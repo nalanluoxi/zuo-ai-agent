@@ -39,11 +39,13 @@ public class MyLoggerAdvisor implements CallAdvisor, StreamAdvisor {
 
     @Override
     public int getOrder() {
-        return 0;
+        return Integer.MAX_VALUE - 2;
+        //return 0;
     }
 
 
     private ChatClientRequest before(ChatClientRequest request) {
+        System.out.println("=== MyLoggerAdvisor before ===");
         log.info("AI 的请求Request: {}", request.prompt());
         return request;
     }

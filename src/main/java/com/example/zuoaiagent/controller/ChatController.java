@@ -42,4 +42,21 @@ public class ChatController {
         return ResultUtils.success(student);
     }
 
+    @PostMapping("/chat/withRag")
+    public BaseResponse<String> chatWithRag(@RequestParam String prompt,
+                                     @RequestParam(required = false) String conversationId,
+                                            @RequestParam(required = false) String name,
+                                            @RequestParam(required = false) String major) {
+
+        String conId = StrUtil.isBlank(conversationId) ? IdUtil.getSnowflakeNextIdStr() : conversationId;
+        String aiName =StrUtil.isBlank(name)?"三条":name;
+        String majorName =StrUtil.isBlank(major)?"金融、宪法学、投资股价学":major;
+        String content = chatService.chatWithRag(prompt, conId,aiName,majorName);
+        return ResultUtils.success(content);
+    }
+
+
+
+
+
 }

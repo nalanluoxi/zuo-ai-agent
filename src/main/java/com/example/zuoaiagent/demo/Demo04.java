@@ -1,4 +1,3 @@
-/*
 package com.example.zuoaiagent.demo;
 
 
@@ -14,7 +13,7 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 
 
-//@Component
+@Component
 @Slf4j
 public class Demo04 {
 
@@ -69,4 +68,3 @@ public class Demo04 {
 
 
 }
-*/
