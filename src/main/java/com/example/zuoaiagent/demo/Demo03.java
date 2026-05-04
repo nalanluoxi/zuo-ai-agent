@@ -1,15 +1,18 @@
+/*
 package com.example.zuoaiagent.demo;
 
 
 import jakarta.annotation.Resource;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 
 
-@Component
+//@Component
+@Profile("!test")
 public class Demo03 implements CommandLineRunner {
 
         @Resource
@@ -24,4 +27,4 @@ public class Demo03 implements CommandLineRunner {
         }
 
 
-}
+}*/
