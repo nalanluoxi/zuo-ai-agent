@@ -1,0 +1,42 @@
+spring:
+  application:
+    name: zuo-ai-agent
+  profiles:
+    active: local
+  ai:
+    dashscope:
+      api-key: ${DASHSCOPE_API_KEY}
+      chat:
+        options:
+          model: deepseek-v4-pro
+    #zhipuai:
+    #  api-key: f02d7f56ae294ea4ba1860d36b393a49.HGG51eFdjEcBxTpj
+    #  embedding:
+    #    options:
+    #      model: embedding-2
+
+logging:
+  level:
+    com.example.zuoaiagent: INFO
+server:
+  port: 8123
+  servlet:
+    context-path: /api
+# springdoc-openapi
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+  api-docs:
+    path: /v3/api-docs
+  group-configs:
+    - group: 'default'
+      paths-to-match: '/**'
+      packages-to-scan: com.example.zuoaiagent.controller
+# knife4j config
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
+
