@@ -10,8 +10,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-@RestController
-@RequestMapping("/knowledge")
+//@RestController
+//@RequestMapping("/knowledge")
 public class KnowledgeController {
 
     /**
@@ -21,7 +21,7 @@ public class KnowledgeController {
      * 文档分片
      */
 
-    @PostMapping("/createKnowledge")
+    //@PostMapping("/createKnowledge")
     public BaseResponse<String> createKnowledge() {
        // String conId = StrUtil.isBlank(conversationId) ? IdUtil.getSnowflakeNextIdStr() : conversationId;
         //String content = chatService.chat(prompt, conId);

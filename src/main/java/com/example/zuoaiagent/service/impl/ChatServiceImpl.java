@@ -4,7 +4,8 @@ import com.example.zuoaiagent.advisor.MyLoggerAdvisor;
 import com.example.zuoaiagent.constants.SystemConstants;
 import com.example.zuoaiagent.model.Student;
 import com.example.zuoaiagent.service.ChatService;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
@@ -18,9 +19,10 @@ import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
 
-@Slf4j
 @Service
 public class ChatServiceImpl implements ChatService {
+
+    private static final Logger log = LoggerFactory.getLogger(ChatServiceImpl.class);
 
     @Autowired
     private ChatClient chatClient;

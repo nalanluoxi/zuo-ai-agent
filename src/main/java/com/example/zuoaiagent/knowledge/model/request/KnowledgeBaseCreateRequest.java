@@ -1,9 +1,7 @@
 package com.example.zuoaiagent.knowledge.model.request;
 
 import jakarta.validation.constraints.NotBlank;
-import lombok.Data;
 
-@Data
 public class KnowledgeBaseCreateRequest {
 
     /** 知识库名称 */
@@ -12,4 +10,10 @@ public class KnowledgeBaseCreateRequest {
 
     /** 描述 */
     private String description;
+
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
+
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
 }

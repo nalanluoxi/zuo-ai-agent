@@ -27,7 +27,7 @@ public class DocumentLoader {
 
     public List<Document> loadMarkdowns() {
         List<Document> allDocuments = new ArrayList<>();
-        try {
+       /* try {
             Resource[] resources = resourcePatternResolver.getResources("classpath:docs/markdown/*.md");
             for (Resource resource : resources) {
                 String fileName = resource.getFilename();
@@ -42,7 +42,7 @@ public class DocumentLoader {
             }
         } catch (IOException e) {
             log.error("Markdown 文档加载失败", e);
-        }
+        }*/
         return allDocuments;
     }
 

@@ -9,13 +9,14 @@ import com.example.zuoaiagent.exception.BusinessException;
 import com.example.zuoaiagent.exception.ErrorCode;
 import com.example.zuoaiagent.knowledge.entity.KnowledgeBaseDO;
 import com.example.zuoaiagent.knowledge.entity.KnowledgeDocumentDO;
+import com.example.zuoaiagent.knowledge.ingestion.DocumentIngestionService;
 import com.example.zuoaiagent.knowledge.mapper.KnowledgeBaseMapper;
 import com.example.zuoaiagent.knowledge.mapper.KnowledgeDocumentMapper;
 import com.example.zuoaiagent.knowledge.model.request.KnowledgeDocumentPageRequest;
 import com.example.zuoaiagent.knowledge.model.vo.KnowledgeDocumentVO;
 import com.example.zuoaiagent.knowledge.service.KnowledgeDocumentService;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,14 +25,26 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.UUID;
 
-@Slf4j
 @Service
-@RequiredArgsConstructor
 public class KnowledgeDocumentServiceImpl implements KnowledgeDocumentService {
+
+    private static final Logger log = LoggerFactory.getLogger(KnowledgeDocumentServiceImpl.class);
 
     private final KnowledgeDocumentMapper documentMapper;
     private final KnowledgeBaseMapper knowledgeBaseMapper;
     private final JdbcTemplate jdbcTemplate;
+    /** 文档入库服务：异步执行分块 + 向量化 + 写入 PgVector */
+    private final DocumentIngestionService ingestionService;
+
+    public KnowledgeDocumentServiceImpl(KnowledgeDocumentMapper documentMapper,
+                                        KnowledgeBaseMapper knowledgeBaseMapper,
+                                        JdbcTemplate jdbcTemplate,
+                                        DocumentIngestionService ingestionService) {
+        this.documentMapper = documentMapper;
+        this.knowledgeBaseMapper = knowledgeBaseMapper;
+        this.jdbcTemplate = jdbcTemplate;
+        this.ingestionService = ingestionService;
+    }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -75,6 +88,12 @@ public class KnowledgeDocumentServiceImpl implements KnowledgeDocumentService {
                 .deleted(0)
                 .build();
         documentMapper.insert(documentDO);
+
+        // 异步触发分块 + 向量化流水线（@Async，不阻塞上传接口响应）
+        // 文档状态：pending → success（成功）或 failed（异常）
+        Long docId = documentDO.getId();
+        log.info("文档记录已保存: docId={}, 触发异步入库流水线", docId);
+        ingestionService.ingest(docId);
 
         return BeanUtil.toBean(documentDO, KnowledgeDocumentVO.class);
     }

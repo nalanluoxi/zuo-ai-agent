@@ -3,15 +3,37 @@ spring:
     name: zuo-ai-agent
   profiles:
     active: local
+  autoconfigure:
+    # 纯 Java 项目，排除 springdoc Kotlin 自动配置，避免 ClassNotFoundException: kotlin.reflect.full.KClasses
+    exclude: org.springdoc.core.configuration.SpringDocKotlinConfiguration
   ai:
     dashscope:
       api-key: ${DASHSCOPE_API_KEY}
       chat:
         options:
           model: deepseek-v4-pro
+    openai:
+      api-key: sk-kkwfvsqqcsatjssquhalbvxygocvflgkymcmebpxharlfywm
+      base-url: https://api.siliconflow.cn
+      embedding:
+        options:
+          model: bce-embedding-base_v1   # 或 Qwen/Qwen3-Embedding-8B
+    ollama:
+      base-url: http://localhost:11434
+      chat:
+        enabled: false
+      embedding:
+        enabled: true
+        options:
+          model: dengcao/Qwen3-Embedding-8B:F16 # 必须与 ollama list 中的名字完全一致
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 100MB
   datasource:
     url: ${DB_URL}
-    username: ${DB_USERNAME}
+    #username: ${DB_USERNAME}
+    username: postgres.aaqhwitflxtjnsgyrsin
     password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
 
@@ -52,3 +74,35 @@ knife4j:
   enable: true
   setting:
     language: zh_cn
+
+# Tesseract OCR 配置（图片型 PDF 兜底识别）
+ocr:
+  tesseract:
+    data-path: /opt/homebrew/share/tessdata   # Apple Silicon Homebrew 路径
+
+# Embedding 多候选模型路由与熔断配置
+embedding:
+  selection:
+    # 连续失败多少次后触发熔断（进入 OPEN 状态）
+    failure-threshold: 2
+    # 熔断持续时间（毫秒），超过后转为 HALF_OPEN 进行探测
+    open-duration-ms: 30000
+  candidates:
+    # 主候选：本地 Ollama Qwen3-Embedding-8B，维度 4096
+    - id: ollama-qwen3
+      provider: ollama
+      model: dengcao/Qwen3-Embedding-8B:F16
+      priority: 1
+      enabled: true
+    # 备用候选 1：SiliconFlow bce-embedding-base_v1，维度 1024
+    - id: siliconflow-bce
+      provider: openai
+      model: bce-embedding-base_v1
+      priority: 2
+      enabled: true
+    # 备用候选 2：SiliconFlow BAAI/bge-m3，维度 1024
+    - id: siliconflow-bge-m3
+      provider: openai
+      model: BAAI/bge-m3
+      priority: 3
+      enabled: true

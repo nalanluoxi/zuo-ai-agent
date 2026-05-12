@@ -15,8 +15,8 @@ import com.example.zuoaiagent.knowledge.model.request.KnowledgeBaseCreateRequest
 import com.example.zuoaiagent.knowledge.model.request.KnowledgeBasePageRequest;
 import com.example.zuoaiagent.knowledge.model.request.KnowledgeBaseUpdateRequest;
 import com.example.zuoaiagent.knowledge.model.vo.KnowledgeBaseVO;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -26,13 +26,19 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
-@Slf4j
 @Service
-@RequiredArgsConstructor
 public class KnowledgeBaseServiceImpl implements com.example.zuoaiagent.knowledge.service.KnowledgeBaseService {
+
+    private static final Logger log = LoggerFactory.getLogger(KnowledgeBaseServiceImpl.class);
 
     private final KnowledgeBaseMapper knowledgeBaseMapper;
     private final KnowledgeDocumentMapper knowledgeDocumentMapper;
+
+    public KnowledgeBaseServiceImpl(KnowledgeBaseMapper knowledgeBaseMapper,
+                                    KnowledgeDocumentMapper knowledgeDocumentMapper) {
+        this.knowledgeBaseMapper = knowledgeBaseMapper;
+        this.knowledgeDocumentMapper = knowledgeDocumentMapper;
+    }
 
     @Override
     @Transactional(rollbackFor = Exception.class)

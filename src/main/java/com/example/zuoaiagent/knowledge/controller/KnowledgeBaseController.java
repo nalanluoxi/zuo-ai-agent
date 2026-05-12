@@ -40,11 +40,12 @@ public class KnowledgeBaseController {
 
     /**
      * 修改知识库
+     * 优化点：移除 URL 中的 /{id}，改为全 JSON 传参
      */
-    @PutMapping(value = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
-    public BaseResponse<Boolean> update(@PathVariable Long id,
-                                        @RequestBody KnowledgeBaseUpdateRequest request) {
-        knowledgeBaseService.update(id, request);
+    @PutMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
+    public BaseResponse<Boolean> update(@Valid @RequestBody KnowledgeBaseUpdateRequest request) {
+        // 直接从 request 对象中获取 ID 进行逻辑处理
+        knowledgeBaseService.update(request.getId(), request);
         return ResultUtils.success(true);
     }
 
