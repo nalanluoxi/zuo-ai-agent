@@ -1,6 +1,7 @@
 package com.example.zuoaiagent.service.impl;
 
 import com.example.zuoaiagent.advisor.MyLoggerAdvisor;
+import com.example.zuoaiagent.chat.RoutingChatService;
 import com.example.zuoaiagent.constants.SystemConstants;
 import com.example.zuoaiagent.model.Student;
 import com.example.zuoaiagent.service.ChatService;
@@ -12,10 +13,10 @@ import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvi
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.PromptTemplate;
-import org.springframework.ai.chat.prompt.SystemPromptTemplate;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.HashMap;
 
@@ -33,6 +34,8 @@ public class ChatServiceImpl implements ChatService {
     @Autowired
     private VectorStore vectorStore;
 
+    @Autowired
+    private RoutingChatService routingChatService;
 
     @Override
     public String chat(String prompt, String conId) {
@@ -49,23 +52,23 @@ public class ChatServiceImpl implements ChatService {
 
     @Override
     public Student chat2(String prompt, String conId) {
-       Student student = chatClient
+        Student student = chatClient
                 .prompt()
                 .user(prompt)
                 .advisors(MessageChatMemoryAdvisor.builder(chatMemory).conversationId(conId).build())
                 .call()
                 .entity(Student.class);
-       return student;
+        return student;
     }
 
     @Override
-    public String chatWithRag(String prompt, String conId,String name,String major) {
+    public String chatWithRag(String prompt, String conId, String name, String major) {
         PromptTemplate promptTemplate = new PromptTemplate(SystemConstants.SYSTEM_MASTER_PROMPT);
-        HashMap<String, Object> map=new HashMap<>();
-        map.put("name",name);
-        map.put("major",major);
+        HashMap<String, Object> map = new HashMap<>();
+        map.put("name", name);
+        map.put("major", major);
         String systemPrompt = promptTemplate.render(map);
-        log.info("系统提示词:"+systemPrompt);
+        log.info("系统提示词:{}", systemPrompt);
 
         ChatResponse chatResponse = chatClient
                 .prompt()
@@ -83,8 +86,18 @@ public class ChatServiceImpl implements ChatService {
         return content;
     }
 
+    @Override
+    public void streamChat(String prompt, String conversationId, SseEmitter emitter) {
+        routingChatService.streamChat(prompt, conversationId, null, null, emitter);
+    }
 
-
-
-
+    @Override
+    public void streamChatWithRag(String prompt, String conversationId, String name, String major, SseEmitter emitter) {
+        PromptTemplate promptTemplate = new PromptTemplate(SystemConstants.SYSTEM_MASTER_PROMPT);
+        HashMap<String, Object> map = new HashMap<>();
+        map.put("name", name);
+        map.put("major", major);
+        String systemPrompt = promptTemplate.render(map);
+        routingChatService.streamChat(prompt, conversationId, systemPrompt, vectorStore, emitter);
+    }
 }

@@ -70,6 +70,12 @@ public class EmbeddingModelFactory {
     /** 按优先级排序的候选队列 */
     private final Deque<EmbeddingModelEntry> queue;
 
+    /** 测试专用构造器：直接传入已构建好的 Entry 列表，不依赖 Spring 容器 */
+    public EmbeddingModelFactory(java.util.List<EmbeddingModelEntry> entries) {
+        this.queue = new ArrayDeque<>(entries);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
     public EmbeddingModelFactory(EmbeddingProperties properties,
                                  OllamaEmbeddingModel ollamaEmbeddingModel,
                                  OpenAiEmbeddingModel openAiEmbeddingModel) {

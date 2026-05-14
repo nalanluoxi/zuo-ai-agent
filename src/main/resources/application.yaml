@@ -11,10 +11,13 @@ spring:
       api-key: ${DASHSCOPE_API_KEY}
       chat:
         options:
-          model: deepseek-v4-pro
+          model: qwen-plus
     openai:
-      api-key: sk-kkwfvsqqcsatjssquhalbvxygocvflgkymcmebpxharlfywm
+      api-key: ${SILICONFLOW_API_KEY}
       base-url: https://api.siliconflow.cn
+      chat:
+        options:
+          model: deepseek-ai/DeepSeek-V3
       embedding:
         options:
           model: bce-embedding-base_v1   # 或 Qwen/Qwen3-Embedding-8B
@@ -88,21 +91,40 @@ embedding:
     # 熔断持续时间（毫秒），超过后转为 HALF_OPEN 进行探测
     open-duration-ms: 30000
   candidates:
-    # 主候选：本地 Ollama Qwen3-Embedding-8B，维度 4096
-    - id: ollama-qwen3
+    # 主候选：本地 Ollama nomic-embed-text，维度 768，无需网络
+    - id: ollama-nomic
       provider: ollama
-      model: dengcao/Qwen3-Embedding-8B:F16
+      model: nomic-embed-text
       priority: 1
       enabled: true
-    # 备用候选 1：SiliconFlow bce-embedding-base_v1，维度 1024
+    # 备用候选 1：SiliconFlow netease-youdao/bce-embedding-base_v1，维度 768
     - id: siliconflow-bce
       provider: openai
-      model: bce-embedding-base_v1
+      model: netease-youdao/bce-embedding-base_v1
       priority: 2
       enabled: true
-    # 备用候选 2：SiliconFlow BAAI/bge-m3，维度 1024
-    - id: siliconflow-bge-m3
+    # 备用候选 2：SiliconFlow Qwen3-Embedding-8B，维度 4096
+    - id: siliconflow-qwen3
       provider: openai
-      model: BAAI/bge-m3
+      model: Qwen/Qwen3-Embedding-8B
       priority: 3
+      enabled: true
+
+# Chat 多候选模型路由与熔断配置
+chat:
+  selection:
+    failure-threshold: 2
+    open-duration-ms: 30000
+  candidates:
+    # 主候选：DashScope qwen-plus
+    - id: dashscope-qwen
+      provider: dashscope
+      model: qwen-plus
+      priority: 1
+      enabled: true
+    # 备用候选：SiliconFlow DeepSeek-V3（OpenAI 兼容接口）
+    - id: siliconflow-deepseek
+      provider: openai
+      model: deepseek-ai/DeepSeek-V3
+      priority: 2
       enabled: true

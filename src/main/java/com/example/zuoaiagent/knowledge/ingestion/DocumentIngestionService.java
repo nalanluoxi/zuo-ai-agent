@@ -322,14 +322,16 @@ public class DocumentIngestionService {
         try (PDDocument pdDocument = Loader.loadPDF(fileBytes)) {
             PDFRenderer renderer = new PDFRenderer(pdDocument);
             int pageCount = pdDocument.getNumberOfPages();
+            pageCount=Math.min(30,pageCount);
             for (int i = 0; i < pageCount; i++) {
                 // 300 DPI 渲染，OCR 精度较高
                 BufferedImage image = renderer.renderImageWithDPI(i, 300);
                 try {
                     String pageText = tesseract.doOCR(image);
                     sb.append(pageText).append("\n");
-                    log.debug("[OCR] 第 {}/{} 页识别完成，文字长度={}", i + 1, pageCount, pageText.length());
+                    log.info("[OCR] 第 {}/{} 页识别完成，文字长度={}", i + 1, pageCount, pageText.length());
                 } catch (TesseractException e) {
+
                     log.warn("[OCR] 第 {}/{} 页识别失败，跳过。原因: {}", i + 1, pageCount, e.getMessage());
                 }
             }
