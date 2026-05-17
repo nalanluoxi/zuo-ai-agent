@@ -78,6 +78,22 @@ knife4j:
   setting:
     language: zh_cn
 
+# 文档入库流水线配置
+ingestion:
+  chunking:
+    # 默认分块大小（字符数）
+    chunk-size: 512
+    # 默认相邻块重叠大小（字符数）
+    overlap-size: 128
+  enrichment:
+    # 是否开启摘要元数据增强（为每个 chunk 生成 CURRENT/PREVIOUS/NEXT 三种摘要写入 metadata）
+    # 注意：会调用 LLM，入库时间会增加，建议在非高频入库场景开启
+    enable-summary: false
+    # 是否开启关键词元数据增强（从每个 chunk 提取 N 个关键词写入 metadata）
+    enable-keyword: true
+    # 提取关键词数量
+    keyword-count: 5
+
 # Tesseract OCR 配置（图片型 PDF 兜底识别）
 ocr:
   tesseract:
@@ -110,8 +126,20 @@ embedding:
       priority: 3
       enabled: true
 
-# Chat 多候选模型路由与熔断配置
+# 意图树缓存刷新配置
+intent:
+  cache:
+    # 意图树缓存刷新间隔（毫秒），默认 5 分钟
+    refresh-interval-ms: 300000
+
+# Chat 多候选模型路由与熔断配置 + 对话记忆配置
 chat:
+  # 对话记忆参数（DbBasedChatMemory）
+  memory:
+    # 消息轮数超过此阈值时触发摘要压缩（每轮 = 1 user + 1 assistant = 2 条消息）
+    summary-start-turns: 10
+    # 历史记忆保留的最近消息条数（供 MessageChatMemoryAdvisor 使用）
+    history-keep: 20
   selection:
     failure-threshold: 2
     open-duration-ms: 30000

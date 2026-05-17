@@ -1,0 +1,103 @@
+package com.example.zuoaiagent.trace.service.impl;
+
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.example.zuoaiagent.trace.entity.RagTraceNodeDO;
+import com.example.zuoaiagent.trace.entity.RagTraceRunDO;
+import com.example.zuoaiagent.trace.mapper.RagTraceNodeMapper;
+import com.example.zuoaiagent.trace.mapper.RagTraceRunMapper;
+import com.example.zuoaiagent.trace.service.RagTraceRecordService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Service;
+
+import java.util.Date;
+
+/**
+ * RAG 链路追踪记录服务实现
+ *
+ * <p>所有写库操作均加 {@code @Async}，异步执行，不阻塞流水线主线程。
+ * 写库失败只打 warn 日志，不影响主业务。
+ */
+@Service
+public class RagTraceRecordServiceImpl implements RagTraceRecordService {
+
+    private static final Logger log = LoggerFactory.getLogger(RagTraceRecordServiceImpl.class);
+
+    private final RagTraceRunMapper runMapper;
+    private final RagTraceNodeMapper nodeMapper;
+
+    public RagTraceRecordServiceImpl(RagTraceRunMapper runMapper, RagTraceNodeMapper nodeMapper) {
+        this.runMapper = runMapper;
+        this.nodeMapper = nodeMapper;
+    }
+
+    @Async("ingestionExecutor")
+    @Override
+    public void startRun(String traceId, String conversationId, String originalPrompt) {
+        try {
+            RagTraceRunDO run = new RagTraceRunDO();
+            run.setTraceId(traceId);
+            run.setConversationId(conversationId);
+            run.setOriginalPrompt(originalPrompt);
+            run.setStatus("RUNNING");
+            run.setStartTime(new Date());
+            runMapper.insert(run);
+        } catch (Exception e) {
+            log.warn("[RagTrace] startRun 写库失败 traceId={}: {}", traceId, e.getMessage());
+        }
+    }
+
+    @Async("ingestionExecutor")
+    @Override
+    public void finishRun(String traceId, String status, String errorMessage, long durationMs) {
+        try {
+            RagTraceRunDO update = new RagTraceRunDO();
+            update.setStatus(status);
+            update.setErrorMessage(errorMessage);
+            update.setEndTime(new Date());
+            update.setDurationMs(durationMs);
+            runMapper.update(update, new LambdaUpdateWrapper<RagTraceRunDO>()
+                    .eq(RagTraceRunDO::getTraceId, traceId));
+        } catch (Exception e) {
+            log.warn("[RagTrace] finishRun 写库失败 traceId={}: {}", traceId, e.getMessage());
+        }
+    }
+
+    @Async("ingestionExecutor")
+    @Override
+    public void startNode(String traceId, String nodeId, String nodeName, String nodeType, String inputData) {
+        try {
+            RagTraceNodeDO node = new RagTraceNodeDO();
+            node.setTraceId(traceId);
+            node.setNodeId(nodeId);
+            node.setNodeName(nodeName);
+            node.setNodeType(nodeType);
+            node.setStatus("RUNNING");
+            node.setStartTime(new Date());
+            node.setInputData(inputData);
+            nodeMapper.insert(node);
+        } catch (Exception e) {
+            log.warn("[RagTrace] startNode 写库失败 traceId={} nodeId={}: {}", traceId, nodeId, e.getMessage());
+        }
+    }
+
+    @Async("ingestionExecutor")
+    @Override
+    public void finishNode(String traceId, String nodeId, String status, String errorMessage,
+                           long durationMs, String outputData) {
+        try {
+            RagTraceNodeDO update = new RagTraceNodeDO();
+            update.setStatus(status);
+            update.setErrorMessage(errorMessage);
+            update.setEndTime(new Date());
+            update.setDurationMs(durationMs);
+            update.setOutputData(outputData);
+            nodeMapper.update(update, new LambdaUpdateWrapper<RagTraceNodeDO>()
+                    .eq(RagTraceNodeDO::getTraceId, traceId)
+                    .eq(RagTraceNodeDO::getNodeId, nodeId));
+        } catch (Exception e) {
+            log.warn("[RagTrace] finishNode 写库失败 traceId={} nodeId={}: {}", traceId, nodeId, e.getMessage());
+        }
+    }
+}

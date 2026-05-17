@@ -26,7 +26,7 @@ public class DemoTest {
         String major="经济学";
 
 
-        String answer =  chatServiceImpl.chatWithRag(message,chatId,name,major);
+        String answer =  chatServiceImpl.chatWithRag(message,chatId,name);
         Assertions.assertNotNull(answer);
     }
 

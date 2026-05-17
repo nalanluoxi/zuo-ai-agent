@@ -5,6 +5,7 @@ import com.example.zuoaiagent.knowledge.chunk.strategy.FixedSizeChunker;
 import com.example.zuoaiagent.knowledge.chunk.strategy.StructureAwareChunker;
 import com.example.zuoaiagent.knowledge.entity.KnowledgeDocumentDO;
 import com.example.zuoaiagent.knowledge.mapper.KnowledgeDocumentMapper;
+import com.example.zuoaiagent.rag.MyDocumentEnricher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import net.sourceforge.tess4j.Tesseract;
@@ -13,6 +14,8 @@ import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.rendering.PDFRenderer;
 import org.springframework.ai.document.Document;
+import org.springframework.ai.model.transformer.KeywordMetadataEnricher;
+import org.springframework.ai.model.transformer.SummaryMetadataEnricher;
 import org.springframework.ai.reader.ExtractedTextFormatter;
 import org.springframework.ai.reader.pdf.PagePdfDocumentReader;
 import org.springframework.ai.reader.pdf.config.PdfDocumentReaderConfig;
@@ -83,27 +86,31 @@ public class DocumentIngestionService {
     /** 用于读取 t_knowledge_document_file 表中的文件字节 */
     private final JdbcTemplate jdbcTemplate;
 
+    /** 文档元数据增强器（关键词 + 摘要） */
+    private final MyDocumentEnricher documentEnricher;
+
+    /** 入库流水线配置 */
+    private final IngestionProperties ingestionProperties;
+
     public DocumentIngestionService(FixedSizeChunker fixedSizeChunker,
                                     StructureAwareChunker structureAwareChunker,
                                     VectorStore vectorStore,
                                     KnowledgeDocumentMapper documentMapper,
-                                    JdbcTemplate jdbcTemplate) {
+                                    JdbcTemplate jdbcTemplate,
+                                    MyDocumentEnricher documentEnricher,
+                                    IngestionProperties ingestionProperties) {
         this.fixedSizeChunker = fixedSizeChunker;
         this.structureAwareChunker = structureAwareChunker;
         this.vectorStore = vectorStore;
         this.documentMapper = documentMapper;
         this.jdbcTemplate = jdbcTemplate;
+        this.documentEnricher = documentEnricher;
+        this.ingestionProperties = ingestionProperties;
     }
 
     /** Tesseract tessdata 数据目录，macOS brew 安装路径：/usr/local/share/tessdata */
     @Value("${ocr.tesseract.data-path:/usr/local/share/tessdata}")
     private String tessDataPath;
-
-    /** 默认分块大小（字符数）。Markdown 时对应 target 参数。 */
-    private static final int DEFAULT_CHUNK_SIZE = 512;
-
-    /** 默认重叠大小（字符数） */
-    private static final int DEFAULT_OVERLAP_SIZE = 128;
 
     /**
      * 异步触发文档入库流水线。
@@ -141,28 +148,36 @@ public class DocumentIngestionService {
 
             // 4. 选择分块策略：Markdown 使用结构感知，其他使用固定大小
             ChunkingStrategy strategy = selectStrategy(doc.getFileType());
-            List<String> chunks = strategy.chunk(text, DEFAULT_CHUNK_SIZE, DEFAULT_OVERLAP_SIZE);
-            log.info("[入库] docId={} 分块完成，共 {} 块，策略={}", docId, chunks.size(), strategy.getType());
+            int chunkSize = ingestionProperties.getChunking().getChunkSize();
+            int overlapSize = ingestionProperties.getChunking().getOverlapSize();
+            List<String> chunks = strategy.chunk(text, chunkSize, overlapSize);
+            log.info("[入库] docId={} 分块完成，共 {} 块，策略={}，chunkSize={}，overlapSize={}",
+                    docId, chunks.size(), strategy.getType(), chunkSize, overlapSize);
 
-            // 5. 逐块构造 Spring AI Document，批量写入 PgVector
+            // 5. 构造 Spring AI Document 列表（附加基础元数据）
+            List<Document> springDocs = new java.util.ArrayList<>(chunks.size());
+            for (int i = 0; i < chunks.size(); i++) {
+                Map<String, Object> metadata = buildMetadata(doc, i, chunks.size());
+                springDocs.add(new Document(chunks.get(i), metadata));
+            }
+
+            // 6. 元数据增强（可选）：关键词 + 摘要
+            springDocs = enrichDocuments(springDocs, docId);
+
+            // 7. 逐块写入 PgVector
             //    vectorStore.add() 内部调用已配置的 EmbeddingModel 完成向量化
             int successCount = 0;
-            for (int i = 0; i < chunks.size(); i++) {
-                String chunk = chunks.get(i);
+            for (int i = 0; i < springDocs.size(); i++) {
                 try {
-                    // 附加文档元数据，便于后续检索时按知识库 / 文档 ID 过滤
-                    Map<String, Object> metadata = buildMetadata(doc, i, chunks.size());
-                    Document springDoc = new Document(chunk, metadata);
-                    vectorStore.add(List.of(springDoc));
+                    vectorStore.add(List.of(springDocs.get(i)));
                     successCount++;
-
                 } catch (Exception e) {
                     // 单块失败不终止整体入库，记录警告继续处理
                     log.warn("[入库] docId={} 第 {}/{} 块写入失败，跳过。原因: {}",
-                            docId, i + 1, chunks.size(), e.getMessage());
+                            docId, i + 1, springDocs.size(), e.getMessage());
                 }
             }
-            log.info("[入库] docId={} 向量写入完成，成功={}/{}", docId, successCount, chunks.size());
+            log.info("[入库] docId={} 向量写入完成，成功={}/{}", docId, successCount, springDocs.size());
 
             // 6. 更新文档状态为 success
             updateStatus(docId, "success");
@@ -282,6 +297,46 @@ public class DocumentIngestionService {
         meta.put("chunk_index", chunkIndex);
         meta.put("total_chunks", totalChunks);
         return meta;
+    }
+
+    /**
+     * 对文档块列表应用元数据增强（关键词 + 摘要），受配置控制。
+     *
+     * <p>关键词增强（{@code ingestion.enrichment.enable-keyword=true}）：
+     * 从每个 chunk 提取关键词写入 metadata {@code excerpt_keywords}。
+     *
+     * <p>摘要增强（{@code ingestion.enrichment.enable-summary=true}）：
+     * 为每个 chunk 生成 PREVIOUS/CURRENT/NEXT 三种摘要写入 metadata，
+     * 会额外调用 LLM，耗时较长，默认关闭。
+     *
+     * @param docs   待增强的文档块列表
+     * @param docId  文档 ID（仅用于日志）
+     * @return 增强后的文档块列表
+     */
+    private List<Document> enrichDocuments(List<Document> docs, Long docId) {
+        IngestionProperties.Enrichment cfg = ingestionProperties.getEnrichment();
+
+        if (cfg.isEnableKeyword()) {
+            try {
+                log.info("[入库] docId={} 开始关键词增强，keywordCount={}", docId, cfg.getKeywordCount());
+                docs = documentEnricher.enrichDocumentsByKeyword(docs, cfg.getKeywordCount());
+                log.info("[入库] docId={} 关键词增强完成", docId);
+            } catch (Exception e) {
+                log.warn("[入库] docId={} 关键词增强失败，跳过。原因: {}", docId, e.getMessage());
+            }
+        }
+
+        if (cfg.isEnableSummary()) {
+            try {
+                log.info("[入库] docId={} 开始摘要增强", docId);
+                docs = documentEnricher.enrichDocumentsBySummary(docs);
+                log.info("[入库] docId={} 摘要增强完成", docId);
+            } catch (Exception e) {
+                log.warn("[入库] docId={} 摘要增强失败，跳过。原因: {}", docId, e.getMessage());
+            }
+        }
+
+        return docs;
     }
 
     /**

@@ -10,19 +10,24 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 
 @Component
-class MyDocumentEnricher {
+public class MyDocumentEnricher {
     /**
      * 元数据增强
      */
     private final ChatModel chatModel;
 
-    MyDocumentEnricher(@Qualifier("dashscopeChatModel") ChatModel chatModel) {
+    public MyDocumentEnricher(@Qualifier("dashscopeChatModel") ChatModel chatModel) {
         this.chatModel = chatModel;
     }
 
-    // 关键词元信息增强器 chunk中提取5个关键词存入metadata
-    List<Document> enrichDocumentsByKeyword(List<Document> documents) {
-        KeywordMetadataEnricher enricher = new KeywordMetadataEnricher(this.chatModel, 5);
+    // 关键词元信息增强器（使用默认 5 个关键词）
+    public List<Document> enrichDocumentsByKeyword(List<Document> documents) {
+        return enrichDocumentsByKeyword(documents, 5);
+    }
+
+    // 关键词元信息增强器 chunk中提取指定数量关键词存入metadata
+    public List<Document> enrichDocumentsByKeyword(List<Document> documents, int keywordCount) {
+        KeywordMetadataEnricher enricher = new KeywordMetadataEnricher(this.chatModel, keywordCount);
         return enricher.apply(documents);
     }
 
@@ -43,7 +48,7 @@ class MyDocumentEnricher {
      * @param documents
      * @return
      */
-    List<Document> enrichDocumentsBySummary(List<Document> documents) {
+    public List<Document> enrichDocumentsBySummary(List<Document> documents) {
         SummaryMetadataEnricher enricher = new SummaryMetadataEnricher(chatModel,
                 List.of(SummaryMetadataEnricher.SummaryType.PREVIOUS, SummaryMetadataEnricher.SummaryType.CURRENT, SummaryMetadataEnricher.SummaryType.NEXT));
         return enricher.apply(documents);

@@ -50,4 +50,30 @@ public class AsyncConfig {
         log.info("文档入库线程池初始化完成: core=2, max=8, queue=100");
         return executor;
     }
+
+    /**
+     * 多通道并行检索专用线程池。
+     *
+     * <p>配置说明：
+     * <ul>
+     *   <li>corePoolSize=4：每次请求最多 2 个通道并行，预留余量</li>
+     *   <li>maxPoolSize=16：高并发时扩展</li>
+     *   <li>queueCapacity=200：防止突发丢失</li>
+     *   <li>RejectedPolicy=CallerRunsPolicy：降级为同步执行</li>
+     * </ul>
+     *
+     * @return 配置好的线程池执行器
+     */
+    @Bean("retrievalExecutor")
+    public Executor retrievalExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(4);
+        executor.setMaxPoolSize(16);
+        executor.setQueueCapacity(200);
+        executor.setThreadNamePrefix("retrieval-");
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        executor.initialize();
+        log.info("并行检索线程池初始化完成: core=4, max=16, queue=200");
+        return executor;
+    }
 }
