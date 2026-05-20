@@ -179,8 +179,12 @@ public class DocumentIngestionService {
             }
             log.info("[入库] docId={} 向量写入完成，成功={}/{}", docId, successCount, springDocs.size());
 
-            // 6. 更新文档状态为 success
-            updateStatus(docId, "success");
+            // 6. 全部块都失败时标记为 failed，否则标记为 success
+            if (successCount == 0) {
+                updateStatus(docId, "failed");
+            } else {
+                updateStatus(docId, "success");
+            }
 
         } catch (Exception e) {
             log.error("[入库] docId={} 入库失败", docId, e);

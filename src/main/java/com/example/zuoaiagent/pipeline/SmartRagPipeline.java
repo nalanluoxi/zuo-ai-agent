@@ -184,7 +184,7 @@ public class SmartRagPipeline {
         } catch (Exception e) {
             traceService.finishNode(traceId, "classify", "ERROR", e.getMessage(),
                     System.currentTimeMillis() - start, null);
-            log.warn("[SmartRagPipeline] 意图分类失败，降级为 unknown: {}", e.getMessage());
+            log.error("[SmartRagPipeline] 意图分类失败，降级为 unknown: {}", e.getMessage());
             return IntentResult.unknown();
         }
     }

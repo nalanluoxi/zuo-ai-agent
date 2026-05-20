@@ -28,7 +28,7 @@ spring:
       embedding:
         enabled: true
         options:
-          model: dengcao/Qwen3-Embedding-8B:F16 # 必须与 ollama list 中的名字完全一致
+          model: dengcao/Qwen3-Embedding-8B:F16  # 必须与 ollama list 中的名字完全一致，运行前执行：ollama pull dengcao/Qwen3-Embedding-8B:F16
   servlet:
     multipart:
       max-file-size: 20MB
@@ -81,10 +81,11 @@ knife4j:
 # 文档入库流水线配置
 ingestion:
   chunking:
-    # 默认分块大小（字符数）
-    chunk-size: 512
+    # 默认分块大小（字符数）。中文约 1.5~2 token/字，300 字符 ≈ 450~600 token，
+    # 适配 bce-embedding(512 token 上限) 的兜底候选；Qwen3-Embedding 无此限制
+    chunk-size: 300
     # 默认相邻块重叠大小（字符数）
-    overlap-size: 128
+    overlap-size: 50
   enrichment:
     # 是否开启摘要元数据增强（为每个 chunk 生成 CURRENT/PREVIOUS/NEXT 三种摘要写入 metadata）
     # 注意：会调用 LLM，入库时间会增加，建议在非高频入库场景开启
@@ -107,24 +108,24 @@ embedding:
     # 熔断持续时间（毫秒），超过后转为 HALF_OPEN 进行探测
     open-duration-ms: 30000
   candidates:
-    # 主候选：本地 Ollama nomic-embed-text，维度 768，无需网络
-    - id: ollama-nomic
+    # 主候选：本地 Ollama dengcao/Qwen3-Embedding-8B（需提前 ollama pull）
+    - id: ollama-qwen3
       provider: ollama
-      model: nomic-embed-text
+      model: dengcao/Qwen3-Embedding-8B:F16
       priority: 1
       enabled: true
-    # 备用候选 1：SiliconFlow netease-youdao/bce-embedding-base_v1，维度 768
-    - id: siliconflow-bce
-      provider: openai
-      model: netease-youdao/bce-embedding-base_v1
-      priority: 2
-      enabled: true
-    # 备用候选 2：SiliconFlow Qwen3-Embedding-8B，维度 4096
+    # 备用候选 1：SiliconFlow Qwen3-Embedding-8B，维度 4096，无 512 token 限制
     - id: siliconflow-qwen3
       provider: openai
       model: Qwen/Qwen3-Embedding-8B
-      priority: 3
+      priority: 2
       enabled: true
+    # 备用候选 2：SiliconFlow netease-youdao/bce-embedding-base_v1，维度 768，注意 512 token 上限
+    - id: siliconflow-bce
+      provider: openai
+      model: netease-youdao/bce-embedding-base_v1
+      priority: 3
+      enabled: false
 
 # 意图树缓存刷新配置
 intent:

@@ -8,7 +8,6 @@ import com.example.zuoaiagent.intent.mapper.IntentNodeMapper;
 import com.example.zuoaiagent.intent.service.IntentTreeService;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -44,24 +43,26 @@ public class IntentNodeController {
     }
 
     /**
-     * 更新意图节点
+     * 更新意图节点（id 在 RequestBody 中传入，null 或空字符串字段不更新）
      */
-    @PutMapping("/node/{id}")
-    public BaseResponse<Boolean> updateNode(@PathVariable Long id, @RequestBody IntentNodeDO node) {
-        node.setId(id);
+    @PutMapping("/node")
+    public BaseResponse<Boolean> updateNode(@RequestBody IntentNodeDO node) {
+        // 空字符串置 null，MyBatis-Plus updateById 会跳过 null 字段
+        if (node.getLabel() != null && node.getLabel().isBlank()) node.setLabel(null);
+        if (node.getDescription() != null && node.getDescription().isBlank()) node.setDescription(null);
         int rows = intentNodeMapper.updateById(node);
         return ResultUtils.success(rows > 0);
     }
 
     /**
-     * 删除意图节点（逻辑删除）
+     * 删除意图节点（逻辑删除，id 在 RequestBody 中传入）
      */
-    @DeleteMapping("/node/{id}")
-    public BaseResponse<Boolean> deleteNode(@PathVariable Long id) {
-        IntentNodeDO node = new IntentNodeDO();
-        node.setId(id);
-        node.setDeleted((short) 1);
-        int rows = intentNodeMapper.updateById(node);
+    @DeleteMapping("/node")
+    public BaseResponse<Boolean> deleteNode(@RequestBody IntentNodeDO node) {
+        IntentNodeDO update = new IntentNodeDO();
+        update.setId(node.getId());
+        update.setDeleted((short) 1);
+        int rows = intentNodeMapper.updateById(update);
         return ResultUtils.success(rows > 0);
     }
 

@@ -90,13 +90,22 @@ public class IntentTreeService {
             return "（意图树为空）";
         }
 
+        // 统计哪些节点有子节点，用于判断叶子节点
+        java.util.Set<Long> hasChildren = new java.util.HashSet<>();
+        for (IntentNodeDO node : cache.values()) {
+            if (node.getParentId() != null) {
+                hasChildren.add(node.getParentId());
+            }
+        }
+
         StringBuilder sb = new StringBuilder();
         List<IntentNodeDO> sorted = new ArrayList<>(cache.values());
         sorted.sort(Comparator.comparingInt((IntentNodeDO n) -> n.getLevel())
                 .thenComparingInt(n -> n.getSortOrder() == null ? 0 : n.getSortOrder()));
 
         for (IntentNodeDO node : sorted) {
-            String indent = "  ".repeat(node.getLevel() - 1);
+            int indentLevel = node.getLevel() == null ? 0 : Math.max(0, node.getLevel() - 1);
+            String indent = "  ".repeat(indentLevel);
             sb.append(indent)
               .append("[ID=").append(node.getId()).append("] ");
 
@@ -106,6 +115,9 @@ public class IntentTreeService {
 
             if (node.getIsSystem() != null && node.getIsSystem() == 1) {
                 sb.append(" (系统节点)");
+            } else if (!hasChildren.contains(node.getId())) {
+                // 叶子节点明确标注，提示 LLM 优先选择
+                sb.append(" ★叶子节点");
             }
 
             if (node.getDescription() != null && !node.getDescription().isBlank()) {

@@ -13,7 +13,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -33,7 +32,7 @@ public class KnowledgeBaseController {
     /**
      * 创建知识库
      */
-    @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
+    @PostMapping
     public BaseResponse<Long> create(@Valid @RequestBody KnowledgeBaseCreateRequest request) {
         return ResultUtils.success(knowledgeBaseService.create(request));
     }
@@ -42,7 +41,7 @@ public class KnowledgeBaseController {
      * 修改知识库
      * 优化点：移除 URL 中的 /{id}，改为全 JSON 传参
      */
-    @PutMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
+    @PutMapping
     public BaseResponse<Boolean> update(@Valid @RequestBody KnowledgeBaseUpdateRequest request) {
         // 直接从 request 对象中获取 ID 进行逻辑处理
         knowledgeBaseService.update(request.getId(), request);
