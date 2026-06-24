@@ -29,6 +29,7 @@ import java.util.List;
 @Slf4j
 public class DbBasedChatMemory implements ChatMemory {
 
+
     /** 触发摘要压缩的轮数阈值（每轮 = 1 user + 1 assistant），默认 10 轮 */
     private static final int DEFAULT_SUMMARY_START_TURNS = 10;
 
