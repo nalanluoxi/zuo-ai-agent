@@ -165,7 +165,9 @@ class RagPipelineIntegrationTest {
                 UUID.randomUUID().toString(),
                 "测试用户",
                 true,
-                true
+                true,
+                false,
+                1L
         );
 
         System.out.printf("  query: %s | enableRewrite: true | enableRerank: true%n",

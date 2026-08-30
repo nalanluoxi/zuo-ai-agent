@@ -9,26 +9,33 @@ import com.baomidou.mybatisplus.annotation.TableName;
 
 import java.util.Date;
 
-/**
- * 知识库实体
- */
 @TableName("t_knowledge_base")
 public class KnowledgeBaseDO {
 
     @TableId(type = IdType.ASSIGN_ID)
     private Long id;
 
-    /** 知识库名称 */
     private String name;
 
-    /** 描述 */
     private String description;
 
-    /** 创建人 */
     private String createdBy;
 
-    /** 修改人 */
     private String updatedBy;
+
+    private Long tenantId;
+
+    private Long teamId;
+
+    private Long ownerId;
+
+    private String visibility = "PRIVATE";
+
+    private Integer enabled;
+
+    private Integer docCount;
+
+    private Integer chunkCount;
 
     @TableField(fill = FieldFill.INSERT)
     private Date createTime;
@@ -36,7 +43,6 @@ public class KnowledgeBaseDO {
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private Date updateTime;
 
-    /** 是否删除：0-正常，1-删除 */
     @TableLogic
     private Integer deleted;
 
@@ -44,12 +50,21 @@ public class KnowledgeBaseDO {
     }
 
     public KnowledgeBaseDO(Long id, String name, String description, String createdBy,
-                            String updatedBy, Date createTime, Date updateTime, Integer deleted) {
+                            String updatedBy, Long tenantId, Long teamId, Long ownerId,
+                            String visibility, Integer enabled, Integer docCount, Integer chunkCount,
+                            Date createTime, Date updateTime, Integer deleted) {
         this.id = id;
         this.name = name;
         this.description = description;
         this.createdBy = createdBy;
         this.updatedBy = updatedBy;
+        this.tenantId = tenantId;
+        this.teamId = teamId;
+        this.ownerId = ownerId;
+        this.visibility = visibility;
+        this.enabled = enabled;
+        this.docCount = docCount;
+        this.chunkCount = chunkCount;
         this.createTime = createTime;
         this.updateTime = updateTime;
         this.deleted = deleted;
@@ -70,6 +85,27 @@ public class KnowledgeBaseDO {
     public String getUpdatedBy() { return updatedBy; }
     public void setUpdatedBy(String updatedBy) { this.updatedBy = updatedBy; }
 
+    public Long getTenantId() { return tenantId; }
+    public void setTenantId(Long tenantId) { this.tenantId = tenantId; }
+
+    public Long getTeamId() { return teamId; }
+    public void setTeamId(Long teamId) { this.teamId = teamId; }
+
+    public Long getOwnerId() { return ownerId; }
+    public void setOwnerId(Long ownerId) { this.ownerId = ownerId; }
+
+    public String getVisibility() { return visibility; }
+    public void setVisibility(String visibility) { this.visibility = visibility; }
+
+    public Integer getEnabled() { return enabled; }
+    public void setEnabled(Integer enabled) { this.enabled = enabled; }
+
+    public Integer getDocCount() { return docCount; }
+    public void setDocCount(Integer docCount) { this.docCount = docCount; }
+
+    public Integer getChunkCount() { return chunkCount; }
+    public void setChunkCount(Integer chunkCount) { this.chunkCount = chunkCount; }
+
     public Date getCreateTime() { return createTime; }
     public void setCreateTime(Date createTime) { this.createTime = createTime; }
 
@@ -79,7 +115,6 @@ public class KnowledgeBaseDO {
     public Integer getDeleted() { return deleted; }
     public void setDeleted(Integer deleted) { this.deleted = deleted; }
 
-    /** Builder support */
     public static Builder builder() { return new Builder(); }
 
     public static class Builder {
@@ -88,6 +123,13 @@ public class KnowledgeBaseDO {
         private String description;
         private String createdBy;
         private String updatedBy;
+        private Long tenantId;
+        private Long teamId;
+        private Long ownerId;
+        private String visibility = "PRIVATE";
+        private Integer enabled;
+        private Integer docCount;
+        private Integer chunkCount;
         private Date createTime;
         private Date updateTime;
         private Integer deleted;
@@ -97,12 +139,20 @@ public class KnowledgeBaseDO {
         public Builder description(String description) { this.description = description; return this; }
         public Builder createdBy(String createdBy) { this.createdBy = createdBy; return this; }
         public Builder updatedBy(String updatedBy) { this.updatedBy = updatedBy; return this; }
+        public Builder tenantId(Long tenantId) { this.tenantId = tenantId; return this; }
+        public Builder teamId(Long teamId) { this.teamId = teamId; return this; }
+        public Builder ownerId(Long ownerId) { this.ownerId = ownerId; return this; }
+        public Builder visibility(String visibility) { this.visibility = visibility; return this; }
+        public Builder enabled(Integer enabled) { this.enabled = enabled; return this; }
+        public Builder docCount(Integer docCount) { this.docCount = docCount; return this; }
+        public Builder chunkCount(Integer chunkCount) { this.chunkCount = chunkCount; return this; }
         public Builder createTime(Date createTime) { this.createTime = createTime; return this; }
         public Builder updateTime(Date updateTime) { this.updateTime = updateTime; return this; }
         public Builder deleted(Integer deleted) { this.deleted = deleted; return this; }
 
         public KnowledgeBaseDO build() {
             return new KnowledgeBaseDO(id, name, description, createdBy, updatedBy,
+                    tenantId, teamId, ownerId, visibility, enabled, docCount, chunkCount,
                     createTime, updateTime, deleted);
         }
     }

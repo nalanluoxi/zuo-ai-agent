@@ -1,4 +1,4 @@
-package com.example.zuoaiagent.chatmemory;
+package com.example.zuoaiagent.demo;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;

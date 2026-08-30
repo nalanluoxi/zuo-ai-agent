@@ -1,0 +1,1387 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ZUO AI Agent</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--primary:#667eea;--primary-dark:#5a6fd6;--primary-light:#e8ebff;--bg:#f5f6fa;--card-bg:#fff;--text:#333;--text-secondary:#888;--border:#e8e8e8;--danger:#e74c3c;--success:#27ae60;--warning:#f39c12;--radius:8px;--shadow:0 2px 12px rgba(0,0,0,0.08)}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
+button{cursor:pointer;border:none;outline:none;font-size:14px;transition:all 0.2s}
+input,select,textarea{outline:none;border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;font-size:14px;transition:border 0.2s;font-family:inherit}
+input:focus,select:focus,textarea:focus{border-color:var(--primary)}
+.btn{padding:8px 20px;border-radius:var(--radius);font-weight:500;display:inline-flex;align-items:center;gap:6px}
+.btn-primary{background:var(--primary);color:#fff}
+.btn-primary:hover{background:var(--primary-dark)}
+.btn-danger{background:var(--danger);color:#fff}
+.btn-danger:hover{background:#c0392b}
+.btn-success{background:var(--success);color:#fff}
+.btn-outline{background:transparent;border:1px solid var(--border);color:var(--text)}
+.btn-outline:hover{border-color:var(--primary);color:var(--primary)}
+.btn-sm{padding:4px 12px;font-size:12px}
+.btn:disabled{opacity:0.5;cursor:not-allowed}
+.card{background:var(--card-bg);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px}
+.loading{text-align:center;padding:40px;color:var(--text-secondary)}
+.error{text-align:center;padding:40px;color:var(--danger)}
+.empty{text-align:center;padding:40px;color:var(--text-secondary)}
+.stat-card{background:var(--card-bg);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow);text-align:center}
+.stat-card .stat-value{font-size:28px;font-weight:700;color:var(--primary)}
+.stat-card .stat-label{font-size:13px;color:var(--text-secondary);margin-top:4px}
+.tabs{display:flex;gap:4px;margin-bottom:20px;border-bottom:2px solid var(--border)}
+.tab{padding:8px 20px;cursor:pointer;color:var(--text-secondary);border-bottom:2px solid transparent;margin-bottom:-2px;transition:all 0.2s;font-size:14px;font-weight:500}
+.tab.active{color:var(--primary);border-bottom-color:var(--primary)}
+.tab:hover{color:var(--primary)}
+table{width:100%;border-collapse:collapse}
+th{background:var(--primary-light);color:var(--primary);padding:10px 12px;text-align:left;font-weight:600;font-size:13px}
+td{padding:10px 12px;border-bottom:1px solid var(--border);font-size:13px}
+tr:hover{background:#fafafe}
+.pagination{display:flex;justify-content:center;align-items:center;gap:8px;margin-top:16px}
+.pagination button{padding:6px 12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--card-bg);color:var(--text);font-size:13px}
+.pagination button:hover{border-color:var(--primary);color:var(--primary)}
+.pagination button.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+.pagination button:disabled{opacity:0.5;cursor:not-allowed}
+.modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000;animation:fadeIn 0.2s}
+.modal{background:var(--card-bg);border-radius:12px;padding:24px;min-width:420px;max-width:600px;max-height:80vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,0.2);animation:slideIn 0.2s}
+.modal h3{margin-bottom:16px;color:var(--text)}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+.form-group{margin-bottom:12px}
+.form-group label{display:block;margin-bottom:4px;font-size:13px;font-weight:500;color:var(--text)}
+.form-group input,.form-group select,.form-group textarea{width:100%}
+.badge{padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600}
+.badge-success{background:#eafaf1;color:var(--success)}
+.badge-danger{background:#fde8e8;color:var(--danger)}
+.badge-warning{background:#fef9e7;color:var(--warning)}
+.badge-info{background:var(--primary-light);color:var(--primary)}
+a{color:var(--primary);text-decoration:none}
+a:hover{text-decoration:underline}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes slideIn{from{opacity:0;transform:translateY(-20px)}to{opacity:1;transform:translateY(0)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spinner{width:24px;height:24px;border:3px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto}
+.context-menu{position:fixed;background:#fff;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.15);min-width:140px;padding:4px 0;z-index:999;animation:fadeIn 0.15s}
+.context-menu-item{padding:8px 16px;cursor:pointer;font-size:13px;color:var(--text);transition:background 0.15s}
+.context-menu-item:hover{background:var(--primary-light);color:var(--primary)}
+.context-menu-item.danger:hover{background:#fde8e8;color:var(--danger)}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.grid-5{display:grid;grid-template-columns:repeat(5,1fr);gap:16px}
+@media(max-width:768px){.grid-2,.grid-3,.grid-4,.grid-5{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useEffect,useCallback,useRef,createContext,useContext,useMemo} = React;
+
+const API_CONFIG = {AUTH_API:'/api/auth',BUSINESS_API:'/api'};
+const api = axios.create({baseURL:''});
+api.interceptors.request.use(cfg=>{
+  const token=localStorage.getItem('token');
+  if(token) cfg.headers.Authorization='Bearer '+token;
+  return cfg;
+});
+api.interceptors.response.use(r=>r,err=>{
+  if(err.response&&err.response.status===401){localStorage.removeItem('token');localStorage.removeItem('user');window.location.hash='#/login'}
+  return Promise.reject(err);
+});
+
+const apiGet=(url,params)=>api.get(url,{params}).then(r=>r.data.data);
+const apiPost=(url,data)=>api.post(url,data).then(r=>r.data.data);
+const apiPut=(url,data)=>api.put(url,data).then(r=>r.data.data);
+const apiDel=(url,data)=>api.delete(url,{data}).then(r=>r.data.data);
+const formatTime=ts=>{if(!ts)return'--';const d=new Date(ts);const p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes())};
+
+const AuthContext=createContext();
+function AuthProvider({children}){
+  const [user,setUser]=useState(null);
+  const [loading,setLoading]=useState(true);
+  useEffect(()=>{
+    const token=localStorage.getItem('token');
+    const savedUser=localStorage.getItem('user');
+    if(token&&savedUser){setUser(JSON.parse(savedUser));setLoading(false)}
+    else setLoading(false);
+  },[]);
+  const login=async(username,password)=>{
+    const res=await api.post(API_CONFIG.AUTH_API+'/login',{username,password});
+    const data=res.data.data||res.data;
+    const userData={username:data.username||username,role:data.role||'USER',token:data.token||'mock-token'};
+    localStorage.setItem('token',userData.token);
+    localStorage.setItem('user',JSON.stringify(userData));
+    setUser(userData);
+    return userData;
+  };
+  const logout=()=>{localStorage.removeItem('token');localStorage.removeItem('user');setUser(null);window.location.hash='#/login'};
+  return React.createElement(AuthContext.Provider,{value:{user,login,logout,loading}},children);
+}
+
+function useAuth(){return useContext(AuthContext)}
+
+function SetupAxios(){const {user}=useAuth();useEffect(()=>{if(user){api.defaults.headers.common['Authorization']='Bearer '+user.token}},[]);return null}
+
+function Header(){
+  const {user,logout}=useAuth();
+  const [menuOpen,setMenuOpen]=useState(false);
+  const menuRef=useRef();
+  const timerRef=useRef(null);
+  useEffect(()=>{
+    const handler=e=>{if(menuRef.current&&!menuRef.current.contains(e.target))setMenuOpen(false)};
+    document.addEventListener('mousedown',handler);
+    return ()=>document.removeEventListener('mousedown',handler);
+  },[]);
+  const menuItems=[
+    {label:'RAG 对话',path:'#/chat'},
+    {label:'全局看板',path:'#/admin/dashboard'},
+    {label:'租户管理',path:'#/admin/tenant'},
+    {label:'Redis 监控',path:'#/monitor/redis'},
+    {label:'DB 监控',path:'#/monitor/db'},
+    {label:'日志系统',path:'#/monitor/logs'},
+    {label:'审批中心',path:'#/approvals'},
+  ];
+  const showMenu=()=>{clearTimeout(timerRef.current);setMenuOpen(true)};
+  const hideMenu=()=>{timerRef.current=setTimeout(()=>setMenuOpen(false),200)};
+  const nav=path=>{setMenuOpen(false);window.location.hash=path};
+  return React.createElement('header',{style:{height:56,background:'#fff',borderBottom:'1px solid var(--border)',display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 24px',position:'sticky',top:0,zIndex:100}},
+    React.createElement('div',{ref:menuRef,style:{position:'relative'},onMouseEnter:showMenu,onMouseLeave:hideMenu},
+      React.createElement('div',{style:{fontSize:18,fontWeight:700,color:'var(--primary)',cursor:'pointer',padding:'8px 0',userSelect:'none'}},
+        'ZUO AI Agent',
+        menuOpen&&React.createElement('div',{style:{position:'absolute',top:'100%',left:0,background:'#fff',borderRadius:8,boxShadow:'0 4px 20px rgba(0,0,0,0.15)',minWidth:200,padding:'8px 0',zIndex:200},onMouseEnter:showMenu,onMouseLeave:hideMenu},
+          menuItems.map((item,i)=>React.createElement('div',{key:i,style:{padding:'10px 20px',cursor:'pointer',fontSize:14,color:'var(--text)',transition:'background 0.2s'},onMouseEnter:e=>{e.target.style.background='var(--primary-light)';e.target.style.color='var(--primary)'},onMouseLeave:e=>{e.target.style.background='transparent';e.target.style.color='var(--text)'},onClick:()=>nav(item.path)},
+            React.createElement('span',null,item.label)
+          ))
+        )
+      )
+    ),
+    React.createElement('div',{style:{display:'flex',alignItems:'center',gap:16}},
+      React.createElement('span',{style:{width:34,height:34,borderRadius:'50%',background:'var(--primary)',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:600,fontSize:14}},user?.username?.charAt(0)?.toUpperCase()||'U'),
+      React.createElement('span',{style:{fontSize:14,color:'var(--text)'}},user?.username||''),
+      React.createElement('button',{className:'btn btn-outline btn-sm',onClick:logout},'退出')
+    )
+  );
+}
+
+function Sidebar({current}){
+  const items=[
+    {label:'对话聊天',path:'#/chat'},
+    {label:'知识库',path:'#/chat/knowledge'},
+    {label:'意图路由',path:'#/chat/intent'},
+    {label:'个人看板',path:'#/chat/dashboard'},
+  ];
+  const nav=path=>{window.location.hash=path};
+  const isRagPage=current&&(current.startsWith('chat')||current.startsWith('knowledge'));
+  if(!isRagPage)return null;
+  return React.createElement('div',{style:{width:180,background:'#fff',borderRight:'1px solid var(--border)',padding:'16px 0',minHeight:'calc(100vh - 56px)'}},
+    items.map((item,i)=>React.createElement('div',{key:i,style:{padding:'10px 20px',cursor:'pointer',fontSize:14,color:current===item.path.replace('#/','')?'var(--primary)':'var(--text)',background:current===item.path.replace('#/','')?'var(--primary-light)':'transparent',borderRight:current===item.path.replace('#/','')?'3px solid var(--primary)':'3px solid transparent',transition:'all 0.2s',fontWeight:current===item.path.replace('#/','')?600:400},onClick:()=>nav(item.path),onMouseEnter:e=>{if(current!==item.path.replace('#/',''))e.target.style.background='#fafafe'},onMouseLeave:e=>{if(current!==item.path.replace('#/',''))e.target.style.background='transparent'}},item.label))
+  );
+}
+
+function Layout({children,current}){
+  return React.createElement('div',null,
+    React.createElement(Header,null),
+    React.createElement('div',{style:{display:'flex'}},
+      React.createElement(Sidebar,{current:current}),
+      React.createElement('div',{style:{flex:1,padding:24,minHeight:'calc(100vh - 56px)',overflow:'auto'}},children)
+    )
+  );
+}
+
+function useApi(apiFn,depArgs=[]){
+  const [data,setData]=useState(null);
+  const [loading,setLoading]=useState(true);
+  const [error,setError]=useState(null);
+  const load=useCallback(async()=>{
+    setLoading(true);setError(null);
+    try{const res=await apiFn();setData(res)}catch(e){setError(e.response?.data?.message||e.message)}
+    finally{setLoading(false)}
+  },[...depArgs]);
+  useEffect(()=>{load()},[load]);
+  return {data,loading,error,reload:load};
+}
+
+function Pagination({page,totalPages,onChange}){
+  if(!totalPages||totalPages<=1)return null;
+  const pages=useMemo(()=>{
+    const p=[];const start=Math.max(1,page-2);const end=Math.min(totalPages,page+2);
+    for(let i=start;i<=end;i++)p.push(i);
+    return p;
+  },[page,totalPages]);
+  return React.createElement('div',{className:'pagination'},
+    React.createElement('button',{disabled:page<=1,onClick:()=>onChange(page-1)},'上一页'),
+    pages.map(p=>React.createElement('button',{key:p,className:p===page?'active':'',onClick:()=>onChange(p)},p)),
+    React.createElement('button',{disabled:page>=totalPages,onClick:()=>onChange(page+1)},'下一页')
+  );
+}
+
+function BarChart({data,height=120,color='var(--primary)'}){
+  if(!data||data.length===0)return React.createElement('div',{style:{color:'var(--text-secondary)',fontSize:13,textAlign:'center',padding:20}},'暂无数据');
+  const max=Math.max(...data.map(d=>d.value),1);
+  return React.createElement('div',{style:{display:'flex',alignItems:'flex-end',gap:8,height,padding:'0 8px'}},
+    data.map((d,i)=>React.createElement('div',{key:i,style:{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'flex-end',height:'100%'}},
+      React.createElement('div',{style:{width:'100%',height:(d.value/max*100)+'%',background:color,borderRadius:'4px 4px 0 0',minHeight:4,transition:'height 0.3s'}}),
+      React.createElement('span',{style:{fontSize:10,marginTop:4,color:'var(--text-secondary)'}},d.label)
+    ))
+  );
+}
+
+function Spinner(){
+  return React.createElement('div',{style:{textAlign:'center',padding:40}},React.createElement('div',{className:'spinner'}));
+}
+
+function EmptyState({text='暂无数据',action,actionText}){
+  return React.createElement('div',{className:'empty'},
+    React.createElement('p',null,text),
+    action&&React.createElement('button',{className:'btn btn-primary',style:{marginTop:12},onClick:action},actionText||'操作')
+  );
+}
+
+function ErrorState({text,onRetry}){
+  return React.createElement('div',{className:'error'},
+    React.createElement('p',null,text||'加载失败'),
+    onRetry&&React.createElement('button',{className:'btn btn-outline',style:{marginTop:12},onClick:onRetry},'重试')
+  );
+}
+
+function ConfirmModal({title,message,onConfirm,onCancel,loading}){
+  return React.createElement('div',{className:'modal-overlay',onClick:onCancel},
+    React.createElement('div',{className:'modal',onClick:e=>e.stopPropagation(),style:{minWidth:360}},
+      React.createElement('h3',null,title||'确认'),
+      React.createElement('p',{style:{color:'var(--text-secondary)',marginBottom:16}},message),
+      React.createElement('div',{className:'modal-actions'},
+        React.createElement('button',{className:'btn btn-outline',onClick:onCancel},'取消'),
+        React.createElement('button',{className:'btn btn-danger',onClick:onConfirm,disabled:loading},loading?'处理中...':'确认')
+      )
+    )
+  );
+}
+
+// ===================== PAGES =====================
+
+function LoginPage(){
+  const {login}=useAuth();
+  const [username,setUsername]=useState('');
+  const [password,setPassword]=useState('');
+  const [error,setError]=useState('');
+  const [loading,setLoading]=useState(false);
+  const handleSubmit=async(e)=>{
+    e.preventDefault();setError('');setLoading(true);
+    try{await login(username,password);window.location.hash='#/chat'}
+    catch(err){setError(err.response?.data?.message||'登录失败')}
+    finally{setLoading(false)}
+  };
+  return React.createElement('div',{style:{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh',background:'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'}},
+    React.createElement('div',{style:{background:'#fff',borderRadius:16,padding:'40px 36px',width:380,boxShadow:'0 8px 40px rgba(0,0,0,0.2)'}},
+      React.createElement('h2',{style:{textAlign:'center',color:'var(--primary)',marginBottom:8,fontSize:24}},'ZUO AI Agent'),
+      React.createElement('p',{style:{textAlign:'center',color:'var(--text-secondary)',marginBottom:28,fontSize:13}},'智能对话与知识管理平台'),
+      error&&React.createElement('div',{style:{background:'#fde8e8',color:'var(--danger)',padding:'8px 12px',borderRadius:6,marginBottom:12,fontSize:13}},error),
+      React.createElement('form',{onSubmit:handleSubmit},
+        React.createElement('div',{className:'form-group'},React.createElement('label',null,'用户名'),React.createElement('input',{value:username,onChange:e=>setUsername(e.target.value),placeholder:'请输入用户名',autoFocus:true})),
+        React.createElement('div',{className:'form-group'},React.createElement('label',null,'密码'),React.createElement('input',{type:'password',value:password,onChange:e=>setPassword(e.target.value),placeholder:'请输入密码'})),
+        React.createElement('button',{type:'submit',className:'btn btn-primary',disabled:loading,style:{width:'100%',justifyContent:'center',padding:'10px 0',marginTop:8,fontSize:15}},loading?'登录中...':'登录')
+      )
+    )
+  );
+}
+
+function ChatPage(){
+  const [convPage,setConvPage]=useState(1);
+  const [convs,setConvs]=useState({content:[],totalPages:0});
+  const [selectedConv,setSelectedConv]=useState(null);
+  const [messages,setMessages]=useState([]);
+  const [msgPage,setMsgPage]=useState(1);
+  const [msgTotal,setMsgTotal]=useState(0);
+  const [input,setInput]=useState('');
+  const [loading,setLoading]=useState(false);
+  const [convLoading,setConvLoading]=useState(true);
+  const [convError,setConvError]=useState(null);
+  const [msgLoading,setMsgLoading]=useState(false);
+  const [ctxMenu,setCtxMenu]=useState(null);
+  const msgEndRef=useRef();
+  const eventSourceRef=useRef(null);
+
+  const loadConvs=async()=>{
+    setConvLoading(true);setConvError(null);
+    try{const d=await apiGet('/api/conversations',{page:convPage,size:20});setConvs(d||{content:[],totalPages:0})}
+    catch(e){setConvError(e.response?.data?.message||e.message)}
+    finally{setConvLoading(false)}
+  };
+  useEffect(()=>{loadConvs()},[convPage]);
+
+  const loadMessages=async(convId,page=1)=>{
+    setMsgLoading(true);
+    try{const d=await apiGet('/api/conversations/'+convId+'/messages',{page,pageSize:20});setMessages(d?.list||[]);setMsgTotal(d?.total||0);setMsgPage(page)}
+    catch(e){console.error(e)}
+    finally{setMsgLoading(false)}
+  };
+
+  const selectConv=conv=>{setSelectedConv(conv);loadMessages(conv.id,1)};
+  const createConv=async()=>{
+    try{const d=await apiPost('/api/conversations',{title:'新对话'});const newConv={id:d.conversationId||d.conversationId,title:d.title||'新对话',message_count:0,created_at:new Date().toISOString()};setConvs(prev=>({...prev,content:[newConv,...prev.content]}));selectConv(newConv)}
+    catch(e){alert('创建失败：'+(e.response?.data?.message||e.message))}
+  };
+  const sendMsg=async()=>{
+    if(!input.trim()||!selectedConv||loading)return;
+    const msg=input.trim();setInput('');setLoading(true);
+    
+    // 1. 发送用户消息到后端
+    try{
+      await apiPost('/api/conversations/'+selectedConv.id+'/message',{content:msg});
+      const userMsgId=Date.now();
+      const aiMsgId=Date.now()+1;
+      setMessages(prev=>[...prev,{id:userMsgId,content:msg,role:'user',create_time:new Date().toISOString()}]);
+      
+      // 2. 添加 AI 消息占位符
+      setMessages(prev=>[...prev,{id:aiMsgId,content:'',role:'assistant',create_time:new Date().toISOString()}]);
+      
+      // 3. 使用 EventSource 处理 SSE 流式响应
+      const token=localStorage.getItem('token');
+      const url='/api/chat/stream/withRag?prompt='+encodeURIComponent(msg)+'&conversationId='+selectedConv.id+'&satoken='+token;
+      
+      if(eventSourceRef.current){
+        eventSourceRef.current.close();
+      }
+      
+      const es=new EventSource(url);
+      eventSourceRef.current=es;
+      
+      es.onmessage=(event)=>{
+        const chunk=event.data;
+        if(chunk==='[DONE]'){
+          es.close();
+          eventSourceRef.current=null;
+          setLoading(false);
+          loadConvs();
+          return;
+        }
+        // 追加文本到 AI 消息
+        setMessages(prev=>prev.map(m=>m.id===aiMsgId?{...m,content:m.content+chunk}:m));
+      };
+      
+      es.onerror=(e)=>{
+        console.error('SSE error:',e);
+        es.close();
+        eventSourceRef.current=null;
+        setMessages(prev=>prev.map(m=>m.id===aiMsgId?{...m,content:m.content||'抱歉，连接中断'}:m));
+        setLoading(false);
+      };
+      
+    }catch(e){
+      console.error('发送失败:',e);
+      alert('发送失败：'+(e.response?.data?.message||e.message));
+      setLoading(false);
+    }
+  };
+  useEffect(()=>{msgEndRef.current?.scrollIntoView({behavior:'smooth'})},[messages]);
+  useEffect(()=>{return()=>{if(eventSourceRef.current){eventSourceRef.current.close()}}},[]);
+
+  const handleMsgCtxMenu=(e,msg)=>{
+    e.preventDefault();
+    setCtxMenu({x:e.clientX,y:e.clientY,msg});
+  };
+  useEffect(()=>{
+    const handler=()=>setCtxMenu(null);
+    if(ctxMenu)document.addEventListener('click',handler);
+    return ()=>document.removeEventListener('click',handler);
+  },[ctxMenu]);
+  const deleteMsg=async(msg)=>{
+    setCtxMenu(null);
+    try{await apiDel('/api/conversations/'+selectedConv.id+'/messages/'+msg.id);setMessages(prev=>prev.filter(m=>m.id!==msg.id));loadConvs()}
+    catch(e){alert('删除失败：'+(e.response?.data?.message||e.message))}
+  };
+
+  return React.createElement('div',{style:{display:'flex',height:'calc(100vh - 104px)',gap:0}},
+    React.createElement('div',{style:{width:260,background:'#fff',borderRight:'1px solid var(--border)',display:'flex',flexDirection:'column'}},
+      React.createElement('div',{style:{padding:'12px',borderBottom:'1px solid var(--border)',display:'flex',gap:8}},
+        React.createElement('button',{className:'btn btn-primary',style:{flex:1,justifyContent:'center'},onClick:createConv},'+ 新建会话'),
+        React.createElement('button',{className:'btn btn-outline btn-sm',onClick:loadConvs},'刷新')
+      ),
+      React.createElement('div',{style:{flex:1,overflowY:'auto'}},
+        convLoading?React.createElement(Spinner,null):
+        convError?React.createElement(ErrorState,{text:convError,onRetry:loadConvs}):
+        (convs.content||[]).length===0?React.createElement(EmptyState,{text:'暂无对话',action:createConv,actionText:'新建会话'}):
+        (convs.content||[]).map(c=>React.createElement('div',{key:c.id,style:{padding:'12px 16px',cursor:'pointer',borderBottom:'1px solid var(--border)',background:selectedConv?.id===c.id?'var(--primary-light)':'transparent',borderLeft:selectedConv?.id===c.id?'3px solid var(--primary)':'3px solid transparent'},onClick:()=>selectConv(c)},
+          React.createElement('div',{style:{fontSize:14,fontWeight:500,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},c.title||'未命名'),
+          React.createElement('div',{style:{fontSize:11,color:'var(--text-secondary)',marginTop:4}},c.message_count||0,' 条消息'),
+          c.last_message&&React.createElement('div',{style:{fontSize:11,color:'var(--text-secondary)',marginTop:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},c.last_message)
+        ))
+      ),
+      React.createElement(Pagination,{page:convPage,totalPages:convs.totalPages,onChange:setConvPage})
+    ),
+    React.createElement('div',{style:{flex:1,display:'flex',flexDirection:'column',background:'#fff'}},
+      selectedConv?React.createElement(React.Fragment,null,
+        React.createElement('div',{style:{padding:'12px 16px',borderBottom:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center'}},
+          React.createElement('div',null,
+            React.createElement('span',{style:{fontSize:15,fontWeight:600}},selectedConv.title||'未命名对话'),
+          ),
+          React.createElement('div',{style:{display:'flex',gap:16,fontSize:12,color:'var(--text-secondary)'}},
+            React.createElement('span',null,'创建: ',formatTime(selectedConv.created_at)),
+            selectedConv.model&&React.createElement('span',null,'模型: ',selectedConv.model)
+          )
+        ),
+        React.createElement('div',{style:{flex:1,overflowY:'auto',padding:'16px'}},
+          msgLoading?React.createElement(Spinner,null):
+          React.createElement(React.Fragment,null,
+            messages.map(m=>React.createElement('div',{key:m.id,style:{display:'flex',flexDirection:'column',alignItems:m.role==='user'?'flex-end':'flex-start',marginBottom:16},onContextMenu:e=>handleMsgCtxMenu(e,m)},
+              React.createElement('div',{style:{maxWidth:'70%',padding:'10px 16px',borderRadius:12,background:m.role==='user'?'var(--primary)':'#f0f0f5',color:m.role==='user'?'#fff':'var(--text)',fontSize:14,lineHeight:1.5,wordBreak:'break-word'}},m.content),
+              React.createElement('span',{style:{fontSize:10,color:'var(--text-secondary)',marginTop:4,marginLeft:m.role==='user'?0:8,marginRight:m.role==='user'?8:0}},formatTime(m.create_time))
+            )),
+            loading&&React.createElement('div',{style:{display:'flex',justifyContent:'flex-start',marginBottom:16}},
+              React.createElement('div',{style:{padding:'10px 16px',borderRadius:12,background:'#f0f0f5',fontSize:14,color:'var(--text-secondary)'}},'AI 思考中...')
+            ),
+            React.createElement('div',{ref:msgEndRef})
+          )
+        ),
+        React.createElement('div',{style:{padding:'12px 16px',borderTop:'1px solid var(--border)',display:'flex',gap:8}},
+          React.createElement('input',{value:input,onChange:e=>setInput(e.target.value),onKeyDown:e=>{if(e.key==='Enter')sendMsg()},placeholder:'输入消息...',style:{flex:1}}),
+          React.createElement('button',{className:'btn btn-primary',onClick:sendMsg,disabled:loading||!input.trim()},loading?'发送中...':'发送')
+        )
+      ):
+      React.createElement('div',{style:{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'var(--text-secondary)'}},
+        React.createElement('div',{style:{fontSize:16,marginBottom:8}},'选择一个对话或创建新会话开始聊天'),
+        React.createElement('button',{className:'btn btn-primary',onClick:createConv,style:{marginTop:8}},'+ 新建会话')
+      ),
+      ctxMenu&&React.createElement('div',{className:'context-menu',style:{left:ctxMenu.x,top:ctxMenu.y}},
+        React.createElement('div',{className:'context-menu-item danger',onClick:()=>deleteMsg(ctxMenu.msg)},'删除消息')
+      )
+    )
+  );
+}
+
+function KnowledgePage(){
+  const [tab,setTab]=useState('search');
+  const [keyword,setKeyword]=useState('');
+  const [page,setPage]=useState(1);
+  const [readability,setReadability]=useState('');
+  const [statusFilter,setStatusFilter]=useState('');
+  const [detailKb,setDetailKb]=useState(null);
+  const [showCreate,setShowCreate]=useState(false);
+  const [newKb,setNewKb]=useState({name:'',description:'',readability:'PUBLIC'});
+  const [creating,setCreating]=useState(false);
+  const {data,loading,error,reload}=useApi(()=>apiGet('/api/knowledge-base/page',{current:page,size:10,name:keyword||undefined,readability:readability||undefined,status:statusFilter||undefined}),[page,keyword,readability,statusFilter]);
+  const items=data?.records||[];
+
+  const handleCreate=async()=>{
+    if(!newKb.name.trim()){alert('请输入知识库名称');return}
+    setCreating(true);
+    try{
+      await apiPost('/api/knowledge-base',newKb);
+      setShowCreate(false);
+      setNewKb({name:'',description:'',readability:'PUBLIC'});
+      reload();
+    }catch(e){alert('创建失败：'+(e.response?.data?.message||e.message))}
+    finally{setCreating(false)}
+  };
+
+  return React.createElement('div',null,
+    React.createElement('h2',{style:{marginBottom:16,fontSize:20}},'知识库'),
+    React.createElement('div',{className:'tabs'},
+      React.createElement('div',{className:'tab '+(tab==='search'?'active':''),onClick:()=>{setTab('search');setPage(1)}},'搜索'),
+      React.createElement('div',{className:'tab '+(tab==='my'?'active':''),onClick:()=>{setTab('my');setPage(1)}},'我的知识库')
+    ),
+    tab==='search'?React.createElement(React.Fragment,null,
+      React.createElement('div',{style:{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap'}},
+        React.createElement('input',{value:keyword,onChange:e=>setKeyword(e.target.value),placeholder:'搜索知识库...',style:{width:250}}),
+        React.createElement('select',{value:readability,onChange:e=>setReadability(e.target.value),style:{width:120}},
+          React.createElement('option',{value:''},'全部可读性'),
+          React.createElement('option',{value:'PUBLIC'},'Public'),
+          React.createElement('option',{value:'TEAM'},'Team')
+        ),
+        React.createElement('button',{className:'btn btn-primary',onClick:()=>{setPage(1);reload()}},'搜索')
+      ),
+      loading?React.createElement(Spinner,null):
+      error?React.createElement(ErrorState,{text:error,onRetry:reload}):
+      React.createElement('div',{className:'card'},
+        React.createElement('table',null,
+          React.createElement('thead',null,React.createElement('tr',null,
+            React.createElement('th',null,'知识库名称'),React.createElement('th',null,'可读性'),React.createElement('th',null,'文件数'),React.createElement('th',null,'Owner'),React.createElement('th',null,'创建时间'),React.createElement('th',null,'操作')
+          )),
+          React.createElement('tbody',null,items.length===0?React.createElement('tr',null,React.createElement('td',{colSpan:6,style:{textAlign:'center',color:'var(--text-secondary)'}},'暂无数据')):
+            items.map(kb=>React.createElement('tr',{key:kb.id},
+              React.createElement('td',null,React.createElement('strong',{style:{cursor:'pointer',color:'var(--primary)'},onClick:()=>setDetailKb(kb)},kb.name)),
+              React.createElement('td',null,React.createElement('span',{className:'badge '+(kb.readability==='PUBLIC'?'badge-success':'badge-info')},kb.readability||'--')),
+              React.createElement('td',null,kb.fileCount||kb.file_count||'--'),
+              React.createElement('td',null,kb.ownerCount||kb.owner_count||kb.createUser||'--'),
+              React.createElement('td',null,formatTime(kb.createTime)),
+              React.createElement('td',null,React.createElement('button',{className:'btn btn-outline btn-sm',onClick:()=>setDetailKb(kb)},'查看'))
+            ))
+          )
+        ),
+        React.createElement(Pagination,{page:page,totalPages:data?.pages||0,onChange:setPage})
+      )
+    ):
+    React.createElement(React.Fragment,null,
+      React.createElement('div',{style:{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap',alignItems:'center'}},
+        React.createElement('button',{className:'btn btn-primary',onClick:()=>setShowCreate(true)},'+ 新建知识库'),
+        React.createElement('select',{value:statusFilter,onChange:e=>setStatusFilter(e.target.value),style:{width:100}},
+          React.createElement('option',{value:''},'全部状态'),
+          React.createElement('option',{value:'1'},'上线'),
+          React.createElement('option',{value:'0'},'下线')
+        ),
+        React.createElement('button',{className:'btn btn-outline',onClick:reload},'刷新')
+      ),
+      loading?React.createElement(Spinner,null):
+      error?React.createElement(ErrorState,{text:error,onRetry:reload}):
+      React.createElement('div',{className:'card'},
+        React.createElement('table',null,
+          React.createElement('thead',null,React.createElement('tr',null,
+            React.createElement('th',null,'知识库名称'),React.createElement('th',null,'状态'),React.createElement('th',null,'可读性'),React.createElement('th',null,'文件数'),React.createElement('th',null,'Owner'),React.createElement('th',null,'操作')
+          )),
+          React.createElement('tbody',null,items.length===0?React.createElement('tr',null,React.createElement('td',{colSpan:6,style:{textAlign:'center',color:'var(--text-secondary)'}},'暂无数据')):
+            items.map(kb=>React.createElement('tr',{key:kb.id},
+              React.createElement('td',null,React.createElement('strong',null,kb.name)),
+              React.createElement('td',null,React.createElement('span',{className:'badge '+(kb.status==1?'badge-success':'badge-warning')},kb.status==1?'上线':'下线')),
+              React.createElement('td',null,kb.readability||'--'),
+              React.createElement('td',null,kb.fileCount||kb.file_count||'--'),
+              React.createElement('td',null,kb.ownerCount||kb.owner_count||kb.createUser||'--'),
+              React.createElement('td',null,
+                React.createElement('button',{className:'btn btn-outline btn-sm',style:{marginRight:4},onClick:()=>setDetailKb(kb)},'编辑'),
+                React.createElement('button',{className:'btn btn-outline btn-sm',onClick:()=>window.location.hash='#/chat/knowledge/'+kb.id},'详情')
+              )
+            ))
+          )
+        ),
+        React.createElement(Pagination,{page:page,totalPages:data?.pages||0,onChange:setPage})
+      )
+    ),
+    detailKb&&React.createElement('div',{className:'modal-overlay',onClick:()=>setDetailKb(null)},
+      React.createElement('div',{className:'modal',onClick:e=>e.stopPropagation(),style:{minWidth:500}},
+        React.createElement('h3',null,'知识库详情: ',detailKb.name),
+        React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}},
+          React.createElement('div',null,React.createElement('span',{style:{color:'var(--text-secondary)',fontSize:13}},'名称: '),detailKb.name),
+          React.createElement('div',null,React.createElement('span',{style:{color:'var(--text-secondary)',fontSize:13}},'状态: '),React.createElement('span',{className:'badge '+(detailKb.status==1?'badge-success':'badge-warning')},detailKb.status==1?'上线':'下线')),
+          React.createElement('div',null,React.createElement('span',{style:{color:'var(--text-secondary)',fontSize:13}},'可读性: '),detailKb.readability||'--'),
+          React.createElement('div',null,React.createElement('span',{style:{color:'var(--text-secondary)',fontSize:13}},'创建者: '),detailKb.createUser||'--'),
+          React.createElement('div',null,React.createElement('span',{style:{color:'var(--text-secondary)',fontSize:13}},'文件数: '),detailKb.fileCount||detailKb.file_count||'--'),
+          React.createElement('div',null,React.createElement('span',{style:{color:'var(--text-secondary)',fontSize:13}},'创建时间: '),formatTime(detailKb.createTime)),
+          React.createElement('div',{style:{gridColumn:'span 2'}},React.createElement('span',{style:{color:'var(--text-secondary)',fontSize:13}},'描述: '),detailKb.description||'无描述')
+        ),
+        React.createElement('div',{className:'modal-actions'},
+          React.createElement('button',{className:'btn btn-outline',onClick:()=>setDetailKb(null)},'关闭'),
+          React.createElement('button',{className:'btn btn-primary',onClick:()=>{setDetailKb(null);window.location.hash='#/chat/knowledge/'+detailKb.id}},'编辑')
+        )
+      )
+    ),
+    showCreate&&React.createElement('div',{className:'modal-overlay',onClick:()=>setShowCreate(false)},
+      React.createElement('div',{className:'modal',onClick:e=>e.stopPropagation(),style:{minWidth:500}},
+        React.createElement('h3',null,'新建知识库'),
+        React.createElement('div',{className:'form-group'},
+          React.createElement('label',null,'知识库名称 *'),
+          React.createElement('input',{value:newKb.name,onChange:e=>setNewKb({...newKb,name:e.target.value}),placeholder:'请输入知识库名称',autoFocus:true})
+        ),
+        React.createElement('div',{className:'form-group'},
+          React.createElement('label',null,'描述'),
+          React.createElement('textarea',{value:newKb.description,onChange:e=>setNewKb({...newKb,description:e.target.value}),placeholder:'请输入知识库描述',rows:3})
+        ),
+        React.createElement('div',{className:'form-group'},
+          React.createElement('label',null,'可读性'),
+          React.createElement('select',{value:newKb.readability,onChange:e=>setNewKb({...newKb,readability:e.target.value})},
+            React.createElement('option',{value:'PUBLIC'},'Public'),
+            React.createElement('option',{value:'TEAM'},'Team')
+          )
+        ),
+        React.createElement('div',{className:'modal-actions'},
+          React.createElement('button',{className:'btn btn-outline',onClick:()=>setShowCreate(false)},'取消'),
+          React.createElement('button',{className:'btn btn-primary',onClick:handleCreate,disabled:creating},creating?'创建中...':'创建')
+        )
+      )
+    )
+  );
+}
+
+function IntentPage(){
+  const {data,loading,error,reload}=useApi(()=>apiGet('/api/intent/nodes'));
+  const [editNode,setEditNode]=useState(null);
+  const [newLabel,setNewLabel]=useState('');
+  const [newParentId,setNewParentId]=useState(null);
+  const nodes=data||[];
+
+  const buildTree=(nodes)=>{
+    const map={};const roots=[];
+    nodes.forEach(n=>{map[n.id]={...n,children:[]}});
+    nodes.forEach(n=>{if(n.parentId&&map[n.parentId])map[n.parentId].children.push(map[n.id]);else roots.push(map[n.id])});
+    return roots;
+  };
+
+  const tree=useMemo(()=>buildTree(nodes),[nodes]);
+
+  const NodeItem=({node,level=0})=>{
+    const [expanded,setExpanded]=useState(true);
+    const hasChildren=node.children&&node.children.length>0;
+    return React.createElement('div',{style:{marginLeft:level*24}},
+      React.createElement('div',{style:{display:'flex',alignItems:'center',gap:8,padding:'6px 0',borderBottom:'1px solid var(--border)',cursor:'pointer',background:editNode?.id===node.id?'var(--primary-light)':'transparent'},onClick:()=>setEditNode(node)},
+        hasChildren?React.createElement('span',{onClick:e=>{e.stopPropagation();setExpanded(!expanded)},style:{fontSize:12,width:16,cursor:'pointer'}},expanded?'▼':'▶'):
+        React.createElement('span',{style:{width:16}},'\u00A0'),
+        React.createElement('span',{style:{fontSize:14,flex:1}},node.label||node.name||'未命名'),
+        React.createElement('span',{className:'badge '+(node.enabled!==0?'badge-success':'badge-warning'),style:{fontSize:10}},node.enabled!==0?'启用':'禁用'),
+        React.createElement('button',{className:'btn btn-outline btn-sm',onClick:e=>{e.stopPropagation();setNewParentId(node.id);setNewLabel('')},style:{fontSize:11}},'+ 子节点'),
+        React.createElement('button',{className:'btn btn-danger btn-sm',style:{fontSize:11},onClick:e=>{e.stopPropagation();
+          if(confirm('确定删除该节点？')){apiDel('/api/intent/node/'+node.id).then(reload).catch(e=>alert(e.response?.data?.message||e.message))}
+        }},'删除')
+      ),
+      hasChildren&&expanded&&React.createElement('div',null,node.children.map(child=>React.createElement(NodeItem,{key:child.id,node:child,level:level+1})))
+    );
+  };
+
+  const handleSave=async()=>{
+    if(editNode){
+      try{await apiPut('/api/intent/node/'+editNode.id,{label:editNode.label,description:editNode.description,enabled:editNode.enabled});setEditNode(null);reload()}
+      catch(e){alert(e.response?.data?.message||e.message)}
+    }
+  };
+  const handleCreate=async()=>{
+    if(!newLabel.trim())return;
+    try{await apiPost('/api/intent/node',{label:newLabel,parentId:newParentId,level:newParentId?2:1,isSystem:0,enabled:1,sortOrder:0,deleted:0});setNewLabel('');setNewParentId(null);reload()}
+    catch(e){alert(e.response?.data?.message||e.message)}
+  };
+
+  return React.createElement('div',null,
+    React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}},
+      React.createElement('h2',{style:{fontSize:20}},'意图树管理'),
+      React.createElement('div',{style:{display:'flex',gap:8}},
+        React.createElement('button',{className:'btn btn-primary',onClick:()=>{setNewLabel('');setNewParentId(null)}},'+ 新增顶层节点'),
+        React.createElement('button',{className:'btn btn-outline',onClick:reload},'刷新')
+      )
+    ),
+    newLabel!==undefined&&newParentId===null&&React.createElement('div',{className:'card',style:{marginBottom:16,display:'flex',gap:8,alignItems:'center'}},
+      React.createElement('input',{value:newLabel,onChange:e=>setNewLabel(e.target.value),placeholder:'新节点名称',autoFocus:true,style:{width:200}}),
+      React.createElement('button',{className:'btn btn-primary btn-sm',onClick:handleCreate},'创建'),
+      React.createElement('button',{className:'btn btn-outline btn-sm',onClick:()=>{setNewLabel(undefined);setNewParentId(null)}},'取消')
+    ),
+    loading?React.createElement(Spinner,null):
+    error?React.createElement(ErrorState,{text:error,onRetry:reload}):
+    React.createElement('div',{style:{display:'flex',gap:20}},
+      React.createElement('div',{className:'card',style:{flex:1,maxHeight:'calc(100vh - 200px)',overflowY:'auto'}},
+        tree.length===0?React.createElement(EmptyState,{text:'暂无意图节点',action:()=>{setNewLabel('');setNewParentId(null)},actionText:'新增顶层节点'}):
+        tree.map(root=>React.createElement(NodeItem,{key:root.id,node:root}))
+      ),
+      editNode&&React.createElement('div',{className:'card',style:{width:320,flexShrink:0}},
+        React.createElement('h3',{style:{fontSize:15,marginBottom:16}},'编辑节点: ',editNode.label),
+        React.createElement('div',{className:'form-group'},React.createElement('label',null,'节点标签'),React.createElement('input',{value:editNode.label||'',onChange:e=>setEditNode({...editNode,label:e.target.value})})),
+        React.createElement('div',{className:'form-group'},React.createElement('label',null,'描述'),React.createElement('textarea',{value:editNode.description||'',onChange:e=>setEditNode({...editNode,description:e.target.value}),rows:3})),
+        React.createElement('div',{className:'form-group'},React.createElement('label',null,'启用状态'),React.createElement('select',{value:editNode.enabled||0,onChange:e=>setEditNode({...editNode,enabled:parseInt(e.target.value)})},React.createElement('option',{value:1},'启用'),React.createElement('option',{value:0},'禁用'))),
+        React.createElement('div',{className:'form-group'},React.createElement('label',null,'父节点'),React.createElement('input',{value:editNode.parentId||'无（顶层节点）',disabled:true,style:{background:'#f5f5f5',color:'var(--text-secondary)'}})),
+        React.createElement('div',{className:'modal-actions'},
+          React.createElement('button',{className:'btn btn-danger btn-sm',style:{marginRight:'auto'},onClick:()=>{if(confirm('确定删除该节点？')){apiDel('/api/intent/node/'+editNode.id).then(()=>{setEditNode(null);reload()}).catch(e=>alert(e.response?.data?.message||e.message))}}},'删除'),
+          React.createElement('button',{className:'btn btn-outline',onClick:()=>setEditNode(null)},'取消'),
+          React.createElement('button',{className:'btn btn-primary',onClick:handleSave},'保存')
+        )
+      )
+    )
+  );
+}
+
+function DashboardPage(){
+  const {user}=useAuth();
+  const {data:overview,loading:l1,error:e1}=useApi(()=>apiGet('/api/dashboard/overview'));
+  const {data:trend,loading:l2,error:e2}=useApi(()=>apiGet('/api/dashboard/token-trend',{days:7}));
+  const {data:hitRate,loading:l3,error:e3}=useApi(()=>apiGet('/api/dashboard/retrieval-stats'));
+  const {data:topKbs,loading:l4,error:e4}=useApi(()=>apiGet('/api/dashboard/top-knowledge-bases',{limit:5}));
+  const {data:recentConvs,loading:l5,error:e5}=useApi(()=>apiGet('/api/dashboard/recent-conversations',{limit:10}));
+  const loading=l1||l2||l3||l4||l5;
+
+  const trendData=useMemo(()=>{
+    if(!trend?.trendData||trend.trendData.length===0)return[];
+    return trend.trendData.map((v,i)=>({label:(i+1)+'d',value:v.totalTokens||0}));
+  },[trend]);
+
+  const hitRateData=useMemo(()=>{
+    if(!hitRate&&!overview?.retrievalStats)return null;
+    const stats=hitRate||overview?.retrievalStats||{};
+    return {total:stats.totalCount||0,hit:stats.hitCount||0,rate:stats.hitRate||'--'};
+  },[hitRate,overview]);
+
+  const errors=[e1,e2,e3,e4,e5].filter(Boolean);
+  const errorMsg=errors.length>0?'加载失败：'+errors.join('，'):null;
+
+  return React.createElement('div',null,
+    React.createElement('h2',{style:{marginBottom:8,fontSize:20}},'个人看板'),
+    React.createElement('p',{style:{color:'var(--text-secondary)',fontSize:14,marginBottom:16}},'欢迎，',user?.username,'!'),
+    loading?React.createElement(Spinner,null):
+    errorMsg?React.createElement(ErrorState,{text:errorMsg,onRetry:()=>window.location.reload()}):
+    React.createElement(React.Fragment,null,
+      React.createElement('div',{className:'grid-4',style:{marginBottom:20}},
+        React.createElement('div',{className:'stat-card'},React.createElement('div',{className:'stat-value'},overview?.tokenStats?.totalTokens||0),React.createElement('div',{className:'stat-label'},'今日消耗 (tokens)')),
+        React.createElement('div',{className:'stat-card'},React.createElement('div',{className:'stat-value'},overview?.tokenStats?.usageCount||0),React.createElement('div',{className:'stat-label'},'今日调用次数')),
+        React.createElement('div',{className:'stat-card'},React.createElement('div',{className:'stat-value'},overview?.retrievalStats?.totalCount||0),React.createElement('div',{className:'stat-label'},'总检索数')),
+        React.createElement('div',{className:'stat-card'},React.createElement('div',{className:'stat-value'},overview?.retrievalStats?.hitRate||'--'),React.createElement('div',{className:'stat-label'},'命中率'))
+      ),
+      React.createElement('div',{className:'card',style:{marginBottom:20}},
+        React.createElement('h3',{style:{fontSize:15,marginBottom:12}},'Token 消耗趋势（最近 7 天）'),
+        React.createElement(BarChart,{data:trendData,height:120})
+      ),
+      hitRateData&&React.createElement('div',{className:'grid-3',style:{marginBottom:20}},
+        React.createElement('div',{className:'stat-card'},React.createElement('div',{className:'stat-value'},hitRateData.total),React.createElement('div',{className:'stat-label'},'总问询')),
+        React.createElement('div',{className:'stat-card'},React.createElement('div',{className:'stat-value'},hitRateData.hit),React.createElement('div',{className:'stat-label'},'命中数')),
+        React.createElement('div',{className:'stat-card'},React.createElement('div',{className:'stat-value'},hitRateData.rate),React.createElement('div',{className:'stat-label'},'命中率'))
+      ),
+      React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}},
+        topKbs&&React.createElement('div',{className:'card'},
+          React.createElement('h3',{style:{fontSize:15,marginBottom:12}},'热门知识库 Top 5'),
+          React.createElement('table',null,
+            React.createElement('thead',null,React.createElement('tr',null,React.createElement('th',null,'#'),React.createElement('th',null,'知识库'),React.createElement('th',null,'使用次数'),React.createElement('th',null,'操作'))),
+            React.createElement('tbody',null,(topKbs?.topKnowledgeBases||topKbs?.list||topKbs||[]).slice(0,5).map((kb,i)=>React.createElement('tr',{key:i},
+              React.createElement('td',null,i+1),
+              React.createElement('td',null,kb.name||kb.knowledgeBaseName||'未命名'),
+              React.createElement('td',null,kb.count||kb.usageCount||0),
+              React.createElement('td',null,React.createElement('button',{className:'btn btn-outline btn-sm',onClick:()=>window.location.hash='#/chat/knowledge/'+(kb.id||kb.knowledgeBaseId)},'查看'))
+            )))
+          )
+        ),
+        recentConvs&&React.createElement('div',{className:'card'},
+          React.createElement('h3',{style:{fontSize:15,marginBottom:12}},'最近对话记录'),
+          React.createElement('table',null,
+            React.createElement('thead',null,React.createElement('tr',null,React.createElement('th',null,'时间'),React.createElement('th',null,'知识库'),React.createElement('th',null,'问题'))),
+            React.createElement('tbody',null,(recentConvs?.recentConversations||recentConvs?.list||recentConvs||[]).slice(0,10).map((c,i)=>React.createElement('tr',{key:i},
+              React.createElement('td',null,formatTime(c.createTime||c.time)),
+              React.createElement('td',null,c.knowledgeBase||c.kb||'--'),
+              React.createElement('td',{style:{maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},c.question||c.query||'--')
+            )))
+          )
+        )
+      )
+    )
+  );
+}
+
+function RedisMonitorPage(){
+  const [tab,setTab]=useState('dashboard');
+  const {data:info,loading:l1,error:e1}=useApi(()=>apiGet('/api/monitor/redis/info'));
+  const {data:qpsTrend,loading:l2}=useApi(()=>apiGet('/api/monitor/redis/qps-trend',{days:7}));
+  const {data:memTrend,loading:l3}=useApi(()=>apiGet('/api/monitor/redis/memory-trend',{days:7}));
+  const {data:hotKeys,loading:l4}=useApi(()=>apiGet('/api/monitor/redis/keys'));
+  const [keyPattern,setKeyPattern]=useState('');
+  const [keyResults,setKeyResults]=useState(null);
+  const [keySearching,setKeySearching]=useState(false);
+
+  const qpsData=useMemo(()=>{
+    if(!qpsTrend?.dailyValues)return[];
+    return qpsTrend.dailyValues.map((v,i)=>({label:'d'+(i+1),value:v}));
+  },[qpsTrend]);
+  const memData=useMemo(()=>{
+    if(!memTrend?.dailyValues)return[];
+    return memTrend.dailyValues.map((v,i)=>({label:'d'+(i+1),value:v}));
+  },[memTrend]);
+
+  const searchKeys=async()=>{
+    if(!keyPattern.trim())return;
+    setKeySearching(true);
+    try{const d=await apiGet('/api/monitor/redis/keys',{pattern:keyPattern});setKeyResults(d)}
+    catch(e){alert(e.response?.data?.message||e.message)}
+    finally{setKeySearching(false)}
+  };
+
+  return React.createElement('div',null,
+    React.createElement('h2',{style:{marginBottom:16,fontSize:20}},'Redis 监控'),
+    React.createElement('div',{className:'tabs'},
+      React.createElement('div',{className:'tab '+(tab==='dashboard'?'active':''),onClick:()=>setTab('dashboard')},'数据看板'),
+      React.createElement('div',{className:'tab '+(tab==='query'?'active':''),onClick:()=>setTab('query')},'数据查询')
+    ),
+    tab==='dashboard'?React.createElement(React.Fragment,null,
+      (l1||l2||l3||l4)?React.createElement(Spinner,null):
+      e1?React.createElement(ErrorState,{text:e1}):
+      React.createElement(React.Fragment,null,
+        React.createElement('div',{className:'grid-4',style:{marginBottom:20}},
+          React.createElement('div',{className:'stat-card'},React.createElement('div',{className:'stat-value'},info?.keyCount||0),React.createElement('div',{className:'stat-label'},'Key 总数')),
+          React.createElement('div',{className:'stat-card'},React.createElement('div',{className:'stat-value'},info?.memory||'--'),React.createElement('div',{className:'stat-label'},'内存占用')),
+          React.createElement('div',{className:'stat-card'},React.createElement('div',{className:'stat-value'},info?.hitRate||'--'),React.createElement('div',{className:'stat-label'},'命中率')),
+          React.createElement('div',{className:'stat-card'},React.createElement('div',{className:'stat-value'},qpsTrend?.currentQps||info?.qps||'--'),React.createElement('div',{className:'stat-label'},'实时 QPS'))
+        ),
+        React.createElement('div',{className:'grid-2',style:{marginBottom:20}},
+          React.createElement('div',{className:'card'},
+            React.createElement('h3',{style:{fontSize:15,marginBottom:12}},'QPS 趋势'),
+            React.createElement(BarChart,{data:qpsData,height:120})
+          ),
+          React.createElement('div',{className:'card'},
+            React.createElement('h3',{style:{fontSize:15,marginBottom:12}},'内存趋势'),
+            React.createElement(BarChart,{data:memData,height:120,color:'var(--success)'})
+          )
+        ),
+        hotKeys&&React.createElement('div',{className:'card'},
+          React.createElement('h3',{style:{fontSize:15,marginBottom:12}},'热点 Key Top 20'),
+          React.createElement('table',null,
+            React.createElement('thead',null,React.createElement('tr',null,React.createElement('th',null,'#'),React.createElement('th',null,'Key'),React.createElement('th',null,'大小'),React.createElement('th',null,'TTL'),React.createElement('th',null,'访问次数'))),
+            React.createElement('tbody',null,(hotKeys.list||hotKeys||[]).slice(0,20).map((k,i)=>React.createElement('tr',{key:i},
+              React.createElement('td',null,i+1),
+              React.createElement('td',{style:{maxWidth:300,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},k.key||k.name||'--'),
+              React.createElement('td',null,k.size||'--'),
+              React.createElement('td',null,k.ttl||'--'),
+              React.createElement('td',null,k.accessCount||k.count||'--')
+            )))
+          )
+        )
+      )
+    ):
+    React.createElement('div',{className:'card'},
+      React.createElement('h3',{style:{fontSize:15,marginBottom:12}},'Key 查询'),
+      React.createElement('div',{style:{display:'flex',gap:8,marginBottom:16}},
+        React.createElement('input',{value:keyPattern,onChange:e=>setKeyPattern(e.target.value),placeholder:'输入 Key pattern 搜索...',style:{width:300},onKeyDown:e=>{if(e.key==='Enter')searchKeys()}}),
+        React.createElement('button',{className:'btn btn-primary',onClick:searchKeys,disabled:keySearching},keySearching?'搜索中...':'查询')
+      ),
+      keyResults&&React.createElement(React.Fragment,null,
+        React.createElement('p',{style:{color:'var(--text-secondary)',fontSize:13,marginBottom:8}},'共 ',(keyResults.total||keyResults.list?.length||0)+' 条结果'),
+        React.createElement('table',null,
+          React.createElement('thead',null,React.createElement('tr',null,React.createElement('th',null,'Key'),React.createElement('th',null,'类型'),React.createElement('th',null,'大小'),React.createElement('th',null,'TTL'))),
+          React.createElement('tbody',null,(keyResults.list||keyResults||[]).map((k,i)=>React.createElement('tr',{key:i},
+            React.createElement('td',null,k.key||k.name||'--'),
+            React.createElement('td',null,k.type||'--'),
+            React.createElement('td',null,k.size||'--'),
+            React.createElement('td',null,k.ttl||'--')
+          )))
+        )
+      ),
+      !keyResults&&React.createElement('p',{style:{color:'var(--text-secondary)',fontSize:13}},'输入 Key 模式进行查询，支持通配符 *')
+    )
+  );
+}
+
+function DbMonitorPage(){
+  const [tab,setTab]=useState('dashboard');
+  const [sqlPage,setSqlPage]=useState(1);
+  const {data:info,loading:l1,error:e1}=useApi(()=>apiGet('/api/monitor/db/info'));
+  const {data:qpsTrend,loading:l2}=useApi(()=>apiGet('/api/monitor/db/qps-trend',{days:7}));
+  const {data:slowQueries,loading:l3}=useApi(()=>apiGet('/api/monitor/db/slow-queries',{page:sqlPage,size:10}));
+  const [dbName,setDbName]=useState('');
+  const [tableName,setTableName]=useState('');
+  const [tableData,setTableData]=useState(null);
+  const [tableLoading,setTableLoading]=useState(false);
+
+  const qpsData=useMemo(()=>{
+    if(!qpsTrend?.dailyValues)return[];
+    return qpsTrend.dailyValues.map((v,i)=>({label:'d'+(i+1),value:v}));
+  },[qpsTrend]);
+
+  const queryTable=async()=>{
+    if(!dbName.trim()||!tableName.trim())return;
+    setTableLoading(true);
+    try{const d=await apiGet('/api/monitor/db/table-data',{db:dbName,table:tableName});setTableData(d)}
+    catch(e){alert(e.response?.data?.message||e.message)}
+    finally{setTableLoading(false)}
+  };
+
+  return React.createElement('div',null,
+    React.createElement('h2',{style:{marginBottom:16,fontSize:20}},'DB 监控'),
+    React.createElement('div',{className:'tabs'},
+      React.createElement('div',{className:'tab '+(tab==='dashboard'?'active':''),onClick:()=>setTab('dashboard')},'数据看板'),
+      React.createElement('div',{className:'tab '+(tab==='query'?'active':''),onClick:()=>setTab('query')},'数据查询')
+    ),
+    tab==='dashboard'?React.createElement(React.Fragment,null,
+      (l1||l2||l3)?React.createElement(Spinner,null):
+      e1?React.createElement(ErrorState,{text:e1}):
+      React.createElement(React.Fragment,null,
+        React.createElement('div',{className:'grid-4',style:{marginBottom:20}},
+          React.createElement('div',{className:'stat-card'},React.createElement('div',{className:'stat-value'},qpsTrend?.currentQps||info?.qps||'--'),React.createElement('div',{className:'stat-label'},'当前 QPS')),
+          React.createElement('div',{className:'stat-card'},React.createElement('div',{className:'stat-value'},info?.connectionCount||info?.visitCount||'--'),React.createElement('div',{className:'stat-label'},'访问量')),
+          React.createElement('div',{className:'stat-card'},React.createElement('div',{className:'stat-value'},info?.slowQueryCount||slowQueries?.total||'--'),React.createElement('div',{className:'stat-label'},'慢查询')),
+          React.createElement('div',{className:'stat-card'},React.createElement('div',{className:'stat-value'},info?.tableSpace||info?.tableCount||'--'),React.createElement('div',{className:'stat-label'},'表空间'))
+        ),
+        React.createElement('div',{className:'card',style:{marginBottom:20}},
+          React.createElement('h3',{style:{fontSize:15,marginBottom:12}},'QPS 趋势'),
+          React.createElement(BarChart,{data:qpsData,height:120})
+        ),
+        slowQueries&&React.createElement('div',{className:'card'},
+          React.createElement('h3',{style:{fontSize:15,marginBottom:12}},'慢查询列表'),
+          React.createElement('table',null,
+            React.createElement('thead',null,React.createElement('tr',null,React.createElement('th',null,'SQL'),React.createElement('th',null,'耗时(ms)'),React.createElement('th',null,'时间'))),
+            React.createElement('tbody',null,(slowQueries.list||slowQueries||[]).slice(0,10).map((q,i)=>React.createElement('tr',{key:i},
+              React.createElement('td',{style:{maxWidth:400,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},q.sql||q.query||'--'),
+              React.createElement('td',null,q.duration||q.time||'--'),
+              React.createElement('td',null,formatTime(q.createTime||q.occurredAt))
+            )))
+          ),
+          React.createElement(Pagination,{page:sqlPage,totalPages:slowQueries?.totalPages||slowQueries?.pages||0,onChange:setSqlPage})
+        )
+      )
+    ):
+    React.createElement('div',{className:'card'},
+      React.createElement('h3',{style:{fontSize:15,marginBottom:12}},'数据查询'),
+      React.createElement('div',{style:{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap'}},
+        React.createElement('input',{value:dbName,onChange:e=>setDbName(e.target.value),placeholder:'数据库名',style:{width:150}}),
+        React.createElement('input',{value:tableName,onChange:e=>setTableName(e.target.value),placeholder:'表名',style:{width:150}}),
+        React.createElement('button',{className:'btn btn-primary',onClick:queryTable,disabled:tableLoading},tableLoading?'查询中...':'查询')
+      ),
+      tableData?React.createElement('table',null,
+        React.createElement('thead',null,React.createElement('tr',null,(tableData.columns||Object.keys(tableData.list?.[0]||{})).map((col,i)=>React.createElement('th',{key:i},typeof col==='string'?col:col.name||col)))),
+        React.createElement('tbody',null,(tableData.list||tableData||[]).map((row,i)=>React.createElement('tr',{key:i},(tableData.columns||Object.keys(row||{})).map((col,j)=>React.createElement('td',{key:j},typeof row==='object'?row[typeof col==='string'?col:col.name]:row)))))
+      ):
+      React.createElement('p',{style:{color:'var(--text-secondary)',fontSize:13}},'选择数据库和表名后查看表数据')
+    )
+  );
+}
+
+function LogsPage(){
+  const [page,setPage]=useState(1);
+  const [level,setLevel]=useState('');
+  const [keyword,setKeyword]=useState('');
+  const {data,loading,error,reload}=useApi(()=>apiGet('/api/monitor/logs',{page,size:20,level:level||undefined,keyword:keyword||undefined}),[page,level,keyword]);
+  const items=data?.content||data?.list||data?.records||[];
+  const levelBadge=l=>{
+    const map={ERROR:'badge-danger',WARN:'badge-warning',INFO:'badge-info',DEBUG:'badge-info'};
+    return map[l]||'badge-info';
+  };
+
+  return React.createElement('div',null,
+    React.createElement('h2',{style:{marginBottom:16,fontSize:20}},'日志系统'),
+    React.createElement('div',{style:{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap'}},
+      React.createElement('select',{value:level,onChange:e=>{setLevel(e.target.value);setPage(1)},style:{width:120}},
+        React.createElement('option',{value:''},'全部级别'),
+        React.createElement('option',{value:'ERROR'},'ERROR'),
+        React.createElement('option',{value:'WARN'},'WARN'),
+        React.createElement('option',{value:'INFO'},'INFO'),
+        React.createElement('option',{value:'DEBUG'},'DEBUG')
+      ),
+      React.createElement('input',{value:keyword,onChange:e=>setKeyword(e.target.value),placeholder:'搜索日志关键词...',style:{width:250}}),
+      React.createElement('button',{className:'btn btn-primary',onClick:()=>{setPage(1);reload()}},'搜索')
+    ),
+    loading?React.createElement(Spinner,null):
+    error?React.createElement(ErrorState,{text:error,onRetry:reload}):
+    React.createElement('div',{className:'card'},
+      React.createElement('table',null,
+        React.createElement('thead',null,React.createElement('tr',null,
+          React.createElement('th',{style:{width:160}},'时间'),React.createElement('th',{style:{width:80}},'级别'),React.createElement('th',{style:{width:100}},'来源'),React.createElement('th',null,'消息')
+        )),
+        React.createElement('tbody',null,items.length===0?React.createElement('tr',null,React.createElement('td',{colSpan:4,style:{textAlign:'center',color:'var(--text-secondary)'}},'暂无日志')):
+          items.map((l,i)=>React.createElement('tr',{key:i},
+            React.createElement('td',{style:{fontSize:12}},formatTime(l.timestamp||l.time||l.createTime)),
+            React.createElement('td',null,React.createElement('span',{className:'badge '+levelBadge(l.level)},l.level||'--')),
+            React.createElement('td',null,l.source||l.logger||'--'),
+            React.createElement('td',{style:{maxWidth:500,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},l.message||l.msg||'--')
+          ))
+        )
+      ),
+      React.createElement(Pagination,{page:page,totalPages:data?.totalPages||data?.pages||0,onChange:setPage})
+    )
+  );
+}
+
+function ApprovalsPage(){
+  const [tab,setTab]=useState('my');
+  const [page,setPage]=useState(1);
+  const {data,loading,error,reload}=useApi(()=>apiGet('/api/approvals',{page,size:20,status:tab==='pending'?'PENDING':undefined}),[page,tab]);
+  const items=data?.content||data?.list||data?.records||[];
+  const [processModal,setProcessModal]=useState(null);
+  const [processReason,setProcessReason]=useState('');
+  const [processLoading,setProcessLoading]=useState(false);
+
+  const handleApprove=async(id)=>{
+    try{await apiPost('/api/approvals/'+id+'/approve',{approverId:'admin',approvalRemark:processReason||'同意'});setProcessModal(null);setProcessReason('');reload()}
+    catch(e){alert(e.response?.data?.message||e.message)}
+    finally{setProcessLoading(false)}
+  };
+  const handleReject=async(id)=>{
+    if(!processReason.trim()){alert('请输入拒绝原因');return}
+    setProcessLoading(true);
+    try{await apiPost('/api/approvals/'+id+'/reject',{approverId:'admin',rejectionReason:processReason});setProcessModal(null);setProcessReason('');reload()}
+    catch(e){alert(e.response?.data?.message||e.message)}
+    finally{setProcessLoading(false)}
+  };
+
+  return React.createElement('div',null,
+    React.createElement('h2',{style:{marginBottom:16,fontSize:20}},'审批中心'),
+    React.createElement('div',{className:'grid-4',style:{marginBottom:20}},
+      React.createElement('div',{className:'stat-card'},React.createElement('div',{className:'stat-value'},data?.pendingCount||0),React.createElement('div',{className:'stat-label'},'待审批')),
+      React.createElement('div',{className:'stat-card'},React.createElement('div',{className:'stat-value'},data?.approvedCount||0),React.createElement('div',{className:'stat-label'},'已通过')),
+      React.createElement('div',{className:'stat-card'},React.createElement('div',{className:'stat-value'},data?.rejectedCount||0),React.createElement('div',{className:'stat-label'},'已拒绝')),
+      React.createElement('div',{className:'stat-card'},React.createElement('div',{className:'stat-value'},data?.totalElements||data?.total||0),React.createElement('div',{className:'stat-label'},'总数'))
+    ),
+    React.createElement('div',{className:'tabs'},
+      React.createElement('div',{className:'tab '+(tab==='my'?'active':''),onClick:()=>{setTab('my');setPage(1)}},'我发起的审批'),
+      React.createElement('div',{className:'tab '+(tab==='pending'?'active':''),onClick:()=>{setTab('pending');setPage(1)}},'待我审批')
+    ),
+    loading?React.createElement(Spinner,null):
+    error?React.createElement(ErrorState,{text:error,onRetry:reload}):
+    React.createElement('div',{className:'card'},
+      React.createElement('table',null,
+        React.createElement('thead',null,React.createElement('tr',null,
+          tab==='pending'?React.createElement('th',null,'申请人'):null,
+          React.createElement('th',null,'申请类型'),React.createElement('th',null,'申请内容'),React.createElement('th',null,'状态'),React.createElement('th',null,'时间'),React.createElement('th',null,'操作')
+        )),
+        React.createElement('tbody',null,items.length===0?React.createElement('tr',null,React.createElement('td',{colSpan:tab==='pending'?6:5,style:{textAlign:'center',color:'var(--text-secondary)'}},'暂无数据')):
+          items.map(a=>React.createElement('tr',{key:a.id||a.approvalId},
+            tab==='pending'?React.createElement('td',null,a.applicant||a.applyUser||a.username||'--'):null,
+            React.createElement('td',null,a.type||a.approvalType||'--'),
+            React.createElement('td',null,a.title||a.description||'--'),
+            React.createElement('td',null,
+              React.createElement('span',{className:'badge '+(a.status==='PENDING'?'badge-warning':a.status==='APPROVED'?'badge-success':'badge-danger')},
+                a.status==='PENDING'?'待审核':a.status==='APPROVED'?'已通过':'已拒绝')
+            ),
+            React.createElement('td',null,formatTime(a.createTime||a.createdAt)),
+            React.createElement('td',null,
+              (a.status==='PENDING'&&tab==='pending')?React.createElement(React.Fragment,null,
+                React.createElement('button',{className:'btn btn-success btn-sm',style:{marginRight:4},onClick:()=>setProcessModal({id:a.id||a.approvalId,title:a.title||a.description,type:'approve'})},'通过'),
+                React.createElement('button',{className:'btn btn-danger btn-sm',onClick:()=>setProcessModal({id:a.id||a.approvalId,title:a.title||a.description,type:'reject'})},'拒绝')
+              ):
+              tab==='my'&&a.status==='PENDING'?React.createElement('button',{className:'btn btn-outline btn-sm',onClick:()=>{if(confirm('确定取消该审批？')){apiDel('/api/approvals/'+(a.id||a.approvalId)).then(reload).catch(e=>alert(e.response?.data?.message||e.message))}}},'取消'):
+              null
+            )
+          ))
+        )
+      ),
+      React.createElement(Pagination,{page:page,totalPages:data?.totalPages||data?.pages||0,onChange:setPage})
+    ),
+    processModal&&React.createElement('div',{className:'modal-overlay',onClick:()=>setProcessModal(null)},
+      React.createElement('div',{className:'modal',onClick:e=>e.stopPropagation(),style:{minWidth:400}},
+        React.createElement('h3',null,processModal.type==='approve'?'通过审批':'拒绝审批'),
+        React.createElement('p',{style:{color:'var(--text-secondary)',marginBottom:12,fontSize:13}},'审批: ',processModal.title),
+        React.createElement('div',{className:'form-group'},
+          React.createElement('label',null,processModal.type==='approve'?'审批说明（可选）':'拒绝原因'),
+          React.createElement('textarea',{value:processReason,onChange:e=>setProcessReason(e.target.value),rows:3,placeholder:processModal.type==='approve'?'输入审批说明...':'请输入拒绝原因...'})
+        ),
+        React.createElement('div',{className:'modal-actions'},
+          React.createElement('button',{className:'btn btn-outline',onClick:()=>{setProcessModal(null);setProcessReason('')}},'取消'),
+          React.createElement('button',{className:processModal.type==='approve'?'btn btn-success':'btn btn-danger',onClick:()=>processModal.type==='approve'?handleApprove(processModal.id):handleReject(processModal.id),disabled:processLoading},processLoading?'处理中...':processModal.type==='approve'?'通过':'拒绝')
+        )
+      )
+    )
+  );
+}
+
+function AdminDashboardPage(){
+  const {data:overview,loading:l1,error:e1}=useApi(()=>apiGet('/api/admin/dashboard/overview'));
+  const {data:systemStats,loading:l2}=useApi(()=>apiGet('/api/admin/dashboard/system-stats'));
+  const {data:activityTrend,loading:l3}=useApi(()=>apiGet('/api/admin/dashboard/activity-trend',{days:7}));
+  const {data:feedbackStats,loading:l4}=useApi(()=>apiGet('/api/admin/dashboard/feedback-stats'));
+  const loading=l1||l2||l3||l4;
+
+  const activityData=useMemo(()=>{
+    if(!activityTrend?.dailyValues)return[];
+    return activityTrend.dailyValues.map((v,i)=>({label:'d'+(i+1),value:v}));
+  },[activityTrend]);
+
+  return React.createElement('div',null,
+    React.createElement('h2',{style:{marginBottom:16,fontSize:20}},'全局看板'),
+    loading?React.createElement(Spinner,null):
+    e1?React.createElement(ErrorState,{text:e1}):
+    React.createElement(React.Fragment,null,
+      React.createElement('div',{className:'grid-5',style:{marginBottom:20}},
+        React.createElement('div',{className:'stat-card'},React.createElement('div',{className:'stat-value'},systemStats?.userCount||overview?.userCount||0),React.createElement('div',{className:'stat-label'},'用户总数')),
+        React.createElement('div',{className:'stat-card'},React.createElement('div',{className:'stat-value'},systemStats?.activeUserCount||overview?.activeUserCount||0),React.createElement('div',{className:'stat-label'},'活跃用户')),
+        React.createElement('div',{className:'stat-card'},React.createElement('div',{className:'stat-value'},systemStats?.tenantCount||overview?.tenantCount||0),React.createElement('div',{className:'stat-label'},'租户总数')),
+        React.createElement('div',{className:'stat-card'},React.createElement('div',{className:'stat-value'},systemStats?.conversationCount||overview?.conversationCount||0),React.createElement('div',{className:'stat-label'},'对话总数')),
+        React.createElement('div',{className:'stat-card'},React.createElement('div',{className:'stat-value'},React.createElement('span',{style:{color:'var(--success)',fontSize:20}},'●'),React.createElement('span',{style:{fontSize:16,marginLeft:4}},'正常')),React.createElement('div',{className:'stat-label'},'系统状态'))
+      ),
+      React.createElement('div',{className:'grid-4',style:{marginBottom:20}},
+        React.createElement('div',{className:'stat-card'},React.createElement('div',{className:'stat-value'},overview?.apiCalls||'--'),React.createElement('div',{className:'stat-label'},'API 调用')),
+        React.createElement('div',{className:'stat-card'},React.createElement('div',{className:'stat-value'},overview?.totalTokens||'--'),React.createElement('div',{className:'stat-label'},'总消耗 Token')),
+        React.createElement('div',{className:'stat-card'},React.createElement('div',{className:'stat-value'},overview?.todayTokens||'--'),React.createElement('div',{className:'stat-label'},'今日消耗')),
+        React.createElement('div',{className:'stat-card'},React.createElement('div',{className:'stat-value'},overview?.balance||'--'),React.createElement('div',{className:'stat-label'},'剩余额度'))
+      ),
+      overview?.ragStats&&React.createElement('div',{className:'card',style:{marginBottom:20}},
+        React.createElement('h3',{style:{fontSize:15,marginBottom:12}},'RAG 链路统计'),
+        React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(180px,1fr))',gap:12}},
+          Object.entries(overview.ragStats||{}).map(([k,v])=>React.createElement('div',{key:k,style:{padding:'12px',background:'var(--primary-light)',borderRadius:8}},
+            React.createElement('div',{style:{fontSize:13,fontWeight:600,color:'var(--primary)',marginBottom:4}},k),
+            React.createElement('div',{style:{fontSize:12,color:'var(--text-secondary)'}},typeof v==='object'?JSON.stringify(v):String(v))
+          ))
+        )
+      ),
+      feedbackStats&&React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:20}},
+        React.createElement('div',{className:'card'},
+          React.createElement('h3',{style:{fontSize:15,marginBottom:12}},'用户反馈统计'),
+          React.createElement('div',{className:'grid-3'},
+            React.createElement('div',{style:{textAlign:'center',padding:8}},React.createElement('div',{style:{fontSize:22,fontWeight:700,color:'var(--success)'}},feedbackStats.helpful||0),React.createElement('div',{style:{fontSize:12,color:'var(--text-secondary)'}},'有帮助')),
+            React.createElement('div',{style:{textAlign:'center',padding:8}},React.createElement('div',{style:{fontSize:22,fontWeight:700,color:'var(--danger)'}},feedbackStats.notHelpful||0),React.createElement('div',{style:{fontSize:12,color:'var(--text-secondary)'}},'无帮助')),
+            React.createElement('div',{style:{textAlign:'center',padding:8}},React.createElement('div',{style:{fontSize:22,fontWeight:700,color:'var(--warning)'}},feedbackStats.neutral||0),React.createElement('div',{style:{fontSize:12,color:'var(--text-secondary)'}},'一般'))
+          )
+        ),
+        React.createElement('div',{className:'card'},
+          React.createElement('h3',{style:{fontSize:15,marginBottom:12}},'系统活跃度（最近 7 天）'),
+          React.createElement(BarChart,{data:activityData,height:120})
+        )
+      ),
+      React.createElement('div',{style:{display:'flex',gap:8,marginBottom:20,flexWrap:'wrap'}},
+        React.createElement('button',{className:'btn btn-outline',onClick:()=>window.location.hash='#/admin/trace'},'RAG 追踪概览'),
+        React.createElement('button',{className:'btn btn-outline',onClick:()=>window.location.hash='#/admin/tenant'},'租户管理'),
+        React.createElement('button',{className:'btn btn-outline',onClick:()=>window.location.hash='#/monitor/logs'},'查看日志'),
+        React.createElement('button',{className:'btn btn-outline',onClick:()=>window.location.hash='#/monitor/redis'},'Redis 监控'),
+        React.createElement('button',{className:'btn btn-outline',onClick:()=>window.location.hash='#/monitor/db'},'DB 监控')
+      ),
+      React.createElement('div',{className:'card',style:{borderLeft:'4px solid var(--warning)'}},
+        React.createElement('h3',{style:{fontSize:15,marginBottom:12,color:'var(--warning)'}},'系统告警'),
+        React.createElement('div',{style:{fontSize:13,color:'var(--text-secondary)'}},
+          React.createElement('p',null,'系统运行正常，暂无告警信息'),
+          React.createElement('p',{style:{marginTop:4}},'最近检查: ',formatTime(new Date()))
+        )
+      )
+    )
+  );
+}
+
+function TenantPage(){
+  const [selectedTenant,setSelectedTenant]=useState(null);
+  const [page,setPage]=useState(1);
+  const [detailTab,setDetailTab]=useState('dept');
+  const [searchKeyword,setSearchKeyword]=useState('');
+  const {data,loading,error,reload}=useApi(()=>apiGet('/api/tenants',{page,size:20,name:searchKeyword||undefined}),[page,searchKeyword]);
+  const tenants=data?.content||data?.list||data?.records||[];
+  const [detail,setDetail]=useState(null);
+  const [detailLoading,setDetailLoading]=useState(false);
+  const [editMode,setEditMode]=useState(false);
+  const [editForm,setEditForm]=useState({});
+
+  const selectTenant=async(t)=>{
+    setSelectedTenant(t);setDetailLoading(true);setEditMode(false);
+    try{const d=await apiGet('/api/tenants/'+t.id);setDetail(d);setEditForm({tenantName:d.tenant_name||'',tenantCode:d.tenant_code||'',status:d.status||1})}
+    catch(e){alert(e.response?.data?.message||e.message)}
+    finally{setDetailLoading(false)}
+  };
+
+  const saveTenant=async()=>{
+    try{await apiPut('/api/tenants/'+selectedTenant.id,editForm);setEditMode(false);selectTenant(selectedTenant);reload()}
+    catch(e){alert(e.response?.data?.message||e.message)}
+  };
+
+  return React.createElement('div',null,
+    React.createElement('h2',{style:{marginBottom:16,fontSize:20}},'租户管理'),
+    React.createElement('div',{style:{display:'flex',gap:20,height:'calc(100vh - 160px)'}},
+      React.createElement('div',{style:{width:280,background:'#fff',borderRadius:8,boxShadow:'var(--shadow)',overflow:'hidden',display:'flex',flexDirection:'column'}},
+        React.createElement('div',{style:{padding:12,borderBottom:'1px solid var(--border)'}},
+          React.createElement('input',{value:searchKeyword,onChange:e=>setSearchKeyword(e.target.value),placeholder:'搜索租户...',style:{width:'100%'}})
+        ),
+        React.createElement('div',{style:{flex:1,overflowY:'auto'}},
+          loading?React.createElement(Spinner,null):
+          error?React.createElement(ErrorState,{text:error,onRetry:reload}):
+          tenants.length===0?React.createElement(EmptyState,{text:'暂无租户'}):
+          tenants.map(t=>React.createElement('div',{key:t.id,style:{padding:'12px 16px',cursor:'pointer',borderBottom:'1px solid var(--border)',background:selectedTenant?.id===t.id?'var(--primary-light)':'transparent',borderLeft:selectedTenant?.id===t.id?'3px solid var(--primary)':'3px solid transparent'},onClick:()=>selectTenant(t)},
+            React.createElement('div',{style:{fontSize:14,fontWeight:500}},t.tenant_name||'未命名'),
+            React.createElement('div',{style:{fontSize:11,color:'var(--text-secondary)',marginTop:2}},t.tenant_code||''),
+          ))
+        ),
+        React.createElement(Pagination,{page:page,totalPages:data?.totalPages||data?.pages||0,onChange:setPage})
+      ),
+      React.createElement('div',{style:{flex:1,background:'#fff',borderRadius:8,boxShadow:'var(--shadow)',padding:20,overflow:'auto'}},
+        selectedTenant?React.createElement(React.Fragment,null,
+          React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}},
+            React.createElement('h3',{style:{fontSize:16}},'租户详情: ',selectedTenant.tenant_name),
+            React.createElement('button',{className:editMode?'btn btn-primary btn-sm':'btn btn-outline btn-sm',onClick:()=>editMode?saveTenant():setEditMode(true)},editMode?'保存':'编辑')
+          ),
+          detailLoading?React.createElement(Spinner,null):
+          React.createElement(React.Fragment,null,
+            editMode?React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:16}},
+              React.createElement('div',{className:'form-group'},React.createElement('label',null,'名称'),React.createElement('input',{value:editForm.tenantName||'',onChange:e=>setEditForm({...editForm,tenantName:e.target.value})})),
+              React.createElement('div',{className:'form-group'},React.createElement('label',null,'状态'),React.createElement('select',{value:editForm.status||1,onChange:e=>setEditForm({...editForm,status:parseInt(e.target.value)})},React.createElement('option',{value:1},'活跃'),React.createElement('option',{value:0},'暂停'))),
+              React.createElement('div',{className:'form-group',style:{gridColumn:'span 2'}},React.createElement('label',null,'编码'),React.createElement('input',{value:editForm.tenantCode||'',onChange:e=>setEditForm({...editForm,tenantCode:e.target.value})}))
+            ):
+            React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:16}},
+              React.createElement('div',null,React.createElement('span',{style:{color:'var(--text-secondary)',fontSize:13}},'名称: '),detail?.tenant_name||'--'),
+              React.createElement('div',null,React.createElement('span',{style:{color:'var(--text-secondary)',fontSize:13}},'状态: '),React.createElement('span',{className:'badge '+(detail?.status===1?'badge-success':'badge-warning')},detail?.status===1?'活跃':'暂停')),
+              React.createElement('div',null,React.createElement('span',{style:{color:'var(--text-secondary)',fontSize:13}},'编码: '),detail?.tenant_code||'--'),
+              React.createElement('div',null,React.createElement('span',{style:{color:'var(--text-secondary)',fontSize:13}},'成员数: '),detail?.memberCount||0)
+            ),
+            React.createElement('div',{className:'tabs'},
+              React.createElement('div',{className:'tab '+(detailTab==='dept'?'active':''),onClick:()=>setDetailTab('dept')},'团队/部门'),
+              React.createElement('div',{className:'tab '+(detailTab==='user'?'active':''),onClick:()=>setDetailTab('user')},'用户'),
+              React.createElement('div',{className:'tab '+(detailTab==='role'?'active':''),onClick:()=>setDetailTab('role')},'角色权限')
+            ),
+            detailTab==='dept'&&React.createElement('div',{style:{padding:'8px 0'}},
+              detail?.departments?React.createElement('div',null,(detail.departments||[]).map((dept,i)=>React.createElement('div',{key:i,style:{padding:'8px 0',borderBottom:'1px solid var(--border)'}},
+                React.createElement('div',{style:{fontSize:14,fontWeight:500,marginBottom:4}},dept.team_name||dept),
+                React.createElement('div',{style:{fontSize:12,color:'var(--text-secondary)'},'状态: '},dept.status===1?'启用':'禁用')
+              ))):
+              React.createElement('p',{style:{color:'var(--text-secondary)',fontSize:13}},'暂无部门数据')
+            ),
+            detailTab==='user'&&React.createElement('div',null,
+              detail?.users?React.createElement('table',null,
+                React.createElement('thead',null,React.createElement('tr',null,React.createElement('th',null,'用户名'),React.createElement('th',null,'昵称'),React.createElement('th',null,'角色'),React.createElement('th',null,'操作'))),
+                React.createElement('tbody',null,(detail.users||[]).map((u,i)=>React.createElement('tr',{key:i},
+                  React.createElement('td',null,u.username||u.name||'--'),
+                  React.createElement('td',null,u.nickname||'--'),
+                  React.createElement('td',null,u.role||'--'),
+                  React.createElement('td',null,React.createElement('button',{className:'btn btn-outline btn-sm'},'编辑'))
+                )))
+              ):
+              React.createElement('p',{style:{color:'var(--text-secondary)',fontSize:13}},'暂无用户数据')
+            ),
+            detailTab==='role'&&React.createElement('div',null,
+              detail?.roles?React.createElement('table',null,
+                React.createElement('thead',null,React.createElement('tr',null,React.createElement('th',null,'角色名'),React.createElement('th',null,'成员数'),React.createElement('th',null,'操作'))),
+                React.createElement('tbody',null,(detail.roles||[]).map((r,i)=>React.createElement('tr',{key:i},
+                  React.createElement('td',null,r.name||r.role||'--'),
+                  React.createElement('td',null,r.memberCount||r.count||'--'),
+                  React.createElement('td',null,React.createElement('button',{className:'btn btn-outline btn-sm'},'权限配置'))
+                )))
+              ):
+              React.createElement('p',{style:{color:'var(--text-secondary)',fontSize:13}},'暂无角色数据')
+            )
+          )
+        ):
+        React.createElement('div',{style:{display:'flex',alignItems:'center',justifyContent:'center',height:'100%',color:'var(--text-secondary)',fontSize:15,flexDirection:'column'}},
+          React.createElement('p',null,'选择一个租户查看详情')
+        )
+      )
+    )
+  );
+}
+
+function RagTraceOverviewPage(){
+  const [tab,setTab]=useState('overview');
+  const {data:overview,loading:l1,error:e1}=useApi(()=>apiGet('/api/dashboard/trace/overview'));
+  const {data:nodeDuration,loading:l2}=useApi(()=>apiGet('/api/dashboard/trace/node-duration'));
+  const {data:errorTrend,loading:l3}=useApi(()=>apiGet('/api/dashboard/trace/error-trend'));
+  const {data:callVolume,loading:l4}=useApi(()=>apiGet('/api/dashboard/trace/call-volume'));
+  const {data:topModels,loading:l5}=useApi(()=>apiGet('/api/dashboard/trace/top-models'));
+  const [searchId,setSearchId]=useState('');
+  const loading=l1||l2||l3||l4||l5;
+
+  const trendData=useMemo(()=>{
+    if(!overview?.dailyTrend)return[];
+    return overview.dailyTrend.map((v,i)=>({label:'d'+(i+1),value:v}));
+  },[overview]);
+
+  return React.createElement('div',null,
+    React.createElement('h2',{style:{marginBottom:16,fontSize:20}},'RAG 追踪概览'),
+    React.createElement('div',{style:{display:'flex',gap:8,marginBottom:16}},
+      React.createElement('input',{value:searchId,onChange:e=>setSearchId(e.target.value),placeholder:'输入 trace ID 搜索...',style:{width:300},onKeyDown:e=>{if(e.key==='Enter'&&searchId.trim())window.location.hash='#/admin/trace/'+searchId.trim()}}),
+      React.createElement('button',{className:'btn btn-primary',onClick:()=>{if(searchId.trim())window.location.hash='#/admin/trace/'+searchId.trim()}},'搜索')
+    ),
+    loading?React.createElement(Spinner,null):
+    e1?React.createElement(ErrorState,{text:e1}):
+    React.createElement(React.Fragment,null,
+      React.createElement('div',{className:'grid-4',style:{marginBottom:20}},
+        React.createElement('div',{className:'stat-card'},React.createElement('div',{className:'stat-value'},overview?.totalTraces||0),React.createElement('div',{className:'stat-label'},'总调用')),
+        React.createElement('div',{className:'stat-card'},React.createElement('div',{className:'stat-value'},overview?.successCount||overview?.successTraces||0),React.createElement('div',{className:'stat-label'},'成功')),
+        React.createElement('div',{className:'stat-card'},React.createElement('div',{className:'stat-value'},overview?.failCount||overview?.failedTraces||0),React.createElement('div',{className:'stat-label'},'失败')),
+        React.createElement('div',{className:'stat-card'},React.createElement('div',{className:'stat-value'},overview?.avgDuration||'--'),React.createElement('div',{className:'stat-label'},'平均耗时(ms)'))
+      ),
+      React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:20}},
+        React.createElement('div',{className:'card'},
+          React.createElement('h3',{style:{fontSize:15,marginBottom:12}},'响应时间趋势'),
+          React.createElement(BarChart,{data:trendData,height:120})
+        ),
+        topModels&&React.createElement('div',{className:'card'},
+          React.createElement('h3',{style:{fontSize:15,marginBottom:12}},'Top 5 模型使用统计'),
+          React.createElement('table',null,
+            React.createElement('thead',null,React.createElement('tr',null,React.createElement('th',null,'#'),React.createElement('th',null,'模型'),React.createElement('th',null,'调用次数'),React.createElement('th',null,'平均耗时'))),
+            React.createElement('tbody',null,(topModels.list||topModels||[]).slice(0,5).map((m,i)=>React.createElement('tr',{key:i},
+              React.createElement('td',null,i+1),
+              React.createElement('td',null,m.model||m.name||'--'),
+              React.createElement('td',null,m.count||m.calls||'--'),
+              React.createElement('td',null,(m.avgDuration||m.duration||'--')+'ms')
+            )))
+          )
+        )
+      ),
+      nodeDuration&&React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}},
+        React.createElement('div',{className:'card'},
+          React.createElement('h3',{style:{fontSize:15,marginBottom:12}},'节点耗时分布'),
+          React.createElement('table',null,
+            React.createElement('thead',null,React.createElement('tr',null,React.createElement('th',null,'节点'),React.createElement('th',null,'平均耗时(ms)'),React.createElement('th',null,'调用次数'))),
+            React.createElement('tbody',null,(nodeDuration.list||nodeDuration||[]).map((n,i)=>React.createElement('tr',{key:i},React.createElement('td',null,n.node||n.name||'--'),React.createElement('td',null,n.avgDuration||n.duration||'--'),React.createElement('td',null,n.count||'--'))))
+          )
+        ),
+        errorTrend&&React.createElement('div',{className:'card'},
+          React.createElement('h3',{style:{fontSize:15,marginBottom:12}},'错误趋势'),
+          React.createElement('p',{style:{color:'var(--text-secondary)',fontSize:13}},'错误趋势数据：',JSON.stringify(errorTrend).slice(0,200))
+        )
+      )
+    )
+  );
+}
+
+function RagTraceDetailPage({id}){
+  const [tab,setTab]=useState('stages');
+  const {data,loading,error}=useApi(()=>apiGet('/api/admin/dashboard/trace/'+id),[id]);
+
+  return React.createElement('div',null,
+    React.createElement('div',{style:{marginBottom:16}},
+      React.createElement('button',{className:'btn btn-outline',onClick:()=>window.location.hash='#/admin/trace'},'← 返回追踪概览')
+    ),
+    React.createElement('h2',{style:{marginBottom:16,fontSize:20}},'RAG 追踪详情'),
+    loading?React.createElement(Spinner,null):
+    error?React.createElement(ErrorState,{text:error}):
+    React.createElement(React.Fragment,null,
+      React.createElement('div',{className:'card',style:{marginBottom:20}},
+        React.createElement('h3',{style:{fontSize:15,marginBottom:12}},'追踪信息'),
+        React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}},
+          React.createElement('div',null,React.createElement('span',{style:{color:'var(--text-secondary)',fontSize:13}},'Trace ID: '),id),
+          React.createElement('div',null,React.createElement('span',{style:{color:'var(--text-secondary)',fontSize:13}},'状态: '),React.createElement('span',{className:'badge '+(data?.status==='SUCCESS'?'badge-success':'badge-danger')},data?.status||'--')),
+          React.createElement('div',null,React.createElement('span',{style:{color:'var(--text-secondary)',fontSize:13}},'总耗时: '),data?.totalDuration||'--','ms'),
+          React.createElement('div',null,React.createElement('span',{style:{color:'var(--text-secondary)',fontSize:13}},'起始时间: '),formatTime(data?.startTime))
+        )
+      ),
+      data?.stages&&React.createElement(React.Fragment,null,
+        React.createElement('div',{className:'tabs'},
+          React.createElement('div',{className:'tab '+(tab==='stages'?'active':''),onClick:()=>setTab('stages')},'节点耗时分析'),
+          React.createElement('div',{className:'tab '+(tab==='errors'?'active':''),onClick:()=>setTab('errors')},'错误分析'),
+          React.createElement('div',{className:'tab '+(tab==='stats'?'active':''),onClick:()=>setTab('stats')},'调用量统计')
+        ),
+        tab==='stages'&&React.createElement('div',{className:'card'},
+          React.createElement('table',null,
+            React.createElement('thead',null,React.createElement('tr',null,React.createElement('th',null,'阶段'),React.createElement('th',null,'耗时(ms)'),React.createElement('th',null,'状态'),React.createElement('th',null,'详情'))),
+            React.createElement('tbody',null,(Array.isArray(data.stages)?data.stages:Object.entries(data.stages||{})).map((s,i)=>{
+              const stage=Array.isArray(s)?s:{name:s[0],...s[1]};
+              return React.createElement('tr',{key:i},
+                React.createElement('td',null,stage.name||stage.stage||'--'),
+                React.createElement('td',null,stage.duration||stage.time||'--'),
+                React.createElement('td',null,React.createElement('span',{className:'badge '+(stage.status==='SUCCESS'?'badge-success':'badge-danger')},stage.status||'--')),
+                React.createElement('td',null,stage.detail||stage.description||'--')
+              );
+            }))
+          )
+        ),
+        tab==='errors'&&React.createElement('div',{className:'card'},
+          data?.errors?React.createElement('table',null,
+            React.createElement('thead',null,React.createElement('tr',null,React.createElement('th',null,'阶段'),React.createElement('th',null,'错误信息'),React.createElement('th',null,'时间'))),
+            React.createElement('tbody',null,(data.errors||[]).map((e,i)=>React.createElement('tr',{key:i},
+              React.createElement('td',null,e.stage||e.node||'--'),
+              React.createElement('td',{style:{color:'var(--danger)'}},e.message||e.error||'--'),
+              React.createElement('td',null,formatTime(e.time||e.timestamp))
+            )))
+          ):
+          React.createElement('p',{style:{color:'var(--text-secondary)',fontSize:13}},'暂无错误信息')
+        ),
+        tab==='stats'&&React.createElement('div',{className:'card'},
+          React.createElement('p',{style:{color:'var(--text-secondary)',fontSize:13}},'调用量统计: ',JSON.stringify(data?.callStats||data?.stats||{}).slice(0,200))
+        )
+      )
+    )
+  );
+}
+
+// ===================== APP ROUTER =====================
+
+function App(){
+  const {user,loading}=useAuth();
+  const [hash,setHash]=useState(window.location.hash.slice(1)||'/chat');
+  useEffect(()=>{
+    const handler=()=>setHash(window.location.hash.slice(1)||'/chat');
+    window.addEventListener('hashchange',handler);
+    return ()=>window.removeEventListener('hashchange',handler);
+  },[]);
+
+  if(loading)return React.createElement('div',{style:{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center'}},React.createElement(Spinner,null));
+
+  if(!user&&hash!=='/login'){window.location.hash='#/login';return null}
+  if(user&&hash==='/login'){window.location.hash='#/chat';return null}
+  if(!user)return React.createElement(LoginPage,null);
+
+  const path=hash.startsWith('/')?hash.slice(1):hash;
+  const renderPage=()=>{
+    if(path==='chat')return React.createElement(ChatPage,null);
+    if(path==='chat/knowledge')return React.createElement(KnowledgePage,null);
+    if(path.startsWith('chat/knowledge/'))return React.createElement(KnowledgePage,null);
+    if(path==='chat/intent')return React.createElement(IntentPage,null);
+    if(path==='chat/dashboard')return React.createElement(DashboardPage,null);
+    if(path==='monitor/redis')return React.createElement(RedisMonitorPage,null);
+    if(path==='monitor/db')return React.createElement(DbMonitorPage,null);
+    if(path==='monitor/logs')return React.createElement(LogsPage,null);
+    if(path==='approvals')return React.createElement(ApprovalsPage,null);
+    if(path==='admin/dashboard')return React.createElement(AdminDashboardPage,null);
+    if(path==='admin/tenant')return React.createElement(TenantPage,null);
+    if(path==='admin/trace')return React.createElement(RagTraceOverviewPage,null);
+    if(path.startsWith('admin/trace/')){const id=path.split('/')[2];return React.createElement(RagTraceDetailPage,{id:id})}
+    return React.createElement(ChatPage,null);
+  };
+
+  return React.createElement(Layout,{current:path},renderPage());
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(
+  React.createElement(AuthProvider,null,React.createElement(App,null))
+);
+</script>
+</body>
+</html>

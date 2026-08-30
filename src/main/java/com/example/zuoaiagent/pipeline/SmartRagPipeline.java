@@ -3,11 +3,10 @@ package com.example.zuoaiagent.pipeline;
 import com.example.zuoaiagent.chat.RoutingChatService;
 import com.example.zuoaiagent.intent.model.IntentResult;
 import com.example.zuoaiagent.intent.service.IntentClassifier;
+import com.example.zuoaiagent.memory.UserMemoryExtractionService;
 import com.example.zuoaiagent.prompt.PromptScene;
 import com.example.zuoaiagent.prompt.RAGPromptService;
-import com.example.zuoaiagent.rag.DocumentReranker;
-import com.example.zuoaiagent.rag.MultiChannelRetriever;
-import com.example.zuoaiagent.rag.QueryRewriter;
+import com.example.zuoaiagent.rag.*;
 import com.example.zuoaiagent.trace.service.RagTraceRecordService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -17,111 +16,93 @@ import org.springframework.ai.document.Document;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
-/**
- * 智能 RAG 流水线（含 Prompt 组装 + 链路追踪）
- *
- * <p>执行步骤：
- * <ol>
- *   <li>改写查询（可选）</li>
- *   <li>意图分类（LLM）</li>
- *   <li>短路处理（系统/闲聊节点：直接 LLM 流式输出）</li>
- *   <li>多通道并行检索（全局 + 意图定向）</li>
- *   <li>重排序（可选）</li>
- *   <li>Prompt 组装（PromptScene 选模板 + ContextFormatter 格式化文档）</li>
- *   <li>路由流式推送</li>
- * </ol>
- *
- * <p>每个步骤均通过 {@link RagTraceRecordService} 异步记录耗时和数据到数据库。
- */
 @Component
 public class SmartRagPipeline {
 
     private static final Logger log = LoggerFactory.getLogger(SmartRagPipeline.class);
-
-    /** 意图分类置信度阈值：低于此值时 kbId 不传入定向通道 */
     private static final double CONFIDENCE_THRESHOLD = 0.5;
+    private static final double RERANK_CONFIDENCE_THRESHOLD = 0.5;
+    private static final int RERANK_TOP_K = 3;
+    private static final int TOKEN_BUDGET = 3000;
 
     private final QueryRewriter queryRewriter;
+    private final HyDEQueryRewriter hydeQueryRewriter;
     private final IntentClassifier intentClassifier;
     private final MultiChannelRetriever multiChannelRetriever;
     private final DocumentReranker documentReranker;
+    private final TokenBudgetTrimmer tokenBudgetTrimmer;
     private final RAGPromptService ragPromptService;
     private final RoutingChatService routingChatService;
     private final RagTraceRecordService traceService;
+    private final UserMemoryExtractionService memoryExtractionService;
     private final ObjectMapper objectMapper;
 
     public SmartRagPipeline(QueryRewriter queryRewriter,
+                            HyDEQueryRewriter hydeQueryRewriter,
                             IntentClassifier intentClassifier,
                             MultiChannelRetriever multiChannelRetriever,
                             DocumentReranker documentReranker,
+                            TokenBudgetTrimmer tokenBudgetTrimmer,
                             RAGPromptService ragPromptService,
                             RoutingChatService routingChatService,
                             RagTraceRecordService traceService,
+                            UserMemoryExtractionService memoryExtractionService,
                             ObjectMapper objectMapper) {
         this.queryRewriter = queryRewriter;
+        this.hydeQueryRewriter = hydeQueryRewriter;
         this.intentClassifier = intentClassifier;
         this.multiChannelRetriever = multiChannelRetriever;
         this.documentReranker = documentReranker;
+        this.tokenBudgetTrimmer = tokenBudgetTrimmer;
         this.ragPromptService = ragPromptService;
         this.routingChatService = routingChatService;
         this.traceService = traceService;
+        this.memoryExtractionService = memoryExtractionService;
         this.objectMapper = objectMapper;
     }
 
-    /**
-     * 执行智能 RAG 流水线，结果通过 SSE 流式推送。
-     */
     public void execute(RagPipelineContext ctx, SseEmitter emitter) {
         String traceId = UUID.randomUUID().toString().replace("-", "");
         String conId = ctx.getConversationId();
         long pipelineStart = System.currentTimeMillis();
 
-        // ── 流水线开始 ──
         traceService.startRun(traceId, conId, ctx.getOriginalPrompt());
         ctx.setTraceId(traceId);
 
         try {
-            // ① 改写查询
             String rewrittenQuery = executeRewrite(ctx, traceId);
 
-            // ② 意图分类
             IntentResult intentResult = executeClassify(rewrittenQuery, traceId);
             ctx.setIntentResult(intentResult);
 
             String domain = resolveDomain(intentResult);
 
-            // ③ 短路：系统/闲聊节点
             if (intentResult.isSystem()) {
-                log.info("[SmartRagPipeline] traceId={} 命中系统节点，短路直接回复", traceId);
+                String memory = ctx.isEnableMemory() ? memoryExtractionService.getMemoryContext(ctx.getUserId()) : null;
                 String sysPrompt = ragPromptService.build(PromptScene.SYSTEM_CHAT, ctx.getName(), domain, List.of());
+                if (memory != null) sysPrompt = memory + "\n" + sysPrompt;
                 ctx.setFinalSystemPrompt(sysPrompt);
                 traceService.finishRun(traceId, "SUCCESS", null, System.currentTimeMillis() - pipelineStart);
                 routingChatService.streamChat(ctx.getOriginalPrompt(), conId, sysPrompt, null, emitter);
                 return;
             }
 
-            // ④ 多通道并行检索
             List<Document> retrieved = executeRetrieve(rewrittenQuery, intentResult, traceId);
             ctx.setRetrievedDocs(retrieved);
 
-            // ⑤ 重排序
-            List<Document> finalDocs = executeRerank(ctx, rewrittenQuery, retrieved, traceId);
-            ctx.setRerankedDocs(finalDocs);
+            List<Document> reranked = executeRerank(ctx, rewrittenQuery, retrieved, traceId);
+            ctx.setRerankedDocs(reranked);
 
-            // ⑥ Prompt 组装
-            String finalSystemPrompt = executePromptBuild(ctx, domain, finalDocs, traceId);
+            List<Document> trimmed = tokenBudgetTrimmer.trim(reranked, TOKEN_BUDGET);
+
+            String memory = ctx.isEnableMemory() ? memoryExtractionService.getMemoryContext(ctx.getUserId()) : null;
+            String finalSystemPrompt = executePromptBuild(ctx, domain, trimmed, memory, traceId);
             ctx.setFinalSystemPrompt(finalSystemPrompt);
 
-            // ── 流水线成功 ──
             traceService.finishRun(traceId, "SUCCESS", null, System.currentTimeMillis() - pipelineStart);
-
-            // ⑦ 路由流式推送
             routingChatService.streamChat(ctx.getOriginalPrompt(), conId, finalSystemPrompt, null, emitter);
 
         } catch (Exception e) {
@@ -131,45 +112,46 @@ public class SmartRagPipeline {
         }
     }
 
-    // ==================== 各阶段私有方法 ====================
-
-    /** ① 改写查询 */
     private String executeRewrite(RagPipelineContext ctx, String traceId) {
         long start = System.currentTimeMillis();
-        String inputJson = toJson(Map.of("originalPrompt", ctx.getOriginalPrompt(),
-                "enableRewrite", ctx.isEnableRewrite()));
-        traceService.startNode(traceId, "rewrite", "查询改写", "REWRITE", inputJson);
+        traceService.startNode(traceId, "rewrite", "查询改写", "REWRITE",
+                toJson(Map.of("originalPrompt", ctx.getOriginalPrompt(), "enableRewrite", ctx.isEnableRewrite())));
 
-        String rewrittenQuery;
         try {
-            rewrittenQuery = ctx.isEnableRewrite()
+            String rewrittenQuery = ctx.isEnableRewrite()
                     ? queryRewriter.rewrite(ctx.getOriginalPrompt())
                     : ctx.getOriginalPrompt();
+
+            boolean hydeUsed = false;
+            if (hydeQueryRewriter.shouldUseHyDE()) {
+                String hydeDoc = hydeQueryRewriter.generateHypothesisDocument(rewrittenQuery);
+                if (!hydeDoc.isBlank()) {
+                    rewrittenQuery = rewrittenQuery + " " + hydeDoc;
+                    hydeUsed = true;
+                }
+            }
+
             ctx.setRewrittenQuery(rewrittenQuery);
-
-            String outputJson = toJson(Map.of("rewrittenQuery", rewrittenQuery));
+            int promptTokens = estimateTokens(ctx.getOriginalPrompt());
+            int completionTokens = estimateTokens(rewrittenQuery);
             traceService.finishNode(traceId, "rewrite", "SUCCESS", null,
-                    System.currentTimeMillis() - start, outputJson);
-
-            log.info("[SmartRagPipeline] traceId={} 改写: {} → {}", traceId, ctx.getOriginalPrompt(), rewrittenQuery);
+                    System.currentTimeMillis() - start,
+                    toJson(Map.of("rewrittenQuery", rewrittenQuery, "hydeUsed", hydeUsed)),
+                    promptTokens, completionTokens);
             return rewrittenQuery;
         } catch (Exception e) {
             traceService.finishNode(traceId, "rewrite", "ERROR", e.getMessage(),
                     System.currentTimeMillis() - start, null);
-            log.warn("[SmartRagPipeline] 改写失败，降级使用原始 prompt: {}", e.getMessage());
             return ctx.getOriginalPrompt();
         }
     }
 
-    /** ② 意图分类 */
     private IntentResult executeClassify(String query, String traceId) {
         long start = System.currentTimeMillis();
-        String inputJson = toJson(Map.of("query", query));
-        traceService.startNode(traceId, "classify", "意图分类", "CLASSIFY", inputJson);
+        traceService.startNode(traceId, "classify", "意图分类", "CLASSIFY", toJson(Map.of("query", query)));
 
         try {
             IntentResult result = intentClassifier.classify(query);
-
             Map<String, Object> output = new HashMap<>();
             output.put("intentNodeId", result.getIntentNodeId());
             output.put("label", result.getLabel());
@@ -177,59 +159,35 @@ public class SmartRagPipeline {
             output.put("isSystem", result.isSystem());
             output.put("kbId", result.getKbId());
             traceService.finishNode(traceId, "classify", "SUCCESS", null,
-                    System.currentTimeMillis() - start, toJson(output));
-
-            log.info("[SmartRagPipeline] traceId={} 意图: {}", traceId, result);
+                    System.currentTimeMillis() - start, toJson(output),
+                    estimateTokens(query), estimateTokens(String.valueOf(result.getIntentNodeId())));
             return result;
         } catch (Exception e) {
             traceService.finishNode(traceId, "classify", "ERROR", e.getMessage(),
                     System.currentTimeMillis() - start, null);
-            log.error("[SmartRagPipeline] 意图分类失败，降级为 unknown: {}", e.getMessage());
             return IntentResult.unknown();
         }
     }
 
-    /** ④ 多通道并行检索 */
     private List<Document> executeRetrieve(String query, IntentResult intentResult, String traceId) {
         long start = System.currentTimeMillis();
         Long kbId = (intentResult.getConfidence() >= CONFIDENCE_THRESHOLD) ? intentResult.getKbId() : null;
 
-        Map<String, Object> input = new HashMap<>();
-        input.put("query", query);
-        input.put("kbId", kbId);
-        traceService.startNode(traceId, "retrieve", "多通道检索", "RETRIEVE", toJson(input));
+        traceService.startNode(traceId, "retrieve", "多通道检索", "RETRIEVE",
+                toJson(Map.of("query", query, "kbId", kbId)));
 
         try {
             List<Document> docs = multiChannelRetriever.retrieve(query, kbId);
-
-            // 输出记录：文档数量 + 每个文档的 id 和前 200 字
-            List<Map<String, Object>> docSummaries = docs.stream()
-                    .map(d -> {
-                        Map<String, Object> m = new HashMap<>();
-                        m.put("id", d.getId());
-                        String text = d.getFormattedContent();
-                        m.put("preview", text != null && text.length() > 200 ? text.substring(0, 200) + "..." : text);
-                        return m;
-                    })
-                    .collect(Collectors.toList());
-
-            Map<String, Object> output = new HashMap<>();
-            output.put("count", docs.size());
-            output.put("docs", docSummaries);
             traceService.finishNode(traceId, "retrieve", "SUCCESS", null,
-                    System.currentTimeMillis() - start, toJson(output));
-
-            log.info("[SmartRagPipeline] traceId={} 检索到 {} 个文档片段", traceId, docs.size());
+                    System.currentTimeMillis() - start, toJson(Map.of("count", docs.size())));
             return docs;
         } catch (Exception e) {
             traceService.finishNode(traceId, "retrieve", "ERROR", e.getMessage(),
                     System.currentTimeMillis() - start, null);
-            log.error("[SmartRagPipeline] 检索失败: {}", e.getMessage());
             return List.of();
         }
     }
 
-    /** ⑤ 重排序 */
     private List<Document> executeRerank(RagPipelineContext ctx, String query,
                                          List<Document> retrieved, String traceId) {
         long start = System.currentTimeMillis();
@@ -238,56 +196,36 @@ public class SmartRagPipeline {
 
         try {
             List<Document> finalDocs = ctx.isEnableRerank()
-                    ? documentReranker.rerank(query, retrieved, 3)
-                    : (retrieved.size() > 3 ? retrieved.subList(0, 3) : retrieved);
+                    ? documentReranker.rerank(query, retrieved, RERANK_TOP_K, RERANK_CONFIDENCE_THRESHOLD)
+                    : (retrieved.size() > RERANK_TOP_K ? retrieved.subList(0, RERANK_TOP_K) : retrieved);
 
-            // 输出记录：保留文档数量 + 完整文本（供后续回查）
-            List<Map<String, Object>> docDetails = finalDocs.stream()
-                    .map(d -> {
-                        Map<String, Object> m = new HashMap<>();
-                        m.put("id", d.getId());
-                        m.put("content", d.getFormattedContent());
-                        return m;
-                    })
-                    .collect(Collectors.toList());
-
-            Map<String, Object> output = new HashMap<>();
-            output.put("count", finalDocs.size());
-            output.put("docs", docDetails);
             traceService.finishNode(traceId, "rerank", "SUCCESS", null,
-                    System.currentTimeMillis() - start, toJson(output));
-
-            log.info("[SmartRagPipeline] traceId={} 重排序后保留 {} 个文档片段", traceId, finalDocs.size());
+                    System.currentTimeMillis() - start, toJson(Map.of("count", finalDocs.size())),
+                    estimateTokens(query) * retrieved.size(), estimateTokens("score") * retrieved.size());
             return finalDocs;
         } catch (Exception e) {
             traceService.finishNode(traceId, "rerank", "ERROR", e.getMessage(),
                     System.currentTimeMillis() - start, null);
-            log.warn("[SmartRagPipeline] 重排序失败，使用原始检索结果: {}", e.getMessage());
-            return retrieved.size() > 3 ? retrieved.subList(0, 3) : retrieved;
+            return retrieved.size() > RERANK_TOP_K ? retrieved.subList(0, RERANK_TOP_K) : retrieved;
         }
     }
 
-    /** ⑥ Prompt 组装 */
     private String executePromptBuild(RagPipelineContext ctx, String domain,
-                                      List<Document> finalDocs, String traceId) {
+                                      List<Document> finalDocs, String memory, String traceId) {
         long start = System.currentTimeMillis();
         traceService.startNode(traceId, "prompt", "Prompt组装", "PROMPT",
-                toJson(Map.of("scene", finalDocs.isEmpty() ? "EMPTY_RETRIEVAL" : "KB_ONLY",
-                        "domain", domain, "docCount", finalDocs.size())));
+                toJson(Map.of("docCount", finalDocs.size(), "domain", domain)));
 
         PromptScene scene = finalDocs.isEmpty() ? PromptScene.EMPTY_RETRIEVAL : PromptScene.KB_ONLY;
-        String finalSystemPrompt = ragPromptService.build(scene, ctx.getName(), domain, finalDocs);
+        String prompt = ragPromptService.build(scene, ctx.getName(), domain, finalDocs);
+        if (memory != null && !memory.isBlank()) {
+            prompt = memory + "\n" + prompt;
+        }
 
         traceService.finishNode(traceId, "prompt", "SUCCESS", null,
-                System.currentTimeMillis() - start,
-                toJson(Map.of("scene", scene.name(), "promptLength", finalSystemPrompt.length())));
-
-        log.info("[SmartRagPipeline] traceId={} Prompt 组装完成 scene={} 长度={}",
-                traceId, scene, finalSystemPrompt.length());
-        return finalSystemPrompt;
+                System.currentTimeMillis() - start, toJson(Map.of("scene", scene.name(), "promptLength", prompt.length())));
+        return prompt;
     }
-
-    // ==================== 工具方法 ====================
 
     private String resolveDomain(IntentResult intentResult) {
         if (intentResult == null) return "各领域";
@@ -296,10 +234,12 @@ public class SmartRagPipeline {
     }
 
     private String toJson(Object obj) {
-        try {
-            return objectMapper.writeValueAsString(obj);
-        } catch (JsonProcessingException e) {
-            return "{}";
-        }
+        try { return objectMapper.writeValueAsString(obj); }
+        catch (JsonProcessingException e) { return "{}"; }
+    }
+
+    private int estimateTokens(String text) {
+        if (text == null || text.isBlank()) return 0;
+        return (int) Math.ceil(text.length() * 0.4);
     }
 }

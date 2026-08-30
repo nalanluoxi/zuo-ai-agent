@@ -27,6 +27,12 @@ public class RagPipelineContext {
     /** 是否启用重排序 */
     private final boolean enableRerank;
 
+    /** 是否启用长期记忆注入 */
+    private final boolean enableMemory;
+
+    /** 当前用户 ID（用于长期记忆查询） */
+    private final Long userId;
+
     /** 改写后的查询（阶段②产出） */
     private String rewrittenQuery;
 
@@ -45,14 +51,17 @@ public class RagPipelineContext {
     /** 链路追踪 ID（流水线开始时生成） */
     private String traceId;
 
-    public RagPipelineContext(String originalPrompt, String conversationId,
-                              String name,
-                              boolean enableRewrite, boolean enableRerank) {
+public RagPipelineContext(String originalPrompt, String conversationId,
+                               String name,
+                               boolean enableRewrite, boolean enableRerank,
+                               boolean enableMemory, Long userId) {
         this.originalPrompt = originalPrompt;
         this.conversationId = conversationId;
         this.name = name;
         this.enableRewrite = enableRewrite;
         this.enableRerank = enableRerank;
+        this.enableMemory = enableMemory;
+        this.userId = userId;
     }
 
     public String getOriginalPrompt() { return originalPrompt; }
@@ -60,6 +69,8 @@ public class RagPipelineContext {
     public String getName() { return name; }
     public boolean isEnableRewrite() { return enableRewrite; }
     public boolean isEnableRerank() { return enableRerank; }
+    public boolean isEnableMemory() { return enableMemory; }
+    public Long getUserId() { return userId; }
 
     public String getRewrittenQuery() { return rewrittenQuery; }
     public void setRewrittenQuery(String rewrittenQuery) { this.rewrittenQuery = rewrittenQuery; }

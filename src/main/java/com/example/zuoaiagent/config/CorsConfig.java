@@ -1,11 +1,18 @@
 package com.example.zuoaiagent.config;
 
+import com.example.zuoaiagent.monitor.trace.TraceInterceptor;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 @Configuration
+@RequiredArgsConstructor
 public class CorsConfig implements WebMvcConfigurer {
+
+    private final AuthClientInterceptor authClientInterceptor;
+    private final TraceInterceptor traceInterceptor;
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
@@ -18,5 +25,32 @@ public class CorsConfig implements WebMvcConfigurer {
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
                 .exposedHeaders("*");
+    }
+
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        // Auth 拦截器（租户上下文）
+        registry.addInterceptor(authClientInterceptor)
+                .addPathPatterns("/**")
+                .excludePathPatterns(
+                        "/health",
+                        "/swagger-ui/**",
+                        "/swagger-resources/**",
+                        "/v3/api-docs/**",
+                        "/doc.html/**",
+                        "/webjars/**"
+                );
+
+        // Trace 拦截器（自动打点）— 在 Auth 之后执行
+        registry.addInterceptor(traceInterceptor)
+                .addPathPatterns("/**")
+                .excludePathPatterns(
+                        "/health",
+                        "/swagger-ui/**",
+                        "/swagger-resources/**",
+                        "/v3/api-docs/**",
+                        "/doc.html/**",
+                        "/webjars/**"
+                );
     }
 }

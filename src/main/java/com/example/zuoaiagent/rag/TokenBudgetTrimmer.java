@@ -1,0 +1,37 @@
+package com.example.zuoaiagent.rag;
+
+import org.springframework.ai.document.Document;
+import org.springframework.stereotype.Component;
+
+import java.util.ArrayList;
+import java.util.List;
+
+@Component
+public class TokenBudgetTrimmer {
+
+    private static final int DEFAULT_MAX_TOKENS = 3000;
+
+    public List<Document> trim(List<Document> documents, int maxTokens) {
+        if (documents == null || documents.isEmpty()) return List.of();
+        if (maxTokens <= 0) maxTokens = DEFAULT_MAX_TOKENS;
+
+        List<Document> result = new ArrayList<>();
+        int totalTokens = 0;
+        for (Document doc : documents) {
+            int docTokens = estimateTokens(doc.getFormattedContent());
+            if (totalTokens + docTokens > maxTokens) break;
+            result.add(doc);
+            totalTokens += docTokens;
+        }
+        return result;
+    }
+
+    public List<Document> trim(List<Document> documents) {
+        return trim(documents, DEFAULT_MAX_TOKENS);
+    }
+
+    private int estimateTokens(String text) {
+        if (text == null || text.isBlank()) return 0;
+        return (int) Math.ceil(text.length() * 0.5);
+    }
+}

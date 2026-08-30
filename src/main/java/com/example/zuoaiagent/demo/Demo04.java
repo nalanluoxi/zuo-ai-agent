@@ -1,7 +1,6 @@
 package com.example.zuoaiagent.demo;
 
 
-import com.example.zuoaiagent.chatmemory.FileBasedChatMemory;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;

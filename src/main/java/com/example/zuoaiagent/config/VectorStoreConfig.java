@@ -60,7 +60,9 @@ public class VectorStoreConfig {
      * <ul>
      *   <li>dimensions=4096：与 Qwen3-Embedding-8B 输出维度一致</li>
      *   <li>distanceType=COSINE_DISTANCE：余弦相似度，适合文本语义检索</li>
-     *   <li>indexType=HNSW：近似最近邻索引，检索性能优于精确扫描</li>
+     *   <li>indexType=NONE：pgvector 的 HNSW/IVFFLAT 索引硬性限制最多 2000 维，
+     *       4096 维无法建索引（建索引会报 "column cannot have more than 2000 dimensions
+     *       for hnsw index"），因此改为精确扫描（无索引），数据量较小时性能可接受</li>
      *   <li>initializeSchema=true：首次启动自动建表，无需手动 DDL</li>
      * </ul>
      *
@@ -74,7 +76,7 @@ public class VectorStoreConfig {
         return PgVectorStore.builder(jdbcTemplate, circuitBreakerEmbeddingModel)
                 .dimensions(4096)                              // Qwen3-Embedding-8B 维度为 4096
                 .distanceType(PgVectorStore.PgDistanceType.COSINE_DISTANCE)
-                .indexType(PgVectorStore.PgIndexType.HNSW)
+                .indexType(PgVectorStore.PgIndexType.NONE)
                 .initializeSchema(true)
                 .build();
     }

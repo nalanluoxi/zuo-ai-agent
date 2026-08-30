@@ -60,4 +60,7 @@ public interface RagTraceRecordService {
      */
     void finishNode(String traceId, String nodeId, String status, String errorMessage,
                     long durationMs, String outputData);
+
+    void finishNode(String traceId, String nodeId, String status, String errorMessage,
+                    long durationMs, String outputData, int promptTokens, int completionTokens);
 }

@@ -24,7 +24,9 @@ spring:
     ollama:
       base-url: http://localhost:11434
       chat:
-        enabled: false
+        enabled: true
+        options:
+          model: qwen2.5:0.5b
       embedding:
         enabled: true
         options:
@@ -39,6 +41,29 @@ spring:
     username: postgres.aaqhwitflxtjnsgyrsin
     password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:admin}
+    password: ${RABBITMQ_PASSWORD:admin123}
+    listener:
+      simple:
+        acknowledge-mode: manual
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 1000ms
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 4
+      timeout: 3000ms
 
 mybatis-plus:
   configuration:
@@ -145,15 +170,30 @@ chat:
     failure-threshold: 2
     open-duration-ms: 30000
   candidates:
+    # 本地候选：Ollama qwen2.5:0.5b（离线可用，无需 API Key）
+    - id: ollama-qwen
+      provider: ollama
+      model: qwen2.5:0.5b
+      priority: 1
+      enabled: true
     # 主候选：DashScope qwen-plus
     - id: dashscope-qwen
       provider: dashscope
       model: qwen-plus
-      priority: 1
-      enabled: true
+      priority: 2
+      enabled: false
     # 备用候选：SiliconFlow DeepSeek-V3（OpenAI 兼容接口）
     - id: siliconflow-deepseek
       provider: openai
       model: deepseek-ai/DeepSeek-V3
-      priority: 2
-      enabled: true
+      priority: 3
+      enabled: false
+
+# RabbitMQ 队列声明
+zuo:
+  rabbitmq:
+    exchange: zuo.ai.agent
+    queues:
+      ingestion: ingestion.queue
+      chat-memory-persistence: chat.memory.persistence.queue
+      chat-memory-compression: chat.memory.compression.queue

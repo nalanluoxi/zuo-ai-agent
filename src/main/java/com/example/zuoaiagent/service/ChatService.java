@@ -39,5 +39,8 @@ public interface ChatService {
      * @param emitter        SSE 输出通道
      */
     void streamChatSmart(String prompt, String conversationId, String name,
-                         boolean enableRewrite, boolean enableRerank, SseEmitter emitter);
+                         boolean enableRewrite, boolean enableRerank,
+                         boolean enableMemory, Long userId, SseEmitter emitter);
+
+    String ask(String prompt, String conversationId);
 }

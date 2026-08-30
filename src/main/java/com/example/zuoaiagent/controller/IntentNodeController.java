@@ -8,6 +8,7 @@ import com.example.zuoaiagent.intent.mapper.IntentNodeMapper;
 import com.example.zuoaiagent.intent.service.IntentTreeService;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -87,5 +88,39 @@ public class IntentNodeController {
     public BaseResponse<String> refreshCache() {
         intentTreeService.refreshCache();
         return ResultUtils.success("缓存刷新成功，共加载 " + intentTreeService.getAllNodes().size() + " 个节点");
+    }
+
+    @PutMapping("/node/{id}")
+    public BaseResponse<Boolean> updateNode(@PathVariable Long id, @RequestBody IntentNodeDO node) {
+        // P4 修复：如果修改了 parentId，进行树结构校验
+        if (node.getParentId() != null && !node.getParentId().equals(intentNodeMapper.selectById(id).getParentId())) {
+            intentTreeService.validateMove(id, node.getParentId());
+        }
+        
+        node.setId(id);
+        intentNodeMapper.updateById(node);
+        intentTreeService.refreshCache();
+        return ResultUtils.success(true);
+    }
+
+    @DeleteMapping("/node/{id}")
+    public BaseResponse<Boolean> deleteNode(@PathVariable Long id) {
+        // P5 修复：使用新的 deleteNode 方法，包含子节点检查和逻辑删除
+        intentTreeService.deleteNode(id);
+        return ResultUtils.success(true);
+    }
+
+    @PutMapping("/node/{id}/disable")
+    public BaseResponse<Boolean> disable(@PathVariable Long id) {
+        IntentNodeDO node = intentNodeMapper.selectById(id);
+        if (node != null) { node.setEnabled(0); intentNodeMapper.updateById(node); intentTreeService.refreshCache(); }
+        return ResultUtils.success(true);
+    }
+
+    @PutMapping("/node/{id}/enable")
+    public BaseResponse<Boolean> enable(@PathVariable Long id) {
+        IntentNodeDO node = intentNodeMapper.selectById(id);
+        if (node != null) { node.setEnabled(1); intentNodeMapper.updateById(node); intentTreeService.refreshCache(); }
+        return ResultUtils.success(true);
     }
 }

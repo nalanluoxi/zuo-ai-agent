@@ -2,6 +2,7 @@
 CREATE TABLE IF NOT EXISTS t_intent_node
 (
     id          BIGINT PRIMARY KEY,
+    tenant_id   BIGINT,                          -- 租户 ID（多租户隔离）
     parent_id   BIGINT,                          -- NULL 表示顶级节点
     label       VARCHAR(64)  NOT NULL,           -- 节点名称，如"金融"、"股票投资"
     description VARCHAR(256),                    -- 节点描述，用于 LLM 分类 Prompt

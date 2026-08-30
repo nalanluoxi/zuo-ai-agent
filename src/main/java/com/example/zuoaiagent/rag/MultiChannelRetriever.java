@@ -7,27 +7,14 @@ import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 
-/**
- * 多通道并行检索器
- *
- * <p>双通道并行执行：
- * <ul>
- *   <li>全局通道（globalSearch）：在全量向量空间中检索，覆盖面广</li>
- *   <li>意图定向通道（intentDirectedSearch）：按知识库 ID 过滤，精度高</li>
- * </ul>
- *
- * <p>两路结果合并后去重（按 document id），意图定向结果优先排在前面。
- */
 @Component
 public class MultiChannelRetriever {
 
@@ -35,24 +22,20 @@ public class MultiChannelRetriever {
 
     private static final int DEFAULT_TOP_K = 6;
     private static final long RETRIEVE_TIMEOUT_SEC = 10L;
+    private static final double RRF_K = 60.0;
 
     private final VectorStore vectorStore;
     private final Executor retrievalExecutor;
+    private final JdbcTemplate jdbcTemplate;
 
     public MultiChannelRetriever(VectorStore vectorStore,
-                                 @Qualifier("retrievalExecutor") Executor retrievalExecutor) {
+                                 @Qualifier("retrievalExecutor") Executor retrievalExecutor,
+                                 JdbcTemplate jdbcTemplate) {
         this.vectorStore = vectorStore;
         this.retrievalExecutor = retrievalExecutor;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
-    /**
-     * 双通道并行检索，合并去重后返回。
-     *
-     * @param query      检索查询（建议使用改写后的查询）
-     * @param kbId       意图定向的知识库 ID（为 null 时只走全局通道）
-     * @param topK       每个通道检索的最大条数
-     * @return 合并去重后的文档列表，意图定向结果在前
-     */
     public List<Document> retrieve(String query, Long kbId, int topK) {
         CompletableFuture<List<Document>> globalFuture = CompletableFuture.supplyAsync(
                 () -> globalSearch(query, topK), retrievalExecutor);
@@ -61,29 +44,32 @@ public class MultiChannelRetriever {
                 ? CompletableFuture.supplyAsync(() -> intentDirectedSearch(query, kbId, topK), retrievalExecutor)
                 : CompletableFuture.completedFuture(List.of());
 
+        CompletableFuture<List<Document>> fulltextFuture = CompletableFuture.supplyAsync(
+                () -> fullTextSearch(query, kbId, topK), retrievalExecutor);
+
         try {
             List<Document> globalDocs = globalFuture.get(RETRIEVE_TIMEOUT_SEC, TimeUnit.SECONDS);
             List<Document> intentDocs = intentFuture.get(RETRIEVE_TIMEOUT_SEC, TimeUnit.SECONDS);
-            List<Document> merged = merge(intentDocs, globalDocs);
-            log.info("[MultiChannelRetriever] query={} kbId={} 全局:{} 定向:{} 合并:{}",
-                    query, kbId, globalDocs.size(), intentDocs.size(), merged.size());
+            List<Document> fulltextDocs = fulltextFuture.get(RETRIEVE_TIMEOUT_SEC, TimeUnit.SECONDS);
+
+            List<Document> merged = rrfFusion(List.of(
+                    new ChannelResult("vector_global", globalDocs),
+                    new ChannelResult("vector_intent", intentDocs),
+                    new ChannelResult("fulltext", fulltextDocs)
+            ), topK);
+
+            log.info("[MultiChannelRetriever] 向量全局:{} 向量定向:{} 全文:{} RRF合并:{}",
+                    globalDocs.size(), intentDocs.size(), fulltextDocs.size(), merged.size());
             return merged;
         } catch (Exception e) {
-            log.warn("[MultiChannelRetriever] 并行检索超时或异常，降级为全局检索: {}", e.getMessage());
-            globalFuture.cancel(true);
-            intentFuture.cancel(true);
-            return globalSearch(query, topK);
+            log.warn("[MultiChannelRetriever] 并行检索异常，降级: {}", e.getMessage());
+            return rrfFusion(List.of(new ChannelResult("vector_global", globalSearch(query, topK))), topK);
         }
     }
 
-    /**
-     * 使用默认 topK 检索。
-     */
     public List<Document> retrieve(String query, Long kbId) {
         return retrieve(query, kbId, DEFAULT_TOP_K);
     }
-
-    // -------------------- 私有方法 --------------------
 
     private List<Document> globalSearch(String query, int topK) {
         try {
@@ -110,18 +96,60 @@ public class MultiChannelRetriever {
         }
     }
 
-    /** 合并两路结果，priority 在前，按 document id 去重 */
-    private List<Document> merge(List<Document> priority, List<Document> secondary) {
-        List<Document> result = new ArrayList<>(priority);
-        Set<String> seen = new HashSet<>();
-        for (Document doc : priority) {
-            seen.add(doc.getId());
+    private List<Document> fullTextSearch(String query, Long kbId, int topK) {
+        try {
+            String sql = "SELECT d.id, d.doc_name, d.content, d.kb_id, " +
+                    "ts_rank(d.search_vector, plainto_tsquery('simple', ?)) as rank " +
+                    "FROM t_knowledge_document d " +
+                    "WHERE d.deleted = 0 AND d.search_vector @@ plainto_tsquery('simple', ?) ";
+            List<Object> params = new ArrayList<>();
+            params.add(query.replaceAll("\\s+", " & "));
+            params.add(query.replaceAll("\\s+", " & "));
+
+            if (kbId != null) {
+                sql += " AND d.kb_id = ? ";
+                params.add(kbId);
+            }
+            sql += " ORDER BY rank DESC LIMIT ? ";
+            params.add(topK);
+
+            List<Document> docs = new ArrayList<>();
+            jdbcTemplate.query(sql, params.toArray(), rs -> {
+                Map<String, Object> meta = new HashMap<>();
+                meta.put("kb_id", rs.getString("kb_id"));
+                meta.put("doc_name", rs.getString("doc_name"));
+                meta.put("source", "fulltext");
+                docs.add(new Document(rs.getString("content"), meta));
+            });
+            return docs;
+        } catch (Exception e) {
+            log.debug("[MultiChannelRetriever] 全文检索失败(可能search_vector列不存在): {}", e.getMessage());
+            return List.of();
         }
-        for (Document doc : secondary) {
-            if (seen.add(doc.getId())) {
-                result.add(doc);
+    }
+
+    private List<Document> rrfFusion(List<ChannelResult> channels, int topK) {
+        Map<String, Double> scores = new HashMap<>();
+        Map<String, Document> docMap = new LinkedHashMap<>();
+
+        for (ChannelResult channel : channels) {
+            for (int i = 0; i < channel.docs.size(); i++) {
+                Document doc = channel.docs.get(i);
+                String id = doc.getId();
+                if (id == null || id.isBlank()) {
+                    id = UUID.randomUUID().toString();
+                }
+                docMap.putIfAbsent(id, doc);
+                scores.merge(id, 1.0 / (RRF_K + i + 1), Double::sum);
             }
         }
-        return result;
+
+        return docMap.entrySet().stream()
+                .sorted((a, b) -> Double.compare(scores.get(b.getKey()), scores.get(a.getKey())))
+                .limit(topK)
+                .map(e -> docMap.get(e.getKey()))
+                .toList();
     }
+
+    private record ChannelResult(String name, List<Document> docs) {}
 }

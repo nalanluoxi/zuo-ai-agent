@@ -25,6 +25,9 @@ public class IntentNodeDO {
     @TableId(type = IdType.ASSIGN_ID)
     private Long id;
 
+    /** 租户 ID（P19-P21 修复：多租户隔离） */
+    private Long tenantId;
+
     /** 父节点 ID，NULL 表示顶级节点 */
     private Long parentId;
 
@@ -46,6 +49,9 @@ public class IntentNodeDO {
     /** 排序权重 */
     private Integer sortOrder;
 
+    /** 是否启用 1=启用 0=禁用 */
+    private Integer enabled;
+
     @TableField(fill = FieldFill.INSERT)
     private Date createTime;
 
@@ -60,6 +66,9 @@ public class IntentNodeDO {
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
+
+    public Long getTenantId() { return tenantId; }
+    public void setTenantId(Long tenantId) { this.tenantId = tenantId; }
 
     public Long getParentId() { return parentId; }
     public void setParentId(Long parentId) { this.parentId = parentId; }
@@ -81,6 +90,9 @@ public class IntentNodeDO {
 
     public Integer getSortOrder() { return sortOrder; }
     public void setSortOrder(Integer sortOrder) { this.sortOrder = sortOrder; }
+
+    public Integer getEnabled() { return enabled; }
+    public void setEnabled(Integer enabled) { this.enabled = enabled; }
 
     public Date getCreateTime() { return createTime; }
     public void setCreateTime(Date createTime) { this.createTime = createTime; }

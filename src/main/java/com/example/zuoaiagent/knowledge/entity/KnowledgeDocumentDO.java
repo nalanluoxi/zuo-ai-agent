@@ -50,6 +50,9 @@ public class KnowledgeDocumentDO {
     /** 修改人 */
     private String updatedBy;
 
+    /** 文件内容 MD5（用于去重） */
+    private String contentMd5;
+
     @TableField(fill = FieldFill.INSERT)
     private Date createTime;
 
@@ -116,6 +119,9 @@ public class KnowledgeDocumentDO {
     public String getUpdatedBy() { return updatedBy; }
     public void setUpdatedBy(String updatedBy) { this.updatedBy = updatedBy; }
 
+    public String getContentMd5() { return contentMd5; }
+    public void setContentMd5(String contentMd5) { this.contentMd5 = contentMd5; }
+
     public Date getCreateTime() { return createTime; }
     public void setCreateTime(Date createTime) { this.createTime = createTime; }
 
@@ -143,6 +149,7 @@ public class KnowledgeDocumentDO {
         private Date createTime;
         private Date updateTime;
         private Integer deleted;
+        private String contentMd5;
 
         public Builder id(Long id) { this.id = id; return this; }
         public Builder kbId(Long kbId) { this.kbId = kbId; return this; }
@@ -158,6 +165,7 @@ public class KnowledgeDocumentDO {
         public Builder createTime(Date createTime) { this.createTime = createTime; return this; }
         public Builder updateTime(Date updateTime) { this.updateTime = updateTime; return this; }
         public Builder deleted(Integer deleted) { this.deleted = deleted; return this; }
+        public Builder contentMd5(String contentMd5) { this.contentMd5 = contentMd5; return this; }
 
         public KnowledgeDocumentDO build() {
             return new KnowledgeDocumentDO(id, kbId, docName, fileUrl, fileType, fileSize, sourceType,

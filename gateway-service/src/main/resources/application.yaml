@@ -1,0 +1,56 @@
+server:
+  port: 9000
+
+spring:
+  application:
+    name: gateway-service
+  
+  # Redis 配置（用于共享 token）
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      database: 0
+  
+  # Spring Cloud Gateway 路由配置
+  cloud:
+    gateway:
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials
+      
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOriginPatterns: "*"
+            allowedMethods: "*"
+            allowedHeaders: "*"
+            allowCredentials: true
+      
+      routes:
+        # 认证服务（Auth Service - 端口 8100）
+        - id: auth-service
+          uri: http://localhost:8100
+          predicates:
+            - Path=/api/auth/**
+          order: 1
+        
+        # RAG 服务（主服务 - 端口 8123）
+        - id: rag-service
+          uri: http://localhost:8123
+          predicates:
+            - Path=/api/knowledge-base/**,/api/chat/**,/api/dashboard/**,/api/admin/**,/api/conversations/**,/api/health/**,/api/monitor/**,/api/feedback/**,/api/intent/**,/api/approvals/**
+          order: 2
+        
+        # 日志监控服务（Log Monitor Service - 端口 8200）
+        - id: log-monitor-service
+          uri: http://localhost:8200
+          predicates:
+            - Path=/api/log/**
+          order: 3
+
+# 日志配置
+logging:
+  level:
+    root: INFO
+    com.example.zuai.gateway: DEBUG
+    org.springframework.cloud.gateway: DEBUG

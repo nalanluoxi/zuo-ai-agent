@@ -64,6 +64,12 @@ public class RagTraceNodeDO {
     /** 节点输出（JSON 字符串，含检索文档内容、分类结果等） */
     private String outputData;
 
+    /** Prompt Token 用量 */
+    private Integer promptTokens;
+
+    /** Completion Token 用量 */
+    private Integer completionTokens;
+
     @TableField(fill = FieldFill.INSERT)
     private Date createTime;
 
@@ -110,6 +116,12 @@ public class RagTraceNodeDO {
 
     public String getOutputData() { return outputData; }
     public void setOutputData(String outputData) { this.outputData = outputData; }
+
+    public Integer getPromptTokens() { return promptTokens; }
+    public void setPromptTokens(Integer promptTokens) { this.promptTokens = promptTokens; }
+
+    public Integer getCompletionTokens() { return completionTokens; }
+    public void setCompletionTokens(Integer completionTokens) { this.completionTokens = completionTokens; }
 
     public Date getCreateTime() { return createTime; }
     public void setCreateTime(Date createTime) { this.createTime = createTime; }

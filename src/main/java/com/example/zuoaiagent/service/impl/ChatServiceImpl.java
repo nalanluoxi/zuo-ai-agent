@@ -165,11 +165,17 @@ public class ChatServiceImpl implements ChatService {
     }
 
     @Override
-    public void streamChatSmart(String prompt, String conversationId, String name,
-                                boolean enableRewrite, boolean enableRerank, SseEmitter emitter) {
+public void streamChatSmart(String prompt, String conversationId, String name,
+                                 boolean enableRewrite, boolean enableRerank,
+                                 boolean enableMemory, Long userId, SseEmitter emitter) {
         RagPipelineContext ctx = new RagPipelineContext(
-                prompt, conversationId, name, enableRewrite, enableRerank);
+                prompt, conversationId, name, enableRewrite, enableRerank, enableMemory, userId);
         smartRagPipeline.execute(ctx, emitter);
+    }
+
+    @Override
+    public String ask(String prompt, String conversationId) {
+        return routingChatService.chat(prompt, conversationId, null, null);
     }
 
     private String resolveDomain(IntentResult intentResult) {

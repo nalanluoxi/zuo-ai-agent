@@ -86,6 +86,13 @@ public class RagTraceRecordServiceImpl implements RagTraceRecordService {
     @Override
     public void finishNode(String traceId, String nodeId, String status, String errorMessage,
                            long durationMs, String outputData) {
+        finishNode(traceId, nodeId, status, errorMessage, durationMs, outputData, 0, 0);
+    }
+
+    @Async("ingestionExecutor")
+    @Override
+    public void finishNode(String traceId, String nodeId, String status, String errorMessage,
+                           long durationMs, String outputData, int promptTokens, int completionTokens) {
         try {
             RagTraceNodeDO update = new RagTraceNodeDO();
             update.setStatus(status);
@@ -93,6 +100,8 @@ public class RagTraceRecordServiceImpl implements RagTraceRecordService {
             update.setEndTime(new Date());
             update.setDurationMs(durationMs);
             update.setOutputData(outputData);
+            update.setPromptTokens(promptTokens);
+            update.setCompletionTokens(completionTokens);
             nodeMapper.update(update, new LambdaUpdateWrapper<RagTraceNodeDO>()
                     .eq(RagTraceNodeDO::getTraceId, traceId)
                     .eq(RagTraceNodeDO::getNodeId, nodeId));

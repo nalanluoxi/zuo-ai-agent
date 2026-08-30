@@ -99,11 +99,19 @@ public class ChatController {
             @RequestParam(required = false) String conversationId,
             @RequestParam(required = false) String name,
             @RequestParam(defaultValue = "true") boolean enableRewrite,
-            @RequestParam(defaultValue = "true") boolean enableRerank) {
+            @RequestParam(defaultValue = "true") boolean enableRerank,
+            @RequestParam(defaultValue = "false") boolean enableMemory,
+            @RequestParam(required = false) Long userId) {
         String conId = StrUtil.isBlank(conversationId) ? IdUtil.getSnowflakeNextIdStr() : conversationId;
         String aiName = StrUtil.isBlank(name) ? "三条" : name;
         SseEmitter emitter = new SseEmitter(120_000L);
-        chatService.streamChatSmart(prompt, conId, aiName, enableRewrite, enableRerank, emitter);
+        chatService.streamChatSmart(prompt, conId, aiName, enableRewrite, enableRerank, enableMemory, userId, emitter);
         return emitter;
+    }
+
+    @GetMapping("/ask")
+    public String ask(@RequestParam String message, @RequestParam(required = false) String conversationId) {
+        String conId = StrUtil.isBlank(conversationId) ? IdUtil.getSnowflakeNextIdStr() : conversationId;
+        return chatService.ask(message, conId);
     }
 }
