@@ -38,6 +38,9 @@ src/main/resources/application-local.yaml
 ### Node modules ###
 node_modules/
 
+### Build output ###
+dist/
+
 ### 本地运行时生成的 Redis 转储文件 ###
 dump.rdb
 
