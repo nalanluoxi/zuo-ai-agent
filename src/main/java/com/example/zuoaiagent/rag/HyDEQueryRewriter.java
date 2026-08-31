@@ -44,7 +44,7 @@ public class HyDEQueryRewriter {
     public String generateHypothesisDocument(String query) {
         try {
             String prompt = "请根据以下问题，假设你是一个知识库，生成一段可能包含答案的文档内容（不超过200字）：\n\n" + query;
-            String result = routingChatService.chat(prompt, null, null, null);
+            String result = routingChatService.chat(prompt, null, null, null, true);
             return result != null ? result.strip() : "";
         } catch (Exception e) {
             log.warn("[HyDEQueryRewriter] 假设文档生成失败: {}", e.getMessage());
@@ -56,7 +56,7 @@ public class HyDEQueryRewriter {
         List<String> queries = new ArrayList<>();
         try {
             String prompt = "请将以下问题改写为" + count + "个不同表述方式的等价查询，每行一个：\n\n" + query;
-            String result = routingChatService.chat(prompt, null, null, null);
+            String result = routingChatService.chat(prompt, null, null, null, true);
             if (result != null) {
                 for (String line : result.split("\n")) {
                     String trimmed = line.replaceAll("^\\d+\\.?\\s*", "").strip();

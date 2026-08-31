@@ -40,7 +40,7 @@ public interface ChatService {
      */
     void streamChatSmart(String prompt, String conversationId, String name,
                          boolean enableRewrite, boolean enableRerank,
-                         boolean enableMemory, Long userId, SseEmitter emitter);
+                         boolean enableMemory, Long userId, boolean ragEnabled, SseEmitter emitter);
 
     String ask(String prompt, String conversationId);
 }

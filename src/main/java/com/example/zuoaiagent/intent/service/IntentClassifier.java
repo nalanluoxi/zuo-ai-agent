@@ -46,7 +46,8 @@ public class IntentClassifier {
                     "intentTree", treeText,
                     "query", query
             ));
-            String response = routingChatService.chat(promptText, null, null, null);
+            // 使用固定的 conversationId，避免 null 导致对话记忆异常；标记为内部调用，不写入 memory
+            String response = routingChatService.chat(promptText, "intent-classify", null, null, true);
             if (response == null || response.isBlank()) {
                 return IntentResult.unknown();
             }

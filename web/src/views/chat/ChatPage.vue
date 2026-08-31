@@ -5,7 +5,7 @@
       <div class="welcome-icon">
         <el-icon :size="48"><ChatDotSquare /></el-icon>
       </div>
-      <h2>ZUO AI 智能助手</h2>
+      <h2>ZWD-ai 智能助手</h2>
       <p>输入您的问题，开始对话</p>
     </div>
 
@@ -48,6 +48,14 @@
 
     <!-- 输入框 -->
     <div class="input-section">
+      <div class="rag-toggle">
+        <el-switch
+          v-model="ragEnabled"
+          size="small"
+          active-text="RAG 增强"
+          inactive-text="纯对话"
+        />
+      </div>
       <el-input
         v-model="inputText"
         type="textarea"
@@ -75,8 +83,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, onMounted, onUnmounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import request from '../../api/request'
 
@@ -89,27 +97,53 @@ interface Message {
 }
 
 const route = useRoute()
+const router = useRouter()
 const messages = ref<Message[]>([])
 const inputText = ref('')
 const loading = ref(false)
 const streamingContent = ref('')
 const messagesContainer = ref<HTMLElement | null>(null)
 let eventSource: EventSource | null = null
+let loadAbort: AbortController | null = null
+let messageSeq = 0
 
 const conversationId = ref('')
+const ragEnabled = ref<boolean>(localStorage.getItem('ragEnabled') !== 'false')
+
+watch(ragEnabled, (val) => {
+  localStorage.setItem('ragEnabled', String(val))
+})
 
 onMounted(async () => {
-  // 从路由参数或 props 获取 conversationId
   conversationId.value = (route.query.conversationId as string) || ''
-  
-  // 如果有 conversationId，加载历史消息
   if (conversationId.value) {
     await loadMessages()
   }
 })
 
+watch(
+  () => route.query.conversationId,
+  async (newId) => {
+    const id = (newId as string) || ''
+    if (id !== conversationId.value) {
+      closeEventSource()
+      cancelLoad()
+      messages.value = []
+      streamingContent.value = ''
+      loading.value = false
+      inputText.value = ''
+
+      conversationId.value = id
+      if (id) {
+        await loadMessages()
+      }
+    }
+  }
+)
+
 onUnmounted(() => {
   closeEventSource()
+  cancelLoad()
 })
 
 function closeEventSource() {
@@ -119,10 +153,21 @@ function closeEventSource() {
   }
 }
 
+function cancelLoad() {
+  if (loadAbort) {
+    loadAbort.abort()
+    loadAbort = null
+  }
+}
+
 async function loadMessages() {
   if (!conversationId.value) return
+  cancelLoad()
+  const seq = ++messageSeq
+  loadAbort = new AbortController()
   try {
-    const json = await request.get(`/conversations/${conversationId.value}/messages`, { params: { pageSize: 100 } }) as any
+    const json = await request.get(`/conversations/${conversationId.value}/messages`, { params: { pageSize: 100 }, signal: loadAbort.signal }) as any
+    if (seq !== messageSeq) return
     if (json.code === 0 && json.data?.list) {
       messages.value = json.data.list.map((m: any) => ({
         id: m.id,
@@ -163,6 +208,8 @@ const sendMessage = async () => {
       const json = await request.post('/conversations', { title: inputText.value.slice(0, 20) }) as any
       if (json.code === 0 && json.data) {
         conversationId.value = json.data.conversationId
+        // 同步更新路由 query，确保刷新页面后能恢复对话
+        router.replace({ path: '/chat', query: { conversationId: conversationId.value } })
       } else {
         ElMessage.error('创建对话失败')
         return
@@ -191,7 +238,7 @@ const sendMessage = async () => {
 
   // 调用后端 SSE 流式接口
   const token = localStorage.getItem('satoken') || ''
-  const url = `/api/chat/stream/smart?message=${encodeURIComponent(userMessage)}&conversationId=${conversationId.value}&satoken=${token}`
+  const url = `/api/chat/stream/smart?message=${encodeURIComponent(userMessage)}&conversationId=${conversationId.value}&ragEnabled=${ragEnabled.value}&satoken=${token}`
 
   closeEventSource()
   eventSource = new EventSource(url)
@@ -235,6 +282,7 @@ const sendMessage = async () => {
   })
 
   eventSource.onerror = () => {
+    closeEventSource()
     loading.value = false
     if (streamingContent.value) {
       messages.value.push({
@@ -247,7 +295,6 @@ const sendMessage = async () => {
     } else if (messages.value.length === 0 || messages.value[messages.value.length - 1]?.role !== 'assistant') {
       ElMessage.error('连接失败，请检查服务是否启动')
     }
-    closeEventSource()
   }
 }
 

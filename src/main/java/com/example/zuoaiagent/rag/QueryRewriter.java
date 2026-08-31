@@ -30,7 +30,7 @@ public class QueryRewriter {
         }
         try {
             String promptText = templateLoader.render(TEMPLATE_PATH, Map.of("query", query));
-            String rewritten = routingChatService.chat(promptText, null, null, null);
+            String rewritten = routingChatService.chat(promptText, null, null, null, true);
             if (rewritten != null && !rewritten.isBlank()) {
                 log.debug("[QueryRewriter] 原始: {} → 改写: {}", query, rewritten.strip());
                 return rewritten.strip();

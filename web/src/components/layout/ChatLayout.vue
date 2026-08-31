@@ -71,12 +71,26 @@
                 <div class="conv-title">{{ conv.title }}</div>
                 <div class="conv-meta">
                   <span class="conv-time">{{ formatTime(conv.updated_at || conv.updateTime) }}</span>
-                  <el-button text size="small" class="conv-delete" @click.stop="deleteConversation(conv.id)">
-                    <el-icon><Delete /></el-icon>
-                  </el-button>
+                  <div class="conv-actions">
+                    <el-button text size="small" class="conv-edit" @click.stop="showEditDialog(conv)">
+                      <el-icon><Edit /></el-icon>
+                    </el-button>
+                    <el-button text size="small" class="conv-delete" @click.stop="deleteConversation(conv.id)">
+                      <el-icon><Delete /></el-icon>
+                    </el-button>
+                  </div>
                 </div>
               </div>
             </div>
+
+            <!-- 编辑标题弹窗 -->
+            <el-dialog v-model="editDialogVisible" title="编辑对话标题" width="400px">
+              <el-input v-model="editTitle" placeholder="请输入新的标题" />
+              <template #footer>
+                <el-button @click="editDialogVisible = false">取消</el-button>
+                <el-button type="primary" @click="saveEditTitle">保存</el-button>
+              </template>
+            </el-dialog>
           </template>
         </div>
       </el-aside>
@@ -122,6 +136,11 @@ function switchModule(module: string) {
 const conversations = ref<any[]>([])
 const activeConversationId = ref<string | null>(null)
 const searchQuery = ref('')
+
+// 编辑标题弹窗
+const editDialogVisible = ref(false)
+const editTitle = ref('')
+const editingConversationId = ref('')
 
 let searchTimer: any = null
 
@@ -203,6 +222,33 @@ function formatTime(dateStr: string | Date): string {
   if (diff < 86400000) return `${Math.floor(diff / 3600000)}小时前`
   if (diff < 604800000) return `${Math.floor(diff / 86400000)}天前`
   return date.toLocaleDateString()
+}
+
+// ==================== 编辑标题 ====================
+
+function showEditDialog(conv: any) {
+  editingConversationId.value = conv.id
+  editTitle.value = conv.title
+  editDialogVisible.value = true
+}
+
+async function saveEditTitle() {
+  if (!editTitle.value.trim()) {
+    ElMessage.warning('标题不能为空')
+    return
+  }
+  try {
+    await request.put(`/conversations/${editingConversationId.value}`, { title: editTitle.value })
+    // 更新本地列表
+    const conv = conversations.value.find(c => c.id === editingConversationId.value)
+    if (conv) {
+      conv.title = editTitle.value
+    }
+    editDialogVisible.value = false
+    ElMessage.success('标题已更新')
+  } catch {
+    ElMessage.error('更新失败')
+  }
 }
 </script>
 
@@ -320,11 +366,29 @@ function formatTime(dateStr: string | Date): string {
   color: #999;
 }
 
+.conv-actions {
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.conversation-item:hover .conv-actions {
+  opacity: 1;
+}
+
+.conv-actions .conv-edit,
+.conv-actions .conv-delete {
+  padding: 2px 4px;
+}
+
+.conv-edit,
 .conv-delete {
   opacity: 0;
   transition: opacity 0.15s;
 }
 
+.conversation-item:hover .conv-edit,
 .conversation-item:hover .conv-delete {
   opacity: 1;
 }
