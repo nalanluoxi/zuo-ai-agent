@@ -45,14 +45,21 @@ public class AuthClientInterceptor implements HandlerInterceptor {
                     Map.class
             ).getBody();
 
-            // 2. 提取 tenantId 并设置到 TenantContextHolder
+            // 2. 提取 tenantId 和 userId 并设置到上下文
             if (result != null && "0".equals(String.valueOf(result.get("code")))) {
                 @SuppressWarnings("unchecked")
                 Map<String, Object> data = (Map<String, Object>) result.get("data");
-                if (data != null && data.get("tenantId") != null) {
-                    Long tenantId = Long.valueOf(data.get("tenantId").toString());
-                    TenantContextHolder.setTenantId(tenantId);
-                    log.debug("设置租户上下文: tenantId={}", tenantId);
+                if (data != null) {
+                    if (data.get("tenantId") != null) {
+                        Long tenantId = Long.valueOf(data.get("tenantId").toString());
+                        TenantContextHolder.setTenantId(tenantId);
+                        log.debug("设置租户上下文: tenantId={}", tenantId);
+                    }
+                    if (data.get("loginId") != null) {
+                        Long userId = Long.valueOf(data.get("loginId").toString());
+                        TenantContextHolder.setUserId(userId);
+                        log.debug("设置用户上下文: userId={}", userId);
+                    }
                 }
             }
 

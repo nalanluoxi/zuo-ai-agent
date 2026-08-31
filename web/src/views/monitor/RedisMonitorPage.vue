@@ -20,7 +20,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import request from '../../api/request'
 import * as echarts from 'echarts'
 
@@ -28,6 +28,10 @@ const keyCount = ref(0); const latency = ref(0); const hitRate = ref(0)
 const keys = ref<any[]>([]); const bigKeys = ref<any[]>([]); const keyPattern = ref('*')
 const showValue = ref(false); const currentKey = ref(''); const currentValue = ref(''); const currentSize = ref(0); const currentIsBig = ref(false)
 const memChart = ref<HTMLDivElement>(); const latChart = ref<HTMLDivElement>()
+
+// ECharts 实例引用，用于防止内存泄漏
+let memChartInstance: echarts.ECharts | null = null
+let latChartInstance: echarts.ECharts | null = null
 
 onMounted(async () => {
   await searchKeys()
@@ -45,12 +49,13 @@ async function loadMemTrend() {
     const data = res.data || res
     const list = data.trendData || data.trend || data.list || []
     if (memChart.value) {
-      const c = echarts.init(memChart.value)
-      c.setOption({
+      memChartInstance?.dispose()
+      memChartInstance = echarts.init(memChart.value)
+      memChartInstance.setOption({
         tooltip: {},
         xAxis: { type: 'category', data: list.map((d: any) => d.date) },
         yAxis: { type: 'value' },
-        series: [{ name: '内存MB', type: 'line', data: list.map((d: any) => d.memoryMb ?? d.value ?? 0), smooth: true, areaStyle: {} }]
+        series: [{ name: '内存MB', type: 'line', data: list.map((d: any) => Math.round((d.usedMemoryBytes ?? d.memoryMb ?? d.value ?? 0) / 1024 / 1024)), smooth: true, areaStyle: {} }]
       })
     }
   } catch (e) { console.error('加载内存趋势失败', e) }
@@ -63,8 +68,9 @@ async function loadQpsTrend() {
     const data = res.data || res
     const list = data.trendData || data.trend || data.list || []
     if (latChart.value) {
-      const c = echarts.init(latChart.value)
-      c.setOption({
+      latChartInstance?.dispose()
+      latChartInstance = echarts.init(latChart.value)
+      latChartInstance.setOption({
         tooltip: {},
         xAxis: { type: 'category', data: list.map((d: any) => d.date) },
         yAxis: { type: 'value' },
@@ -73,6 +79,12 @@ async function loadQpsTrend() {
     }
   } catch (e) { console.error('加载QPS趋势失败', e) }
 }
+
+// 组件卸载时清理 ECharts 实例，防止内存泄漏
+onBeforeUnmount(() => {
+  memChartInstance?.dispose()
+  latChartInstance?.dispose()
+})
 
 async function searchKeys() {
   try { const r = await request.get(`/log/monitor/redis/keys?pattern=${keyPattern.value}&limit=100`) as any; keyCount.value = r.total; keys.value = r.keys || [] } catch {}

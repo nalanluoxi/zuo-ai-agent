@@ -38,7 +38,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import request from '../../api/request'
 import * as echarts from 'echarts'
 
@@ -50,6 +50,10 @@ const tableTotal = ref(0)
 const connChart = ref<HTMLDivElement>(); const latChart = ref<HTMLDivElement>()
 const showTableData = ref(false); const selectedTable = ref('')
 const tableColumns = ref<string[]>([]); const tableRows = ref<any[]>([]); const tableRowTotal = ref(0)
+
+// ECharts 实例引用，用于防止内存泄漏
+let connChartInstance: echarts.ECharts | null = null
+let latChartInstance: echarts.ECharts | null = null
 
 onMounted(async () => {
   try { const r = await request.get('/log/monitor/db/connections') as any; connTotal.value = r.total; connActive.value = r.active } catch {}
@@ -84,12 +88,13 @@ async function loadAccessTrend() {
     const data = res.data || res
     const list = data.trendData || data.trend || data.list || []
     if (connChart.value) {
-      const c = echarts.init(connChart.value)
-      c.setOption({
+      connChartInstance?.dispose()
+      connChartInstance = echarts.init(connChart.value)
+      connChartInstance.setOption({
         tooltip: {},
         xAxis: { type: 'category', data: list.map((d: any) => d.date) },
         yAxis: { type: 'value' },
-        series: [{ name: '访问量', type: 'line', data: list.map((d: any) => d.accessCount ?? d.value ?? 0), smooth: true }]
+        series: [{ name: '访问量', type: 'line', data: list.map((d: any) => d.totalCount ?? d.accessCount ?? d.value ?? 0), smooth: true }]
       })
     }
   } catch (e) { console.error('加载访问趋势失败', e) }
@@ -102,8 +107,9 @@ async function loadQpsTrend() {
     const data = res.data || res
     const list = data.trendData || data.trend || data.list || []
     if (latChart.value) {
-      const c = echarts.init(latChart.value)
-      c.setOption({
+      latChartInstance?.dispose()
+      latChartInstance = echarts.init(latChart.value)
+      latChartInstance.setOption({
         tooltip: {},
         xAxis: { type: 'category', data: list.map((d: any) => d.date) },
         yAxis: { type: 'value' },
@@ -112,6 +118,12 @@ async function loadQpsTrend() {
     }
   } catch (e) { console.error('加载QPS趋势失败', e) }
 }
+
+// 组件卸载时清理 ECharts 实例，防止内存泄漏
+onBeforeUnmount(() => {
+  connChartInstance?.dispose()
+  latChartInstance?.dispose()
+})
 
 async function viewTableData(row: any) {
   selectedTable.value = row.tablename

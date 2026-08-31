@@ -29,7 +29,7 @@ public class CorsConfig implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        // Auth 拦截器（租户上下文）
+        // 方案 B：zuo-ai-agent 通过 auth-service 验证 token
         registry.addInterceptor(authClientInterceptor)
                 .addPathPatterns("/**")
                 .excludePathPatterns(
@@ -41,7 +41,7 @@ public class CorsConfig implements WebMvcConfigurer {
                         "/webjars/**"
                 );
 
-        // Trace 拦截器（自动打点）— 在 Auth 之后执行
+        // Trace 拦截器（自动打点）
         registry.addInterceptor(traceInterceptor)
                 .addPathPatterns("/**")
                 .excludePathPatterns(

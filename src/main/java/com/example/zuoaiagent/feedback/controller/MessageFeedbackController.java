@@ -25,10 +25,10 @@ public class MessageFeedbackController {
      * @param feedbackType 反馈类型：1=点赞, 0=点踩
      */
     @PostMapping
-    public BaseResponse<Boolean> submitFeedback(
-            @RequestParam String conversationId,
-            @RequestParam String messageId,
-            @RequestParam Integer feedbackType) {
+    public BaseResponse<Boolean> submitFeedback(@RequestBody Map<String, Object> body) {
+        String conversationId = (String) body.get("conversationId");
+        String messageId = (String) body.get("messageId");
+        Integer feedbackType = (Integer) body.get("feedbackType");
         return ResultUtils.success(feedbackService.submitFeedback(conversationId, messageId, feedbackType));
     }
     

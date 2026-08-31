@@ -5,6 +5,7 @@ import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
 import com.example.zuoaiagent.common.BaseResponse;
 import com.example.zuoaiagent.common.ResultUtils;
+import com.example.zuoaiagent.config.TenantContextHolder;
 import com.example.zuoaiagent.model.Student;
 import com.example.zuoaiagent.service.ChatService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -92,20 +93,29 @@ public class ChatController {
     /**
      * 智能 RAG 流水线：意图检测 + 闲聊短路 + 多通道并行检索 + 重排序 + 流式推送
      * 领域由意图树自动识别填充，无需手动传入
+     * userId 从认证 token 自动获取，前端无需传递
      */
     @GetMapping(value = "/stream/smart", produces = "text/event-stream;charset=UTF-8")
     public SseEmitter streamChatSmart(
-            @RequestParam String prompt,
+            @RequestParam(required = false) String prompt,
+            @RequestParam(required = false) String message,
             @RequestParam(required = false) String conversationId,
             @RequestParam(required = false) String name,
             @RequestParam(defaultValue = "true") boolean enableRewrite,
             @RequestParam(defaultValue = "true") boolean enableRerank,
             @RequestParam(defaultValue = "false") boolean enableMemory,
-            @RequestParam(required = false) Long userId) {
+            @RequestParam(defaultValue = "true") boolean ragEnabled) {
+        // 支持 message 或 prompt 参数（兼容前端和后端命名）
+        String actualPrompt = StrUtil.isNotBlank(prompt) ? prompt : message;
+        if (StrUtil.isBlank(actualPrompt)) {
+            throw new IllegalArgumentException("prompt 或 message 参数不能为空");
+        }
         String conId = StrUtil.isBlank(conversationId) ? IdUtil.getSnowflakeNextIdStr() : conversationId;
         String aiName = StrUtil.isBlank(name) ? "三条" : name;
+        // 从认证上下文获取 userId，前端无需传递
+        Long userId = TenantContextHolder.getUserId();
         SseEmitter emitter = new SseEmitter(120_000L);
-        chatService.streamChatSmart(prompt, conId, aiName, enableRewrite, enableRerank, enableMemory, userId, emitter);
+        chatService.streamChatSmart(actualPrompt, conId, aiName, enableRewrite, enableRerank, enableMemory, userId, ragEnabled, emitter);
         return emitter;
     }
 

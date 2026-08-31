@@ -8,7 +8,7 @@
           <template #reference>
             <div class="logo">
               <el-icon><DataAnalysis /></el-icon>
-              <span>ZUO AI Agent</span>
+              <span>ZWD-ai</span>
             </div>
           </template>
           <div class="logo-menu">

@@ -1,6 +1,7 @@
 package com.example.zuoaiagent.pipeline;
 
 import com.example.zuoaiagent.chat.RoutingChatService;
+import com.example.zuoaiagent.dashboard.service.RetrievalLogService;
 import com.example.zuoaiagent.intent.model.IntentResult;
 import com.example.zuoaiagent.intent.service.IntentClassifier;
 import com.example.zuoaiagent.memory.UserMemoryExtractionService;
@@ -39,6 +40,7 @@ public class SmartRagPipeline {
     private final RagTraceRecordService traceService;
     private final UserMemoryExtractionService memoryExtractionService;
     private final ObjectMapper objectMapper;
+    private final RetrievalLogService retrievalLogService;
 
     public SmartRagPipeline(QueryRewriter queryRewriter,
                             HyDEQueryRewriter hydeQueryRewriter,
@@ -50,7 +52,8 @@ public class SmartRagPipeline {
                             RoutingChatService routingChatService,
                             RagTraceRecordService traceService,
                             UserMemoryExtractionService memoryExtractionService,
-                            ObjectMapper objectMapper) {
+                            ObjectMapper objectMapper,
+                            RetrievalLogService retrievalLogService) {
         this.queryRewriter = queryRewriter;
         this.hydeQueryRewriter = hydeQueryRewriter;
         this.intentClassifier = intentClassifier;
@@ -62,6 +65,7 @@ public class SmartRagPipeline {
         this.traceService = traceService;
         this.memoryExtractionService = memoryExtractionService;
         this.objectMapper = objectMapper;
+        this.retrievalLogService = retrievalLogService;
     }
 
     public void execute(RagPipelineContext ctx, SseEmitter emitter) {
@@ -86,11 +90,11 @@ public class SmartRagPipeline {
                 if (memory != null) sysPrompt = memory + "\n" + sysPrompt;
                 ctx.setFinalSystemPrompt(sysPrompt);
                 traceService.finishRun(traceId, "SUCCESS", null, System.currentTimeMillis() - pipelineStart);
-                routingChatService.streamChat(ctx.getOriginalPrompt(), conId, sysPrompt, null, emitter);
+                routingChatService.streamChat(ctx.getOriginalPrompt(), conId, sysPrompt, null, emitter, false, ctx.getUserId());
                 return;
             }
 
-            List<Document> retrieved = executeRetrieve(rewrittenQuery, intentResult, traceId);
+            List<Document> retrieved = executeRetrieve(rewrittenQuery, intentResult, traceId, ctx);
             ctx.setRetrievedDocs(retrieved);
 
             List<Document> reranked = executeRerank(ctx, rewrittenQuery, retrieved, traceId);
@@ -103,7 +107,7 @@ public class SmartRagPipeline {
             ctx.setFinalSystemPrompt(finalSystemPrompt);
 
             traceService.finishRun(traceId, "SUCCESS", null, System.currentTimeMillis() - pipelineStart);
-            routingChatService.streamChat(ctx.getOriginalPrompt(), conId, finalSystemPrompt, null, emitter);
+            routingChatService.streamChat(ctx.getOriginalPrompt(), conId, finalSystemPrompt, null, emitter, false, ctx.getUserId());
 
         } catch (Exception e) {
             log.error("[SmartRagPipeline] traceId={} 流水线异常: {}", traceId, e.getMessage(), e);
@@ -169,17 +173,49 @@ public class SmartRagPipeline {
         }
     }
 
-    private List<Document> executeRetrieve(String query, IntentResult intentResult, String traceId) {
+    private List<Document> executeRetrieve(String query, IntentResult intentResult, String traceId,
+                                           RagPipelineContext ctx) {
         long start = System.currentTimeMillis();
         Long kbId = (intentResult.getConfidence() >= CONFIDENCE_THRESHOLD) ? intentResult.getKbId() : null;
 
+        Map<String, Object> retrieveInput = new HashMap<>();
+        retrieveInput.put("query", query);
+        retrieveInput.put("kbId", kbId);  // HashMap 允许 null
         traceService.startNode(traceId, "retrieve", "多通道检索", "RETRIEVE",
-                toJson(Map.of("query", query, "kbId", kbId)));
+                toJson(retrieveInput));
 
         try {
             List<Document> docs = multiChannelRetriever.retrieve(query, kbId);
+            int latencyMs = (int) (System.currentTimeMillis() - start);
+
+            // 记录检索日志
+            if (ctx.getUserId() != null) {
+                try {
+                    String messageId = UUID.randomUUID().toString();
+                    String kbIdStr = kbId != null ? kbId.toString() : null;
+                    double avgScore = docs.isEmpty() ? 0.0 :
+                            docs.stream().mapToDouble(doc -> {
+                                Object score = doc.getMetadata().get("score");
+                                return score instanceof Number ? ((Number) score).doubleValue() : 0.0;
+                            }).average().orElse(0.0);
+
+                    retrievalLogService.recordRetrieval(
+                            ctx.getUserId().toString(),
+                            ctx.getConversationId(),
+                            messageId,
+                            kbIdStr,
+                            query,
+                            docs.size(),
+                            avgScore,
+                            latencyMs
+                    );
+                } catch (Exception e) {
+                    log.warn("记录检索日志失败", e);
+                }
+            }
+
             traceService.finishNode(traceId, "retrieve", "SUCCESS", null,
-                    System.currentTimeMillis() - start, toJson(Map.of("count", docs.size())));
+                    latencyMs, toJson(Map.of("count", docs.size())));
             return docs;
         } catch (Exception e) {
             traceService.finishNode(traceId, "retrieve", "ERROR", e.getMessage(),

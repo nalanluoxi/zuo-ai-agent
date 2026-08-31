@@ -19,32 +19,32 @@ CREATE INDEX IF NOT EXISTS idx_intent_node_parent_id ON t_intent_node (parent_id
 CREATE INDEX IF NOT EXISTS idx_intent_node_level ON t_intent_node (level);
 
 -- 初始化数据：系统/闲聊节点
-INSERT INTO t_intent_node (id, parent_id, label, description, level, is_system, kb_id, sort_order)
-VALUES (1, NULL, '闲聊/通用', '用户问候、闲聊、系统类问题，如"你好"、"你是谁"、"今天天气怎么样"', 1, 1, NULL, 0)
+INSERT INTO t_intent_node (id, tenant_id, parent_id, label, description, level, is_system, kb_id, sort_order)
+VALUES (1, 1, NULL, '闲聊/通用', '用户问候、闲聊、系统类问题，如"你好"、"你是谁"、"今天天气怎么样"', 1, 1, NULL, 0)
 ON CONFLICT (id) DO NOTHING;
 
 -- 初始化数据：金融领域（一级）
-INSERT INTO t_intent_node (id, parent_id, label, description, level, is_system, kb_id, sort_order)
-VALUES (2, NULL, '金融', '金融工程、金融产品、金融市场相关问题', 1, 0, NULL, 1)
+INSERT INTO t_intent_node (id, tenant_id, parent_id, label, description, level, is_system, kb_id, sort_order)
+VALUES (2, 1, NULL, '金融', '金融工程、金融产品、金融市场相关问题', 1, 0, NULL, 1)
 ON CONFLICT (id) DO NOTHING;
 
 -- 初始化数据：金融工程（二级）
-INSERT INTO t_intent_node (id, parent_id, label, description, level, is_system, kb_id, sort_order)
-VALUES (3, 2, '金融工程', '金融工程技术、衍生品定价、风险管理相关问题', 2, 0, NULL, 0)
+INSERT INTO t_intent_node (id, tenant_id, parent_id, label, description, level, is_system, kb_id, sort_order)
+VALUES (3, 1, 2, '金融工程', '金融工程技术、衍生品定价、风险管理相关问题', 2, 0, NULL, 0)
 ON CONFLICT (id) DO NOTHING;
 
 -- 初始化数据：投资估价（二级）
-INSERT INTO t_intent_node (id, parent_id, label, description, level, is_system, kb_id, sort_order)
-VALUES (4, 2, '投资估价', '股票估值、市盈率、投资分析相关问题', 2, 0, NULL, 1)
+INSERT INTO t_intent_node (id, tenant_id, parent_id, label, description, level, is_system, kb_id, sort_order)
+VALUES (4, 1, 2, '投资估价', '股票估值、市盈率、投资分析相关问题', 2, 0, NULL, 1)
 ON CONFLICT (id) DO NOTHING;
 
 -- 初始化数据：宪法学领域（一级）
-INSERT INTO t_intent_node (id, parent_id, label, description, level, is_system, kb_id, sort_order)
-VALUES (5, NULL, '宪法学', '宪法条文、公民权利、国家机构相关问题', 1, 0, NULL, 2)
+INSERT INTO t_intent_node (id, tenant_id, parent_id, label, description, level, is_system, kb_id, sort_order)
+VALUES (5, 1, NULL, '宪法学', '宪法条文、公民权利、国家机构相关问题', 1, 0, NULL, 2)
 ON CONFLICT (id) DO NOTHING;
 
 -- 初始化数据：宪法学（二级，指向知识库）
 -- 注意：kb_id 需根据实际知识库 ID 更新
-INSERT INTO t_intent_node (id, parent_id, label, description, level, is_system, kb_id, sort_order)
-VALUES (6, 5, '宪法基础', '宪法基本原则、宪法历史、公民基本权利与义务', 2, 0, NULL, 0)
+INSERT INTO t_intent_node (id, tenant_id, parent_id, label, description, level, is_system, kb_id, sort_order)
+VALUES (6, 1, 5, '宪法基础', '宪法基本原则、宪法历史、公民基本权利与义务', 2, 0, NULL, 0)
 ON CONFLICT (id) DO NOTHING;

@@ -114,7 +114,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import request from '../../api/request'
 import * as echarts from 'echarts'
 
@@ -132,6 +132,10 @@ const stageLatency = ref<any[]>([])
 const tokenTrendChart = ref<HTMLDivElement>()
 const activityTrendChart = ref<HTMLDivElement>()
 
+// ECharts 实例引用，用于防止内存泄漏
+let tokenTrendChartInstance: echarts.ECharts | null = null
+let activityTrendChartInstance: echarts.ECharts | null = null
+
 onMounted(async () => {
   await Promise.all([
     loadOverview(),
@@ -146,8 +150,19 @@ onMounted(async () => {
 
 async function loadOverview() {
   try {
-    const res = await request.get('/admin/dashboard/overview')
-    overview.value = (res as any).data || res
+    const res = await request.get('/admin/dashboard/overview') as any
+    const data = res.data || res
+    // 后端返回嵌套结构 {systemStats:{...}, ragStats:{...}, ...}，前端需要扁平化
+    const sys = data.systemStats || {}
+    const e2e = await request.get('/admin/dashboard/e2e-latency').then((r: any) => r.data || r).catch(() => ({}))
+    overview.value = {
+      totalUsers: sys.totalUsers || 0,
+      activeUsers7Days: sys.activeUsers7Days !== undefined ? sys.activeUsers7Days : (data.activeUsers7Days || 0),
+      totalConversations: sys.totalConversations || 0,
+      totalKnowledgeBases: sys.totalKnowledgeBases || 0,
+      totalTenants: sys.totalTenants || 0,
+      avgDurationMs: e2e.avgDurationMs || 0
+    }
   } catch (e) { console.error(e) }
 }
 
@@ -164,8 +179,13 @@ async function loadTokenTrend() {
     const data = res.data || res
     await nextTick()
     if (tokenTrendChart.value) {
-      const c = echarts.init(tokenTrendChart.value)
-      c.setOption({
+      // 清理旧实例
+      if (tokenTrendChartInstance) {
+        tokenTrendChartInstance.dispose()
+      }
+      // 创建新实例
+      tokenTrendChartInstance = echarts.init(tokenTrendChart.value)
+      tokenTrendChartInstance.setOption({
         tooltip: { trigger: 'axis' },
         legend: { data: ['输入Token', '输出Token'] },
         xAxis: { type: 'category', data: data.trendData.map((d: any) => d.date) },
@@ -185,8 +205,13 @@ async function loadActivityTrend() {
     const data = res.data || res
     await nextTick()
     if (activityTrendChart.value) {
-      const c = echarts.init(activityTrendChart.value)
-      c.setOption({
+      // 清理旧实例
+      if (activityTrendChartInstance) {
+        activityTrendChartInstance.dispose()
+      }
+      // 创建新实例
+      activityTrendChartInstance = echarts.init(activityTrendChart.value)
+      activityTrendChartInstance.setOption({
         tooltip: { trigger: 'axis' },
         xAxis: { type: 'category', data: data.trendData.map((d: any) => d.date) },
         yAxis: { type: 'value' },
@@ -202,7 +227,12 @@ async function loadTopActiveUsers() {
   try {
     const res = await request.get(`/admin/dashboard/top-active-users?limit=${activeTopN.value}`) as any
     const data = res.data || res
-    topActiveUsers.value = data.users || []
+    // 后端返回 snake_case (conversation_count, last_active_at)，前端需要 camelCase
+    topActiveUsers.value = (data.users || []).map((u: any) => ({
+      ...u,
+      conversationCount: u.conversationCount ?? u.conversation_count ?? 0,
+      lastActiveAt: u.lastActiveAt ?? u.last_active_at ?? null
+    }))
   } catch (e) { console.error(e) }
 }
 
@@ -210,7 +240,13 @@ async function loadTopTokenUsers() {
   try {
     const res = await request.get(`/admin/dashboard/top-token-users?limit=${tokenTopN.value}`) as any
     const data = res.data || res
-    topTokenUsers.value = data.users || []
+    // 后端返回 snake_case (input_tokens, output_tokens, total_tokens)，前端需要 camelCase
+    topTokenUsers.value = (data.users || []).map((u: any) => ({
+      ...u,
+      totalTokens: u.totalTokens ?? u.total_tokens ?? 0,
+      inputTokens: u.inputTokens ?? u.input_tokens ?? 0,
+      outputTokens: u.outputTokens ?? u.output_tokens ?? 0
+    }))
   } catch (e) { console.error(e) }
 }
 
@@ -218,9 +254,27 @@ async function loadStageLatency() {
   try {
     const res = await request.get(`/admin/dashboard/stage-latency?limit=${stageTopN.value}`) as any
     const data = res.data || res
-    stageLatency.value = data.stages || []
+    // 后端返回 SQL snake_case 字段 (avg_duration 等)，前端需要 camelCase (avgDuration 等)
+    stageLatency.value = (data.stages || []).map((s: any) => ({
+      ...s,
+      avgDuration: s.avgDuration ?? s.avg_duration ?? 0,
+      maxDuration: s.maxDuration ?? s.max_duration ?? 0,
+      minDuration: s.minDuration ?? s.min_duration ?? 0
+    }))
   } catch (e) { console.error(e) }
 }
+
+// 页面卸载时清理 ECharts 实例
+onBeforeUnmount(() => {
+  if (tokenTrendChartInstance) {
+    tokenTrendChartInstance.dispose()
+    tokenTrendChartInstance = null
+  }
+  if (activityTrendChartInstance) {
+    activityTrendChartInstance.dispose()
+    activityTrendChartInstance = null
+  }
+})
 </script>
 
 <style scoped>

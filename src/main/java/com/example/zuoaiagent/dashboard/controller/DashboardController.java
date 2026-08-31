@@ -2,126 +2,127 @@ package com.example.zuoaiagent.dashboard.controller;
 
 import com.example.zuoaiagent.common.BaseResponse;
 import com.example.zuoaiagent.common.ResultUtils;
+import com.example.zuoaiagent.config.TenantContextHolder;
 import com.example.zuoaiagent.dashboard.service.DashboardService;
 import com.example.zuoaiagent.exception.BusinessException;
 import com.example.zuoaiagent.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.Map;
 
 /**
- * P24：个人看板 API
- * 功能：Token 统计、命中率统计、趋势数据、TOP 知识库推荐
+ * Dashboard 看板 API
+ *
+ * 统一时间范围参数：
+ *   period = day | week | month | custom（默认 week）
+ *   startDate / endDate = yyyy-MM-dd（period=custom 时必填）
+ *
+ * 所有统计按当前登录用户 userId 过滤，保证口径统一
  */
 @RestController
 @RequestMapping("/dashboard")
 @RequiredArgsConstructor
 public class DashboardController {
 
+    private static final Logger log = LoggerFactory.getLogger(DashboardController.class);
+
     private final DashboardService dashboardService;
 
-    /**
-     * P24：获取当日 Token 统计信息
-     * @return Token 总消耗、输入/输出分布、成本统计
-     */
-    @GetMapping("/token-stats")
-    public BaseResponse<Map<String, Object>> getTokenStats(
-            @RequestParam(required = false) String date) {
-        
-        LocalDate queryDate = parseDate(date);
-        return ResultUtils.success(dashboardService.getTokenStats(queryDate));
+    @GetMapping("/overview")
+    public BaseResponse<Map<String, Object>> getOverview() {
+        Long userId = TenantContextHolder.getUserId();
+        log.debug("Dashboard overview, userId={}", userId);
+        return ResultUtils.success(dashboardService.getOverview(userId));
     }
 
-    /**
-     * P24：获取 Token 消耗趋势（7天/30天）
-     * @param days 统计天数，默认 7，可选 30
-     */
     @GetMapping("/token-trend")
     public BaseResponse<Map<String, Object>> getTokenTrend(
-            @RequestParam(defaultValue = "7") int days) {
-        
-        if (days != 7 && days != 30) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "天数只能选择 7 或 30");
-        }
-        
-        return ResultUtils.success(dashboardService.getTokenTrend(days));
+            @RequestParam(defaultValue = "week") String period,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate) {
+
+        DateRange range = parseRange(period, startDate, endDate);
+        Long userId = TenantContextHolder.getUserId();
+        return ResultUtils.success(dashboardService.getTokenTrend(userId, range.days(), range.start(), range.end()));
     }
 
-    /**
-     * P24：获取检索命中率统计
-     * @return 命中率百分比、成功次数、总次数
-     */
-    @GetMapping("/retrieval-stats")
-    public BaseResponse<Map<String, Object>> getRetrievalStats(
-            @RequestParam(required = false) String date) {
-        
-        LocalDate queryDate = parseDate(date);
-        return ResultUtils.success(dashboardService.getRetrievalStats(queryDate));
+    @GetMapping("/message-trend")
+    public BaseResponse<Map<String, Object>> getMessageTrend(
+            @RequestParam(defaultValue = "week") String period,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate) {
+
+        DateRange range = parseRange(period, startDate, endDate);
+        Long userId = TenantContextHolder.getUserId();
+        return ResultUtils.success(dashboardService.getMessageTrend(userId, range.days(), range.start(), range.end()));
     }
 
-    /**
-     * P24：获取检索命中率趋势（7天/30天）
-     * @param days 统计天数，默认 7，可选 30
-     */
     @GetMapping("/retrieval-trend")
     public BaseResponse<Map<String, Object>> getRetrievalTrend(
-            @RequestParam(defaultValue = "7") int days) {
-        
-        if (days != 7 && days != 30) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "天数只能选择 7 或 30");
-        }
-        
-        return ResultUtils.success(dashboardService.getRetrievalTrend(days));
+            @RequestParam(defaultValue = "week") String period,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate) {
+
+        DateRange range = parseRange(period, startDate, endDate);
+        Long userId = TenantContextHolder.getUserId();
+        return ResultUtils.success(dashboardService.getRetrievalTrend(userId, range.days(), range.start(), range.end()));
     }
 
-    /**
-     * P24：获取 TOP 5 常用知识库
-     * @return 知识库列表、访问次数、文件数量
-     */
     @GetMapping("/top-knowledge-bases")
     public BaseResponse<Map<String, Object>> getTopKnowledgeBases(
-            @RequestParam(defaultValue = "5") int limit) {
-        
-        if (limit < 1 || limit > 50) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "limit 必须在 1-50 之间");
+            @RequestParam(defaultValue = "week") String period,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate,
+            @RequestParam(defaultValue = "5") int topN) {
+
+        if (topN < 1 || topN > 100) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "topN 必须在 1-100 之间");
         }
-        
-        return ResultUtils.success(dashboardService.getTopKnowledgeBases(limit));
+
+        DateRange range = parseRange(period, startDate, endDate);
+        Long userId = TenantContextHolder.getUserId();
+        return ResultUtils.success(dashboardService.getTopKnowledgeBases(
+            userId, range.days(), range.start(), range.end(), topN));
     }
 
-    /**
-     * P24：获取最近对话列表
-     * @return 最近 10 条对话
-     */
-    @GetMapping("/recent-conversations")
-    public BaseResponse<Map<String, Object>> getRecentConversations(
-            @RequestParam(defaultValue = "10") int limit) {
-        
-        if (limit < 1 || limit > 50) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "limit 必须在 1-50 之间");
-        }
-        
-        return ResultUtils.success(dashboardService.getRecentConversations(limit));
-    }
+    record DateRange(int days, LocalDate start, LocalDate end) {}
 
-    /**
-     * P24：获取个人看板总览数据
-     * @return Token 统计、检索命中率、TOP 知识库、最近对话
-     */
-    @GetMapping("/overview")
-    public BaseResponse<Map<String, Object>> getDashboardOverview() {
-        return ResultUtils.success(dashboardService.getDashboardOverview());
-    }
+    private DateRange parseRange(String period, String startDate, String endDate) {
+        LocalDate today = LocalDate.now();
 
-    // ==================== 工具方法 ====================
+        return switch (period == null ? "week" : period) {
+            case "day" -> new DateRange(1, today, today);
+            case "week" -> new DateRange(7, today.minusDays(6), today);
+            case "month" -> new DateRange((int) today.getDayOfMonth(),
+                    today.withDayOfMonth(1), today);
+            case "custom" -> {
+                if (startDate == null || endDate == null) {
+                    throw new BusinessException(ErrorCode.PARAMS_ERROR,
+                        "period=custom 时 startDate 和 endDate 必填，格式 yyyy-MM-dd");
+                }
+                LocalDate s = parseDate(startDate);
+                LocalDate e = parseDate(endDate);
+                if (s.isAfter(e)) {
+                    throw new BusinessException(ErrorCode.PARAMS_ERROR, "startDate 不能大于 endDate");
+                }
+                long days = ChronoUnit.DAYS.between(s, e) + 1;
+                if (days > 365) {
+                    throw new BusinessException(ErrorCode.PARAMS_ERROR, "时间范围不能超过 365 天");
+                }
+                yield new DateRange((int) days, s, e);
+            }
+            default -> throw new BusinessException(ErrorCode.PARAMS_ERROR,
+                "period 只能选择 day/week/month/custom");
+        };
+    }
 
     private LocalDate parseDate(String date) {
-        if (date == null || date.isEmpty()) {
-            return LocalDate.now();
-        }
         try {
             return LocalDate.parse(date, DateTimeFormatter.ISO_DATE);
         } catch (Exception e) {

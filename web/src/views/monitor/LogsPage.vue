@@ -7,7 +7,7 @@
         <el-option label="ERROR" value="ERROR" /><el-option label="WARN" value="WARN" /><el-option label="INFO" value="INFO" />
       </el-select>
       <el-select v-model="service" placeholder="服务" clearable style="width:150px">
-        <el-option label="zuo-ai-agent" value="zuo-ai-agent" /><el-option label="auth-service" value="auth-service" />
+        <el-option label="ZWD-ai" value="zuo-ai-agent" /><el-option label="auth-service" value="auth-service" />
       </el-select>
       <el-button type="primary" @click="search">搜索</el-button>
     </div>

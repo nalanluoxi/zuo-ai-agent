@@ -18,6 +18,9 @@ import reactor.core.publisher.Flux;
 import com.example.zuoaiagent.dashboard.service.TokenUsageService;
 import com.example.zuoaiagent.prompt.PromptTemplateLoader;
 
+import org.springframework.ai.chat.metadata.Usage;
+import org.springframework.ai.chat.model.ChatResponse;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -135,10 +138,22 @@ public class RoutingChatService {
         AtomicBoolean sendFailed = new AtomicBoolean(false);
         StringBuilder responseAccumulator = new StringBuilder();
         long startTime = System.currentTimeMillis();
+        int[] tokenUsage = new int[]{0, 0};
 
-        Flux<String> flux = buildSpec(entry, prompt, conversationId, systemPrompt, vectorStore, internal)
+        Flux<ChatResponse> responseFlux = buildSpec(entry, prompt, conversationId, systemPrompt, vectorStore, internal)
                 .stream()
-                .content();
+                .chatResponse();
+
+        Flux<String> flux = responseFlux.map(cr -> {
+            // 累积真实 Token 使用量（Ollama 在最后一个 chunk 中返回完整 usage）
+            Usage usage = cr.getMetadata() != null ? cr.getMetadata().getUsage() : null;
+            if (usage != null) {
+                tokenUsage[0] = usage.getPromptTokens() != null ? usage.getPromptTokens() : 0;
+                tokenUsage[1] = usage.getCompletionTokens() != null ? usage.getCompletionTokens() : 0;
+            }
+            return cr.getResult() != null && cr.getResult().getOutput() != null
+                    ? cr.getResult().getOutput().getText() : "";
+        }).filter(s -> !s.isEmpty());
 
         final Disposable[] subscriptionHolder = new Disposable[1];
 
@@ -193,26 +208,28 @@ public class RoutingChatService {
                     if (!internal && !fullResponse.isEmpty()) {
                         chatMemory.add(conversationId, new AssistantMessage(fullResponse));
 
-                        // 记录 Token 使用量（基于估算）
-                        if (userId != null) {
-                            try {
-                                int inputTokens = estimateTokens(prompt);
-                                int outputTokens = estimateTokens(fullResponse);
-                                int totalTokens = inputTokens + outputTokens;
-                                String messageId = UUID.randomUUID().toString();
+                        int inputTokens = tokenUsage[0];
+                        int outputTokens = tokenUsage[1];
+                        // 如果模型未返回真实 token（如 Ollama 某些版本），回退到估算
+                        if (inputTokens == 0 && outputTokens == 0) {
+                            inputTokens = estimateTokens(prompt);
+                            outputTokens = estimateTokens(fullResponse);
+                            log.debug("[RoutingChatService] 模型未返回 token 统计，使用估算值: input={}, output={}", inputTokens, outputTokens);
+                        }
+                        int totalTokens = inputTokens + outputTokens;
 
-                                tokenUsageService.recordUsage(
-                                    String.valueOf(userId),
-                                    conversationId,
-                                    messageId,
-                                    entry.modelName(),
-                                    inputTokens,
-                                    outputTokens,
-                                    totalTokens
-                                );
-                            } catch (Exception e) {
-                                log.warn("记录 token 使用量失败", e);
-                            }
+                        try {
+                            tokenUsageService.recordUsage(
+                                userId != null ? String.valueOf(userId) : null,
+                                conversationId,
+                                UUID.randomUUID().toString(),
+                                entry.modelName(),
+                                inputTokens,
+                                outputTokens,
+                                totalTokens
+                            );
+                        } catch (Exception e) {
+                            log.warn("记录 token 使用量失败", e);
                         }
                     }
                     if (probeCompleted.get() && !sendFailed.get()) {

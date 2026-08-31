@@ -139,12 +139,12 @@ embedding:
       model: dengcao/Qwen3-Embedding-8B:F16
       priority: 1
       enabled: true
-    # 备用候选 1：SiliconFlow Qwen3-Embedding-8B，维度 4096，无 512 token 限制
+    # 备用候选 1：SiliconFlow Qwen3-Embedding-8B，维度 4096，无 512 token 限制（已禁用，API Key失效）
     - id: siliconflow-qwen3
       provider: openai
       model: Qwen/Qwen3-Embedding-8B
       priority: 2
-      enabled: true
+      enabled: false
     # 备用候选 2：SiliconFlow netease-youdao/bce-embedding-base_v1，维度 768，注意 512 token 上限
     - id: siliconflow-bce
       provider: openai
@@ -162,8 +162,11 @@ intent:
 chat:
   # 对话记忆参数（DbBasedChatMemory）
   memory:
-    # 消息轮数超过此阈值时触发摘要压缩（每轮 = 1 user + 1 assistant = 2 条消息）
-    summary-start-turns: 10
+    # 触发压缩的消息轮数阈值（每轮 = 1 user + 1 assistant = 2 条消息）
+    # 20 轮 = 40 条消息触发压缩
+    summary-start-turns: 20
+    # 每次压缩时提取的最旧消息条数
+    compression-batch-size: 20
     # 历史记忆保留的最近消息条数（供 MessageChatMemoryAdvisor 使用）
     history-keep: 20
   selection:

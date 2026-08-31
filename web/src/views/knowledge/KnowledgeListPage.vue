@@ -236,8 +236,8 @@ onMounted(async () => {
 
 async function loadAllKnowledgeBases() {
   try {
-    const res = await request.get('/knowledge-base/page', { 
-      params: { pageNum: searchPage.value, pageSize: 20 }
+    const res = await request.get('/knowledge-base/page', {
+      params: { current: searchPage.value, pageSize: 20 }
     }) as any
     const data = res.data || res
     allKnowledgeBases.value = data.records || []

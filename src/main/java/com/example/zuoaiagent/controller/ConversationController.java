@@ -128,8 +128,8 @@ public class ConversationController {
                 throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "对话不存在");
             }
             
-            // 删除 Redis 中的对话队列
-            redisTemplate.delete("chatmemory:queue:" + conversationId);
+            // 删除 Redis 中的对话队列（与 sendMessage 使用一致的 key 前缀）
+            redisTemplate.delete("chatmemory:" + conversationId);
             
             return ResultUtils.success(true);
         } catch (Exception e) {
@@ -201,18 +201,18 @@ public class ConversationController {
         message.put("createdAt", LocalDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME));
         
         try {
-            // 保存消息到 Redis 队列
+            // 保存消息到 Redis 队列（使用统一的 key 前缀）
             String messageJson = new ObjectMapper().writeValueAsString(message);
-            redisTemplate.opsForList().leftPush("chatmemory:queue:" + conversationId, messageJson);
-            
+            redisTemplate.opsForList().rightPush("chatmemory:" + conversationId, messageJson);
+
             // 同时保存到数据库
             String sql = "INSERT INTO t_chat_message_raw (id, msg_id, conversation_id, content, role, create_time) VALUES (?, ?, ?, ?, ?, NOW())";
             jdbcTemplate.update(sql, System.currentTimeMillis(), messageId, conversationId, content, "user");
-            
+
             // 更新对话的 updated_at
             String updateSql = "UPDATE t_conversation SET updated_at = NOW() WHERE id = ?";
             jdbcTemplate.update(updateSql, conversationId);
-            
+
             return ResultUtils.success(message);
         } catch (Exception e) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "消息保存失败：" + e.getMessage());

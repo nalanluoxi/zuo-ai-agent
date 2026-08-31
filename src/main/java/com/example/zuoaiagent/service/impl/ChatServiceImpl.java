@@ -154,8 +154,8 @@ public class ChatServiceImpl implements ChatService {
                                 boolean enableMemory, Long userId, boolean ragEnabled,
                                 SseEmitter emitter) {
         if (!ragEnabled) {
-            log.info("[ChatService] RAG 已关闭，纯模型对话, conversationId={}", conversationId);
-            routingChatService.streamChat(prompt, conversationId, null, null, emitter, false);
+            log.info("[ChatService] RAG 已关闭，纯模型对话, conversationId={}, userId={}", conversationId, userId);
+            routingChatService.streamChat(prompt, conversationId, null, null, emitter, false, userId);
             return;
         }
         RagPipelineContext ctx = new RagPipelineContext(

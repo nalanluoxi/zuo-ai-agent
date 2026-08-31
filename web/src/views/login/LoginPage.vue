@@ -1,7 +1,7 @@
 <template>
   <div class="login-container">
     <el-card class="login-card">
-      <h2>ZUO AI Agent</h2>
+      <h2>ZWD-ai</h2>
       <el-tabs v-model="mode">
         <el-tab-pane label="登录" name="login">
           <el-input v-model="loginForm.username" placeholder="用户名" class="mb" />

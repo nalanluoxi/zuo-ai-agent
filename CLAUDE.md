@@ -22,9 +22,64 @@ mvn test
 mvn test -Dtest=ZuoAiAgentApplicationTests
 ```
 
+## 启动脚本
+
+项目提供三个启动脚本：
+
+- **`./start.sh`** - 主控脚本，支持 start/stop/restart/status，调用后端和前端脚本
+- **`./start-backend.sh`** - 启动所有后端服务（中间件 + 4个Java服务）
+- **`./start-frontend.sh`** - 启动所有前端服务（web + monitor-web）
+
+### 快速使用
+
+```bash
+# 启动全部服务
+./start.sh
+
+# 仅启动后端服务
+./start.sh backend
+
+# 仅启动前端服务
+./start.sh frontend
+
+# 查看状态
+./start.sh status
+```
+
+## Service Architecture
+
+| Service | Port | Context Path | Description |
+|---------|------|--------------|-------------|
+| **gateway-service** | 9000 | - | API 网关，对外暴露唯一入口 |
+| **auth-service** | 8100 | /api/auth | 认证服务，用户登录/注册/token 管理 |
+| **zuo-ai-agent** | 8123 | /api | 主服务，AI 对话/知识库/文档处理 |
+| **log-monitor-service** | 8200 | /api/log | 日志监控服务 |
+
+## Frontend Services
+
+| Service | Port | Description |
+|---------|------|-------------|
+| **web** | 5173 | 主前端（用户界面） |
+| **monitor-web** | 5174 | 监控前端 |
+
+## 访问入口 / 登录主页面
+
+> **每次启动后，访问地址：**
+> - 🌐 **登录主页面: http://localhost:5173**
+> - 测试账号: `admin` / `123456`
+
 ## API & Service
 
-- Base URL: `http://localhost:8123/api`
+### 对外暴露入口
+
+所有前端请求通过 **Gateway (9000)** 路由到后端服务：
+
+- 🌐 **主前端（登录页面）**: `http://localhost:5173`
+- 监控前端: `http://localhost:5174`
+- 网关 API: `http://localhost:9000`
+
+### 内部服务（不直接对外暴露）
+
 - Health check: `GET /api/health` → returns `"ok"`
 - Swagger UI: `http://localhost:8123/api/swagger-ui.html`
 - API docs: `http://localhost:8123/api/v3/api-docs`

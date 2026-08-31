@@ -1,7 +1,7 @@
 package com.example.zuoaiagent.config;
 
 import com.example.zuoaiagent.chatmemory.RedisChatMemory;
-import com.example.zuoaiagent.constants.SystemConstants;
+import com.example.zuoaiagent.prompt.PromptTemplateLoader;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -12,12 +12,16 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 @Configuration
 public class ChatClientConfig {
 
-    @Value("${chat.memory.summary-start-turns:10}")
+    @Value("${chat.memory.summary-start-turns:20}")
     private int summaryStartTurns;
+
+    @Value("${chat.memory.compression-batch-size:20}")
+    private int compressionBatchSize;
 
     @Value("${chat.memory.history-keep:20}")
     private int historyKeep;
@@ -27,16 +31,19 @@ public class ChatClientConfig {
 
     @Bean
     public ChatMemory chatMemory(StringRedisTemplate redisTemplate,
-                                  RabbitTemplate rabbitTemplate) {
-        return new RedisChatMemory(redisTemplate, rabbitTemplate,
-                summaryStartTurns, historyKeep, sessionTtlMinutes);
+                                  RabbitTemplate rabbitTemplate,
+                                  JdbcTemplate jdbcTemplate) {
+        return new RedisChatMemory(redisTemplate, rabbitTemplate, jdbcTemplate,
+                summaryStartTurns, compressionBatchSize, historyKeep, sessionTtlMinutes);
     }
 
     @Bean
     public ChatClient chatClient(@Qualifier("dashscopeChatModel") ChatModel chatModel,
-                                  ChatMemory chatMemory) {
+                                  ChatMemory chatMemory,
+                                  PromptTemplateLoader templateLoader) {
+        String systemPrompt = templateLoader.load("prompts/system-chat.st");
         return ChatClient.builder(chatModel)
-                .defaultSystem(SystemConstants.SYSTEM_PROMPT)
+                .defaultSystem(systemPrompt)
                 .defaultAdvisors(
                         MessageChatMemoryAdvisor.builder(chatMemory).build()
                 )
