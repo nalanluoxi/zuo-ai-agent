@@ -34,16 +34,17 @@
         <el-card class="chart-card">
           <template #header>
             <div class="card-header">
-              <span>Token 消耗趋势（input / output）</span>
-              <div class="header-controls">
+              <div class="header-top">
+                <span>Token 消耗趋势（input / output）</span>
                 <el-radio-group v-model="tokenPeriod" size="small" @change="handlePeriodChange('token')">
                   <el-radio-button value="day">1天</el-radio-button>
                   <el-radio-button value="week">7天</el-radio-button>
                   <el-radio-button value="month">本月</el-radio-button>
                   <el-radio-button value="custom">自定义</el-radio-button>
                 </el-radio-group>
+              </div>
+              <div v-if="tokenPeriod === 'custom'" class="header-bottom">
                 <el-date-picker
-                  v-if="tokenPeriod === 'custom'"
                   v-model="tokenDateRange"
                   type="daterange"
                   range-separator="至"
@@ -65,16 +66,17 @@
         <el-card class="chart-card">
           <template #header>
             <div class="card-header">
-              <span>消息频次统计</span>
-              <div class="header-controls">
+              <div class="header-top">
+                <span>消息频次统计</span>
                 <el-radio-group v-model="msgPeriod" size="small" @change="handlePeriodChange('msg')">
                   <el-radio-button value="day">1天</el-radio-button>
                   <el-radio-button value="week">7天</el-radio-button>
                   <el-radio-button value="month">本月</el-radio-button>
                   <el-radio-button value="custom">自定义</el-radio-button>
                 </el-radio-group>
+              </div>
+              <div v-if="msgPeriod === 'custom'" class="header-bottom">
                 <el-date-picker
-                  v-if="msgPeriod === 'custom'"
                   v-model="msgDateRange"
                   type="daterange"
                   range-separator="至"
@@ -99,16 +101,17 @@
         <el-card class="chart-card">
           <template #header>
             <div class="card-header">
-              <span>检索耗时统计</span>
-              <div class="header-controls">
+              <div class="header-top">
+                <span>检索耗时统计</span>
                 <el-radio-group v-model="retrievalPeriod" size="small" @change="handlePeriodChange('retrieval')">
                   <el-radio-button value="day">1天</el-radio-button>
                   <el-radio-button value="week">7天</el-radio-button>
                   <el-radio-button value="month">本月</el-radio-button>
                   <el-radio-button value="custom">自定义</el-radio-button>
                 </el-radio-group>
+              </div>
+              <div v-if="retrievalPeriod === 'custom'" class="header-bottom">
                 <el-date-picker
-                  v-if="retrievalPeriod === 'custom'"
                   v-model="retrievalDateRange"
                   type="daterange"
                   range-separator="至"
@@ -130,16 +133,20 @@
         <el-card class="chart-card">
           <template #header>
             <div class="card-header">
-              <span>知识库使用频率 Top N</span>
-              <div class="header-controls">
-                <el-radio-group v-model="kbPeriod" size="small" @change="handlePeriodChange('kb')">
-                  <el-radio-button value="day">1天</el-radio-button>
-                  <el-radio-button value="week">7天</el-radio-button>
-                  <el-radio-button value="month">本月</el-radio-button>
-                  <el-radio-button value="custom">自定义</el-radio-button>
-                </el-radio-group>
+              <div class="header-top">
+                <span>知识库使用频率 Top N</span>
+                <div class="header-controls">
+                  <el-radio-group v-model="kbPeriod" size="small" @change="handlePeriodChange('kb')">
+                    <el-radio-button value="day">1天</el-radio-button>
+                    <el-radio-button value="week">7天</el-radio-button>
+                    <el-radio-button value="month">本月</el-radio-button>
+                    <el-radio-button value="custom">自定义</el-radio-button>
+                  </el-radio-group>
+                  <el-input-number v-model="topN" :min="1" :max="20" size="small" @change="loadTopKB" style="width:120px" />
+                </div>
+              </div>
+              <div v-if="kbPeriod === 'custom'" class="header-bottom">
                 <el-date-picker
-                  v-if="kbPeriod === 'custom'"
                   v-model="kbDateRange"
                   type="daterange"
                   range-separator="至"
@@ -151,7 +158,6 @@
                   style="width: 280px"
                   @change="loadTopKB"
                 />
-                <el-input-number v-model="topN" :min="1" :max="20" size="small" @change="loadTopKB" style="width:120px" />
               </div>
             </div>
           </template>
@@ -531,13 +537,24 @@ onBeforeUnmount(() => {
 
 .card-header {
   display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.header-top {
+  display: flex;
   justify-content: space-between;
   align-items: center;
-  flex-wrap: wrap;
   gap: 8px;
 }
 
 .header-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.header-bottom {
   display: flex;
   align-items: center;
   gap: 12px;
