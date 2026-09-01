@@ -35,11 +35,27 @@
           <template #header>
             <div class="card-header">
               <span>Token 消耗趋势（input / output）</span>
-              <el-radio-group v-model="tokenPeriod" size="small" @change="loadTokenTrend">
-                <el-radio-button value="day">1天</el-radio-button>
-                <el-radio-button value="week">7天</el-radio-button>
-                <el-radio-button value="month">本月</el-radio-button>
-              </el-radio-group>
+              <div class="header-controls">
+                <el-radio-group v-model="tokenPeriod" size="small" @change="handlePeriodChange('token')">
+                  <el-radio-button value="day">1天</el-radio-button>
+                  <el-radio-button value="week">7天</el-radio-button>
+                  <el-radio-button value="month">本月</el-radio-button>
+                  <el-radio-button value="custom">自定义</el-radio-button>
+                </el-radio-group>
+                <el-date-picker
+                  v-if="tokenPeriod === 'custom'"
+                  v-model="tokenDateRange"
+                  type="daterange"
+                  range-separator="至"
+                  start-placeholder="开始日期"
+                  end-placeholder="结束日期"
+                  format="YYYY-MM-DD"
+                  value-format="YYYY-MM-DD"
+                  size="small"
+                  style="width: 280px"
+                  @change="loadTokenTrend"
+                />
+              </div>
             </div>
           </template>
           <div ref="tokenChartEl" class="chart-container"></div>
@@ -50,11 +66,27 @@
           <template #header>
             <div class="card-header">
               <span>消息频次统计</span>
-              <el-radio-group v-model="msgPeriod" size="small" @change="loadMessageTrend">
-                <el-radio-button value="day">1天</el-radio-button>
-                <el-radio-button value="week">7天</el-radio-button>
-                <el-radio-button value="month">本月</el-radio-button>
-              </el-radio-group>
+              <div class="header-controls">
+                <el-radio-group v-model="msgPeriod" size="small" @change="handlePeriodChange('msg')">
+                  <el-radio-button value="day">1天</el-radio-button>
+                  <el-radio-button value="week">7天</el-radio-button>
+                  <el-radio-button value="month">本月</el-radio-button>
+                  <el-radio-button value="custom">自定义</el-radio-button>
+                </el-radio-group>
+                <el-date-picker
+                  v-if="msgPeriod === 'custom'"
+                  v-model="msgDateRange"
+                  type="daterange"
+                  range-separator="至"
+                  start-placeholder="开始日期"
+                  end-placeholder="结束日期"
+                  format="YYYY-MM-DD"
+                  value-format="YYYY-MM-DD"
+                  size="small"
+                  style="width: 280px"
+                  @change="loadMessageTrend"
+                />
+              </div>
             </div>
           </template>
           <div ref="msgChartEl" class="chart-container"></div>
@@ -68,11 +100,27 @@
           <template #header>
             <div class="card-header">
               <span>检索耗时统计</span>
-              <el-radio-group v-model="retrievalPeriod" size="small" @change="loadRetrievalTrend">
-                <el-radio-button value="day">1天</el-radio-button>
-                <el-radio-button value="week">7天</el-radio-button>
-                <el-radio-button value="month">本月</el-radio-button>
-              </el-radio-group>
+              <div class="header-controls">
+                <el-radio-group v-model="retrievalPeriod" size="small" @change="handlePeriodChange('retrieval')">
+                  <el-radio-button value="day">1天</el-radio-button>
+                  <el-radio-button value="week">7天</el-radio-button>
+                  <el-radio-button value="month">本月</el-radio-button>
+                  <el-radio-button value="custom">自定义</el-radio-button>
+                </el-radio-group>
+                <el-date-picker
+                  v-if="retrievalPeriod === 'custom'"
+                  v-model="retrievalDateRange"
+                  type="daterange"
+                  range-separator="至"
+                  start-placeholder="开始日期"
+                  end-placeholder="结束日期"
+                  format="YYYY-MM-DD"
+                  value-format="YYYY-MM-DD"
+                  size="small"
+                  style="width: 280px"
+                  @change="loadRetrievalTrend"
+                />
+              </div>
             </div>
           </template>
           <div ref="retrievalChartEl" class="chart-container"></div>
@@ -84,11 +132,25 @@
             <div class="card-header">
               <span>知识库使用频率 Top N</span>
               <div class="header-controls">
-                <el-radio-group v-model="kbPeriod" size="small" @change="loadTopKB">
+                <el-radio-group v-model="kbPeriod" size="small" @change="handlePeriodChange('kb')">
                   <el-radio-button value="day">1天</el-radio-button>
                   <el-radio-button value="week">7天</el-radio-button>
                   <el-radio-button value="month">本月</el-radio-button>
+                  <el-radio-button value="custom">自定义</el-radio-button>
                 </el-radio-group>
+                <el-date-picker
+                  v-if="kbPeriod === 'custom'"
+                  v-model="kbDateRange"
+                  type="daterange"
+                  range-separator="至"
+                  start-placeholder="开始日期"
+                  end-placeholder="结束日期"
+                  format="YYYY-MM-DD"
+                  value-format="YYYY-MM-DD"
+                  size="small"
+                  style="width: 280px"
+                  @change="loadTopKB"
+                />
                 <el-input-number v-model="topN" :min="1" :max="20" size="small" @change="loadTopKB" style="width:120px" />
               </div>
             </div>
@@ -121,6 +183,12 @@ const retrievalPeriod = ref('week')
 const kbPeriod = ref('week')
 const topN = ref(5)
 
+// ── 自定义日期范围 ─
+const tokenDateRange = ref<[string, string] | null>(null)
+const msgDateRange = ref<[string, string] | null>(null)
+const retrievalDateRange = ref<[string, string] | null>(null)
+const kbDateRange = ref<[string, string] | null>(null)
+
 // ── 图表 DOM ──
 const tokenChartEl = ref<HTMLDivElement>()
 const msgChartEl = ref<HTMLDivElement>()
@@ -144,9 +212,31 @@ async function loadOverview() {
   } catch { /* 容错 */ }
 }
 
+// ── 切换 period 时，如果是 custom 但没有选日期，不请求；否则清空对应日期范围并请求 ──
+function handlePeriodChange(chart: 'token' | 'msg' | 'retrieval' | 'kb') {
+  if (chart === 'token') {
+    if (tokenPeriod.value === 'custom' && !tokenDateRange.value) return
+    loadTokenTrend()
+  } else if (chart === 'msg') {
+    if (msgPeriod.value === 'custom' && !msgDateRange.value) return
+    loadMessageTrend()
+  } else if (chart === 'retrieval') {
+    if (retrievalPeriod.value === 'custom' && !retrievalDateRange.value) return
+    loadRetrievalTrend()
+  } else if (chart === 'kb') {
+    if (kbPeriod.value === 'custom' && !kbDateRange.value) return
+    loadTopKB()
+  }
+}
+
 async function loadTokenTrend() {
   try {
-    const json = await request.get('/dashboard/token-trend', { params: { period: tokenPeriod.value } }) as any
+    const params: any = { period: tokenPeriod.value }
+    if (tokenPeriod.value === 'custom' && tokenDateRange.value) {
+      params.startDate = tokenDateRange.value[0]
+      params.endDate = tokenDateRange.value[1]
+    }
+    const json = await request.get('/dashboard/token-trend', { params }) as any
     const data = json.data || json
     const list = data.trendData || []
     await nextTick()
@@ -156,7 +246,12 @@ async function loadTokenTrend() {
 
 async function loadMessageTrend() {
   try {
-    const json = await request.get('/dashboard/message-trend', { params: { period: msgPeriod.value } }) as any
+    const params: any = { period: msgPeriod.value }
+    if (msgPeriod.value === 'custom' && msgDateRange.value) {
+      params.startDate = msgDateRange.value[0]
+      params.endDate = msgDateRange.value[1]
+    }
+    const json = await request.get('/dashboard/message-trend', { params }) as any
     const data = json.data || json
     const list = data.trendData || []
     await nextTick()
@@ -166,7 +261,12 @@ async function loadMessageTrend() {
 
 async function loadRetrievalTrend() {
   try {
-    const json = await request.get('/dashboard/retrieval-trend', { params: { period: retrievalPeriod.value } }) as any
+    const params: any = { period: retrievalPeriod.value }
+    if (retrievalPeriod.value === 'custom' && retrievalDateRange.value) {
+      params.startDate = retrievalDateRange.value[0]
+      params.endDate = retrievalDateRange.value[1]
+    }
+    const json = await request.get('/dashboard/retrieval-trend', { params }) as any
     const data = json.data || json
     const list = data.trendData || []
     await nextTick()
@@ -176,9 +276,12 @@ async function loadRetrievalTrend() {
 
 async function loadTopKB() {
   try {
-    const json = await request.get('/dashboard/top-knowledge-bases', {
-      params: { period: kbPeriod.value, topN: topN.value }
-    }) as any
+    const params: any = { period: kbPeriod.value, topN: topN.value }
+    if (kbPeriod.value === 'custom' && kbDateRange.value) {
+      params.startDate = kbDateRange.value[0]
+      params.endDate = kbDateRange.value[1]
+    }
+    const json = await request.get('/dashboard/top-knowledge-bases', { params }) as any
     const data = json.data || json
     topKBList.value = data.knowledgeBases || []
   } catch { /* 容错 */ }
