@@ -33,7 +33,7 @@
       <div class="info-grid">
         <div class="info-item">
           <span class="label">创建者：</span>
-          <span class="value">{{ knowledgeBase.creator || knowledgeBase.createdBy || '-' }}</span>
+          <span class="value">{{ knowledgeBase.createdByUsername || knowledgeBase.createdBy || '-' }}</span>
         </div>
         <div class="info-item">
           <span class="label">创建时间：</span>
@@ -51,6 +51,14 @@
             <el-option label="公开" value="public" />
           </el-select>
         </div>
+        <div class="info-item full-width" v-if="boundIntentNodeNames.length > 0">
+          <span class="label">绑定意图节点：</span>
+          <div class="intent-tags">
+            <el-tag v-for="nodeName in boundIntentNodeNames" :key="nodeName" size="small" type="success" class="intent-tag">
+              {{ nodeName }}
+            </el-tag>
+          </div>
+        </div>
       </div>
     </el-card>
 
@@ -67,18 +75,71 @@
             </el-button>
           </div>
 
-          <el-table :data="owners" style="width: 100%" v-loading="ownersLoading">
-            <el-table-column prop="ownerId" label="用户ID" width="150" />
-            <el-table-column prop="username" label="用户名" width="200" />
-            <el-table-column prop="nickname" label="昵称" />
-            <el-table-column label="操作" width="100">
-              <template #default="{ row }">
-                <el-button text type="danger" size="small" @click="removeOwner(row.ownerId)">
-                  删除
-                </el-button>
+          <div class="owner-cards" v-loading="ownersLoading">
+            <template v-if="owners.length > 0">
+              <!-- 显示前2个卡片 -->
+              <div
+                v-for="owner in displayedOwners"
+                :key="owner.ownerId"
+                class="owner-card"
+              >
+                <div class="owner-card-content">
+                  <div class="owner-info">
+                    <div class="owner-name">{{ owner.username || '未知用户' }}</div>
+                    <div class="owner-nickname" v-if="owner.nickname">{{ owner.nickname }}</div>
+                  </div>
+                  <el-button
+                    type="danger"
+                    size="small"
+                    text
+                    @click="removeOwner(owner.ownerId)"
+                  >
+                    删除
+                  </el-button>
+                </div>
+              </div>
+
+              <!-- 第3个及以后显示"+N 更多" -->
+              <div
+                v-if="remainingOwnersCount > 0 && !showAllOwners"
+                class="owner-more"
+                @click="showAllOwners = true"
+              >
+                +{{ remainingOwnersCount }} 更多
+              </div>
+
+              <!-- 展开后显示所有剩余卡片 -->
+              <template v-if="showAllOwners">
+                <div
+                  v-for="owner in remainingOwners"
+                  :key="owner.ownerId"
+                  class="owner-card"
+                >
+                  <div class="owner-card-content">
+                    <div class="owner-info">
+                      <div class="owner-name">{{ owner.username || '未知用户' }}</div>
+                      <div class="owner-nickname" v-if="owner.nickname">{{ owner.nickname }}</div>
+                    </div>
+                    <el-button
+                      type="danger"
+                      size="small"
+                      text
+                      @click="removeOwner(owner.ownerId)"
+                    >
+                      删除
+                    </el-button>
+                  </div>
+                </div>
+
+                <!-- 收起按钮 -->
+                <div class="owner-more" @click="showAllOwners = false">
+                  收起
+                </div>
               </template>
-            </el-table-column>
-          </el-table>
+            </template>
+
+            <el-empty v-else description="暂无 Owner" />
+          </div>
         </div>
       </el-tab-pane>
 
@@ -159,6 +220,22 @@
             <el-option label="公开" value="public" />
           </el-select>
         </el-form-item>
+        <el-form-item label="绑定意图节点">
+          <el-select
+            v-model="editForm.intentNodeIds"
+            multiple
+            filterable
+            placeholder="选择要绑定的意图节点（可选）"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="node in intentNodeList"
+              :key="node.id"
+              :label="node.label"
+              :value="node.id"
+            />
+          </el-select>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="showEditDialog = false">取消</el-button>
@@ -227,7 +304,8 @@ const filesLoading = ref(false)
 const showEditDialog = ref(false)
 const showUploadDialog = ref(false)
 const showAddOwnerDialog = ref(false)
-const editForm = ref({ name: '', description: '', readability: '' })
+const intentNodeList = ref<any[]>([])
+const editForm = ref({ name: '', description: '', readability: '', intentNodeIds: [] as string[] })
 const ownerForm = ref({ ownerId: '' })
 const selectedFiles = ref<File[]>([])
 const uploadFileList = ref<any[]>([])
@@ -237,6 +315,18 @@ const totalChunks = computed(() => files.value.reduce((s, f) => s + (f.chunks ||
 const totalSizeMb = computed(() => {
   const bytes = files.value.reduce((s, f) => s + (f.fileSize || f.file_size || 0), 0)
   return Math.round((bytes / 1024 / 1024) * 100) / 100
+})
+
+// Owner 卡片展示逻辑
+const showAllOwners = ref(false)
+const displayedOwners = computed(() => owners.value.slice(0, 2))
+const remainingOwnersCount = computed(() => Math.max(0, owners.value.length - 2))
+const remainingOwners = computed(() => owners.value.slice(2))
+
+// 绑定意图节点名称
+const boundIntentNodeNames = computed(() => {
+  if (!knowledgeBase.value.intentNodeLabels) return []
+  return knowledgeBase.value.intentNodeLabels
 })
 
 onMounted(async () => {
@@ -320,11 +410,39 @@ const updateReadability = async () => {
   }
 }
 
-const openEditDialog = () => {
+const openEditDialog = async () => {
+  // 加载意图节点列表，并过滤出叶子节点
+  try {
+    const res = await request.get('/intent/nodes') as any
+    const allNodes = res?.data || res || []
+
+    // 找出所有父节点ID
+    const parentIdSet = new Set(
+      allNodes
+        .map((n: any) => n.parentId)
+        .filter((id: any) => id != null && id !== 0)
+    )
+
+    // 过滤出叶子节点（不在parentId集合中的节点）
+    intentNodeList.value = allNodes.filter((n: any) => !parentIdSet.has(n.id))
+  } catch {}
+
+  // 加载当前知识库已绑定的节点
+  // kbId 为雪花 ID 字符串，与 n.kbId 直接按字符串比较，避免 Number() 转换丢失精度
+  let boundNodeIds: string[] = []
+  try {
+    const res = await request.get('/intent/nodes') as any
+    const allNodes = res?.data || res || []
+    boundNodeIds = allNodes
+      .filter((n: any) => n.kbId === kbId)
+      .map((n: any) => n.id)
+  } catch {}
+
   editForm.value = {
     name: knowledgeBase.value.name,
     description: knowledgeBase.value.description,
-    readability: knowledgeBase.value.readability
+    readability: knowledgeBase.value.readability,
+    intentNodeIds: boundNodeIds
   }
   showEditDialog.value = true
 }
@@ -332,10 +450,11 @@ const openEditDialog = () => {
 const saveEdit = async () => {
   try {
     await request.put('/knowledge-base', {
-      id: Number(kbId),
+      id: kbId,
       name: editForm.value.name,
       description: editForm.value.description,
-      readability: editForm.value.readability
+      readability: editForm.value.readability,
+      intentNodeIds: editForm.value.intentNodeIds
     })
     showEditDialog.value = false
     ElMessage.success('修改已保存')
@@ -510,5 +629,66 @@ const uploadFiles = async () => {
 
 :deep(.el-statistic) {
   text-align: center;
+}
+
+.owner-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.owner-card {
+  width: 240px;
+  border: 1px solid #e4e7ed;
+  border-radius: 6px;
+  padding: 16px;
+  background: #fff;
+  transition: all 0.3s;
+}
+
+.owner-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.owner-card-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.owner-info {
+  flex: 1;
+}
+
+.owner-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 4px;
+}
+
+.owner-nickname {
+  font-size: 13px;
+  color: #909399;
+}
+
+.owner-more {
+  width: 240px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed #dcdfe6;
+  border-radius: 6px;
+  color: #409eff;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.owner-more:hover {
+  border-color: #409eff;
+  background: #ecf5ff;
 }
 </style>

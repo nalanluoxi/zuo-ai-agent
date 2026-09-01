@@ -62,12 +62,12 @@
                 </span>
                 <span class="stat-item">
                   <el-icon><User /></el-icon>
-                  {{ kb.createdBy || '系统' }}
+                  {{ kb.createdByUsername || '系统' }}
                 </span>
               </div>
 
               <div class="kb-footer">
-                <span class="creator">创建者: {{ kb.createdBy || '系统' }}</span>
+                <span class="creator">创建者: {{ kb.createdByUsername || '系统' }}</span>
                 <span class="time">{{ formatDate(kb.createTime) }}</span>
               </div>
             </el-card>
@@ -108,7 +108,7 @@
               </template>
             </el-input>
 
-            <el-button type="primary" @click="showCreateDialog = true; editingKBId = null; createForm = { name: '', description: '', readability: 'private' }" style="margin-left: 10px">
+            <el-button type="primary" @click="showCreateDialog = true; editingKBId = null; createForm = { name: '', description: '', readability: 'private', intentNodeIds: [] }" style="margin-left: 10px">
               <el-icon><Plus /></el-icon>
               新建知识库
             </el-button>
@@ -164,7 +164,7 @@
     </el-tabs>
 
     <!-- 创建知识库弹窗 -->
-    <el-dialog v-model="showCreateDialog" :title="editingKBId ? '编辑知识库' : '新建知识库'" width="500px">
+    <el-dialog v-model="showCreateDialog" :title="editingKBId ? '编辑知识库' : '新建知识库'" width="560px">
       <el-form :model="createForm" label-width="100px">
         <el-form-item label="知识库名称">
           <el-input v-model="createForm.name" placeholder="请输入知识库名称" />
@@ -182,6 +182,22 @@
             <el-option label="私密" value="private" />
             <el-option label="团队" value="team" />
             <el-option label="公开" value="public" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="绑定意图节点">
+          <el-select
+            v-model="createForm.intentNodeIds"
+            multiple
+            filterable
+            placeholder="选择要绑定的意图节点（可选）"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="node in intentNodeList"
+              :key="node.id"
+              :label="node.label"
+              :value="node.id"
+            />
           </el-select>
         </el-form-item>
       </el-form>
@@ -222,15 +238,35 @@ const myKnowledgeBases = ref<any[]>([])
 // 创建/编辑知识库表单
 const showCreateDialog = ref(false)
 const editingKBId = ref<string | null>(null)
+const intentNodeList = ref<any[]>([])
 const createForm = ref({
   name: '',
   description: '',
-  readability: 'private'
+  readability: 'private',
+  intentNodeIds: [] as string[]
 })
 
 // debounce 计时器
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 let mySearchTimer: ReturnType<typeof setTimeout> | null = null
+
+// 加载意图节点列表（用于绑定选择）- 只显示叶子节点
+async function loadIntentNodes() {
+  try {
+    const res = await request.get('/intent/nodes') as any
+    const allNodes = res?.data || res || []
+
+    // 找出所有父节点 ID
+    const parentIds = new Set(
+      allNodes
+        .map((n: any) => n.parentId)
+        .filter((id: any) => id != null)
+    )
+
+    // 过滤出叶子节点（不在 parentId 集合中的节点）
+    intentNodeList.value = allNodes.filter((n: any) => !parentIds.has(n.id))
+  } catch { /* ignore */ }
+}
 
 // 加载搜索 Tab 数据（后端搜索）
 async function loadSearchResults() {
@@ -289,6 +325,13 @@ watch(activeTab, (newTab) => {
   }
 })
 
+// 新建/编辑知识库对话框打开时加载意图节点
+watch(showCreateDialog, async (visible) => {
+  if (visible) {
+    await loadIntentNodes()
+  }
+})
+
 // 搜索 debounce（300ms）
 const handleSearch = () => {
   if (searchTimer) clearTimeout(searchTimer)
@@ -342,12 +385,26 @@ const navigateToDetail = (id: string) => {
   router.push(`/chat/knowledge/${id}`)
 }
 
-const editKB = (kb: any) => {
+const editKB = async (kb: any) => {
   editingKBId.value = kb.id
+
+  // 加载意图节点列表
+  await loadIntentNodes()
+
+  // 加载当前知识库已绑定的节点
+  let boundNodeIds: string[] = []
+  try {
+    const allNodes = intentNodeList.value
+    boundNodeIds = allNodes
+      .filter((n: any) => n.kbId === kb.id)
+      .map((n: any) => n.id)
+  } catch {}
+
   createForm.value = {
     name: kb.name,
     description: kb.description || '',
-    readability: kb.readability || 'private'
+    readability: kb.readability || 'private',
+    intentNodeIds: boundNodeIds
   }
   showCreateDialog.value = true
 }
@@ -387,7 +444,8 @@ const handleCreate = async () => {
       await request.put('/knowledge-base', {
         id: editingKBId.value,
         name: createForm.value.name,
-        description: createForm.value.description
+        description: createForm.value.description,
+        intentNodeIds: createForm.value.intentNodeIds
       })
       ElMessage.success('知识库更新成功')
     } else {
@@ -395,14 +453,15 @@ const handleCreate = async () => {
       await request.post('/knowledge-base', {
         name: createForm.value.name,
         description: createForm.value.description,
-        readability: createForm.value.readability
+        readability: createForm.value.readability,
+        intentNodeIds: createForm.value.intentNodeIds
       })
       ElMessage.success('知识库创建成功')
     }
 
     showCreateDialog.value = false
     editingKBId.value = null
-    createForm.value = { name: '', description: '', readability: 'private' }
+    createForm.value = { name: '', description: '', readability: 'private', intentNodeIds: [] }
     // 创建/编辑后重新加载当前 Tab 的数据
     if (activeTab.value === 'mine') {
       await loadMyKnowledgeBases()

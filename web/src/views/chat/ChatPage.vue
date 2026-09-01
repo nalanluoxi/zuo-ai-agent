@@ -49,40 +49,38 @@
     <!-- 输入框 -->
     <div class="input-section">
       <div class="input-controls">
-        <div class="rag-toggle">
-          <el-switch
-            v-model="ragEnabled"
-            size="small"
-            active-text="RAG 增强"
-            inactive-text="纯对话"
-          />
-        </div>
-        <div class="model-select">
-          <el-select v-model="selectedModel" size="small" placeholder="选择模型" @change="handleModelChange">
-            <el-option-group label="自动路由">
-              <el-option label="Auto Route (智能切换)" value="auto">
-                <span style="float: left">Auto Route</span>
-                <span style="float: right; color: #8492a6; font-size: 13px">智能切换</span>
-              </el-option>
-            </el-option-group>
-            <el-option-group label="Free - 本地模型">
-              <el-option label="Qwen2.5-7B (本地)" value="qwen2.5:7b">
-                <span style="float: left">Qwen2.5-7B</span>
-                <span style="float: right; color: #8492a6; font-size: 13px">本地</span>
-              </el-option>
-            </el-option-group>
-            <el-option-group label="Premium - 远程模型">
-              <el-option label="GPT-4o (OpenAI)" value="gpt-4o">
-                <span style="float: left">GPT-4o</span>
-                <span style="float: right; color: #8492a6; font-size: 13px">OpenAI</span>
-              </el-option>
-              <el-option label="Claude-3.5-Sonnet" value="claude-3-5-sonnet-20241022">
-                <span style="float: left">Claude 3.5 Sonnet</span>
-                <span style="float: right; color: #8492a6; font-size: 13px">Anthropic</span>
-              </el-option>
-            </el-option-group>
-          </el-select>
-        </div>
+        <el-button
+          :type="ragEnabled ? 'primary' : 'default'"
+          size="small"
+          @click="ragEnabled = !ragEnabled"
+          style="min-width: 90px"
+        >
+          {{ ragEnabled ? 'RAG 增强' : '纯对话' }}
+        </el-button>
+        <el-select v-model="selectedModel" size="small" placeholder="选择模型" @change="handleModelChange" style="width: 160px">
+          <el-option-group label="自动路由">
+            <el-option label="Auto Route (智能切换)" value="auto">
+              <span style="float: left">Auto Route</span>
+              <span style="float: right; color: #8492a6; font-size: 13px">智能切换</span>
+            </el-option>
+          </el-option-group>
+          <el-option-group label="Free - 本地模型">
+            <el-option label="Qwen2.5-7B (本地)" value="qwen2.5:7b">
+              <span style="float: left">Qwen2.5-7B</span>
+              <span style="float: right; color: #8492a6; font-size: 13px">本地</span>
+            </el-option>
+          </el-option-group>
+          <el-option-group label="Premium - 远程模型">
+            <el-option label="GPT-4o (OpenAI)" value="gpt-4o">
+              <span style="float: left">GPT-4o</span>
+              <span style="float: right; color: #8492a6; font-size: 13px">OpenAI</span>
+            </el-option>
+            <el-option label="Claude-3.5-Sonnet" value="claude-3-5-sonnet-20241022">
+              <span style="float: left">Claude 3.5 Sonnet</span>
+              <span style="float: right; color: #8492a6; font-size: 13px">Anthropic</span>
+            </el-option>
+          </el-option-group>
+        </el-select>
       </div>
       <el-input
         v-model="inputText"
@@ -535,6 +533,12 @@ const scrollToBottom = () => {
   justify-content: space-between;
   align-items: center;
   margin-top: 8px;
+}
+
+.input-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .input-hint {

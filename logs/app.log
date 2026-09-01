@@ -1,0 +1,155 @@
+[INFO] Scanning for projects...
+[INFO] 
+[INFO] ----------------------< com.example:zuo-ai-agent >----------------------
+[INFO] Building zuo-ai-agent 0.0.1-SNAPSHOT
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] >>> spring-boot:3.4.4:run (default-cli) > test-compile @ zuo-ai-agent >>>
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ zuo-ai-agent ---
+[INFO] Copying 3 resources from src/main/resources to target/classes
+[INFO] Copying 21 resources from src/main/resources to target/classes
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ zuo-ai-agent ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ zuo-ai-agent ---
+[INFO] skip non existing resourceDirectory /Users/jiziyan/IdeaProjects/zuo-ai-agent/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ zuo-ai-agent ---
+[INFO] Recompiling the module because of changed source code.
+[INFO] Compiling 14 source files with javac [debug parameters release 17] to target/test-classes
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by lombok.permit.Permit
+WARNING: Please consider reporting this to the maintainers of class lombok.permit.Permit
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+[INFO] 
+[INFO] <<< spring-boot:3.4.4:run (default-cli) < test-compile @ zuo-ai-agent <<<
+[INFO] 
+[INFO] 
+[INFO] --- spring-boot:3.4.4:run (default-cli) @ zuo-ai-agent ---
+[INFO] Attaching agents: []
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.4.4)
+
+2026-09-01T23:39:31.818+08:00  INFO 61305 --- [zuo-ai-agent] [           main] c.e.zuoaiagent.ZuoAiAgentApplication     : Starting ZuoAiAgentApplication using Java 26.0.1 with PID 61305 (/Users/jiziyan/IdeaProjects/zuo-ai-agent/target/classes started by jiziyan in /Users/jiziyan/IdeaProjects/zuo-ai-agent)
+2026-09-01T23:39:31.819+08:00  INFO 61305 --- [zuo-ai-agent] [           main] c.e.zuoaiagent.ZuoAiAgentApplication     : The following 1 profile is active: "dev"
+2026-09-01T23:39:32.462+08:00  INFO 61305 --- [zuo-ai-agent] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Multiple Spring Data modules found, entering strict repository configuration mode
+2026-09-01T23:39:32.465+08:00  INFO 61305 --- [zuo-ai-agent] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2026-09-01T23:39:32.497+08:00  INFO 61305 --- [zuo-ai-agent] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 15 ms. Found 0 Redis repository interfaces.
+2026-09-01T23:39:32.942+08:00  INFO 61305 --- [zuo-ai-agent] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8123 (http)
+2026-09-01T23:39:32.950+08:00  INFO 61305 --- [zuo-ai-agent] [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-09-01T23:39:32.950+08:00  INFO 61305 --- [zuo-ai-agent] [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.39]
+2026-09-01T23:39:32.991+08:00  INFO 61305 --- [zuo-ai-agent] [           main] o.a.c.c.C.[Tomcat].[localhost].[/api]    : Initializing Spring embedded WebApplicationContext
+2026-09-01T23:39:32.992+08:00  INFO 61305 --- [zuo-ai-agent] [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 1155 ms
+2026-09-01T23:39:33.315+08:00  INFO 61305 --- [zuo-ai-agent] [           main] c.e.zuoaiagent.chat.ChatModelFactory     : [ChatModelFactory] 注册候选: id=ollama-qwen, model=qwen2.5:0.5b, provider=ollama
+2026-09-01T23:39:33.373+08:00  INFO 61305 --- [zuo-ai-agent] [           main] org.redisson.Version                     : Redisson 3.34.0
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::allocateMemory has been called by io.netty.util.internal.PlatformDependent0$2 (file:/Users/jiziyan/.m2/repository/io/netty/netty-common/4.1.119.Final/netty-common-4.1.119.Final.jar)
+WARNING: Please consider reporting this to the maintainers of class io.netty.util.internal.PlatformDependent0$2
+WARNING: sun.misc.Unsafe::allocateMemory will be removed in a future release
+2026-09-01T23:39:33.409+08:00  WARN 61305 --- [zuo-ai-agent] [           main] i.n.r.d.DnsServerAddressStreamProviders  : Can not find io.netty.resolver.dns.macos.MacOSDnsServerAddressStreamProvider in the classpath, fallback to system defaults. This may result in incorrect DNS resolutions on MacOS. Check whether you have a dependency on 'io.netty:netty-resolver-dns-native-macos'
+2026-09-01T23:39:33.498+08:00  INFO 61305 --- [zuo-ai-agent] [isson-netty-1-5] o.redisson.connection.ConnectionsHolder  : 1 connections initialized for localhost/127.0.0.1:6379
+2026-09-01T23:39:33.529+08:00  INFO 61305 --- [zuo-ai-agent] [sson-netty-1-20] o.redisson.connection.ConnectionsHolder  : 24 connections initialized for localhost/127.0.0.1:6379
+2026-09-01T23:39:33.676+08:00  INFO 61305 --- [zuo-ai-agent] [           main] c.e.z.k.embedding.EmbeddingModelFactory  : [EmbeddingModelFactory] 注册候选: id=ollama-qwen3, model=dengcao/Qwen3-Embedding-8B:F16, provider=ollama
+2026-09-01T23:39:33.735+08:00  INFO 61305 --- [zuo-ai-agent] [           main] o.s.a.v.pgvector.PgVectorStore           : Using the vector table name: vector_store. Is empty: false
+2026-09-01T23:39:33.737+08:00  INFO 61305 --- [zuo-ai-agent] [           main] o.s.a.v.pgvector.PgVectorStore           : Initializing PGVectorStore schema for table: vector_store in schema: public
+2026-09-01T23:39:33.737+08:00  INFO 61305 --- [zuo-ai-agent] [           main] o.s.a.v.pgvector.PgVectorStore           : vectorTableValidationsEnabled false
+2026-09-01T23:39:33.738+08:00  INFO 61305 --- [zuo-ai-agent] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-09-01T23:39:33.741+08:00  WARN 61305 --- [zuo-ai-agent] [           main] ConfigServletWebServerApplicationContext : Exception encountered during context initialization - cancelling refresh attempt: org.springframework.beans.factory.UnsatisfiedDependencyException: Error creating bean with name 'chatController' defined in file [/Users/jiziyan/IdeaProjects/zuo-ai-agent/target/classes/com/example/zuoaiagent/controller/ChatController.class]: Unsatisfied dependency expressed through constructor parameter 0: Error creating bean with name 'chatServiceImpl': Unsatisfied dependency expressed through field 'vectorStore': Error creating bean with name 'vectorStore' defined in class path resource [com/example/zuoaiagent/config/VectorStoreConfig.class]: Driver org.postgresql.Driver claims to not accept jdbcUrl, ${DB_URL}
+2026-09-01T23:39:33.748+08:00  INFO 61305 --- [zuo-ai-agent] [           main] o.apache.catalina.core.StandardService   : Stopping service [Tomcat]
+2026-09-01T23:39:33.756+08:00  INFO 61305 --- [zuo-ai-agent] [           main] .s.b.a.l.ConditionEvaluationReportLogger : 
+
+Error starting ApplicationContext. To display the condition evaluation report re-run your application with 'debug' enabled.
+2026-09-01T23:39:33.762+08:00 ERROR 61305 --- [zuo-ai-agent] [           main] o.s.boot.SpringApplication               : Application run failed
+
+org.springframework.beans.factory.UnsatisfiedDependencyException: Error creating bean with name 'chatController' defined in file [/Users/jiziyan/IdeaProjects/zuo-ai-agent/target/classes/com/example/zuoaiagent/controller/ChatController.class]: Unsatisfied dependency expressed through constructor parameter 0: Error creating bean with name 'chatServiceImpl': Unsatisfied dependency expressed through field 'vectorStore': Error creating bean with name 'vectorStore' defined in class path resource [com/example/zuoaiagent/config/VectorStoreConfig.class]: Driver org.postgresql.Driver claims to not accept jdbcUrl, ${DB_URL}
+	at org.springframework.beans.factory.support.ConstructorResolver.createArgumentArray(ConstructorResolver.java:804) ~[spring-beans-6.2.5.jar:6.2.5]
+	at org.springframework.beans.factory.support.ConstructorResolver.autowireConstructor(ConstructorResolver.java:240) ~[spring-beans-6.2.5.jar:6.2.5]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.autowireConstructor(AbstractAutowireCapableBeanFactory.java:1381) ~[spring-beans-6.2.5.jar:6.2.5]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.createBeanInstance(AbstractAutowireCapableBeanFactory.java:1218) ~[spring-beans-6.2.5.jar:6.2.5]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.doCreateBean(AbstractAutowireCapableBeanFactory.java:563) ~[spring-beans-6.2.5.jar:6.2.5]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.createBean(AbstractAutowireCapableBeanFactory.java:523) ~[spring-beans-6.2.5.jar:6.2.5]
+	at org.springframework.beans.factory.support.AbstractBeanFactory.lambda$doGetBean$0(AbstractBeanFactory.java:339) ~[spring-beans-6.2.5.jar:6.2.5]
+	at org.springframework.beans.factory.support.DefaultSingletonBeanRegistry.getSingleton(DefaultSingletonBeanRegistry.java:347) ~[spring-beans-6.2.5.jar:6.2.5]
+	at org.springframework.beans.factory.support.AbstractBeanFactory.doGetBean(AbstractBeanFactory.java:337) ~[spring-beans-6.2.5.jar:6.2.5]
+	at org.springframework.beans.factory.support.AbstractBeanFactory.getBean(AbstractBeanFactory.java:202) ~[spring-beans-6.2.5.jar:6.2.5]
+	at org.springframework.beans.factory.support.DefaultListableBeanFactory.instantiateSingleton(DefaultListableBeanFactory.java:1155) ~[spring-beans-6.2.5.jar:6.2.5]
+	at org.springframework.beans.factory.support.DefaultListableBeanFactory.preInstantiateSingleton(DefaultListableBeanFactory.java:1121) ~[spring-beans-6.2.5.jar:6.2.5]
+	at org.springframework.beans.factory.support.DefaultListableBeanFactory.preInstantiateSingletons(DefaultListableBeanFactory.java:1056) ~[spring-beans-6.2.5.jar:6.2.5]
+	at org.springframework.context.support.AbstractApplicationContext.finishBeanFactoryInitialization(AbstractApplicationContext.java:987) ~[spring-context-6.2.5.jar:6.2.5]
+	at org.springframework.context.support.AbstractApplicationContext.refresh(AbstractApplicationContext.java:627) ~[spring-context-6.2.5.jar:6.2.5]
+	at org.springframework.boot.web.servlet.context.ServletWebServerApplicationContext.refresh(ServletWebServerApplicationContext.java:146) ~[spring-boot-3.4.4.jar:3.4.4]
+	at org.springframework.boot.SpringApplication.refresh(SpringApplication.java:752) ~[spring-boot-3.4.4.jar:3.4.4]
+	at org.springframework.boot.SpringApplication.refreshContext(SpringApplication.java:439) ~[spring-boot-3.4.4.jar:3.4.4]
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:318) ~[spring-boot-3.4.4.jar:3.4.4]
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:1361) ~[spring-boot-3.4.4.jar:3.4.4]
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:1350) ~[spring-boot-3.4.4.jar:3.4.4]
+	at com.example.zuoaiagent.ZuoAiAgentApplication.main(ZuoAiAgentApplication.java:14) ~[classes/:na]
+Caused by: org.springframework.beans.factory.UnsatisfiedDependencyException: Error creating bean with name 'chatServiceImpl': Unsatisfied dependency expressed through field 'vectorStore': Error creating bean with name 'vectorStore' defined in class path resource [com/example/zuoaiagent/config/VectorStoreConfig.class]: Driver org.postgresql.Driver claims to not accept jdbcUrl, ${DB_URL}
+	at org.springframework.beans.factory.annotation.AutowiredAnnotationBeanPostProcessor$AutowiredFieldElement.resolveFieldValue(AutowiredAnnotationBeanPostProcessor.java:788) ~[spring-beans-6.2.5.jar:6.2.5]
+	at org.springframework.beans.factory.annotation.AutowiredAnnotationBeanPostProcessor$AutowiredFieldElement.inject(AutowiredAnnotationBeanPostProcessor.java:768) ~[spring-beans-6.2.5.jar:6.2.5]
+	at org.springframework.beans.factory.annotation.InjectionMetadata.inject(InjectionMetadata.java:146) ~[spring-beans-6.2.5.jar:6.2.5]
+	at org.springframework.beans.factory.annotation.AutowiredAnnotationBeanPostProcessor.postProcessProperties(AutowiredAnnotationBeanPostProcessor.java:509) ~[spring-beans-6.2.5.jar:6.2.5]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.populateBean(AbstractAutowireCapableBeanFactory.java:1445) ~[spring-beans-6.2.5.jar:6.2.5]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.doCreateBean(AbstractAutowireCapableBeanFactory.java:600) ~[spring-beans-6.2.5.jar:6.2.5]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.createBean(AbstractAutowireCapableBeanFactory.java:523) ~[spring-beans-6.2.5.jar:6.2.5]
+	at org.springframework.beans.factory.support.AbstractBeanFactory.lambda$doGetBean$0(AbstractBeanFactory.java:339) ~[spring-beans-6.2.5.jar:6.2.5]
+	at org.springframework.beans.factory.support.DefaultSingletonBeanRegistry.getSingleton(DefaultSingletonBeanRegistry.java:347) ~[spring-beans-6.2.5.jar:6.2.5]
+	at org.springframework.beans.factory.support.AbstractBeanFactory.doGetBean(AbstractBeanFactory.java:337) ~[spring-beans-6.2.5.jar:6.2.5]
+	at org.springframework.beans.factory.support.AbstractBeanFactory.getBean(AbstractBeanFactory.java:202) ~[spring-beans-6.2.5.jar:6.2.5]
+	at org.springframework.beans.factory.config.DependencyDescriptor.resolveCandidate(DependencyDescriptor.java:254) ~[spring-beans-6.2.5.jar:6.2.5]
+	at org.springframework.beans.factory.support.DefaultListableBeanFactory.doResolveDependency(DefaultListableBeanFactory.java:1667) ~[spring-beans-6.2.5.jar:6.2.5]
+	at org.springframework.beans.factory.support.DefaultListableBeanFactory.resolveDependency(DefaultListableBeanFactory.java:1555) ~[spring-beans-6.2.5.jar:6.2.5]
+	at org.springframework.beans.factory.support.ConstructorResolver.resolveAutowiredArgument(ConstructorResolver.java:913) ~[spring-beans-6.2.5.jar:6.2.5]
+	at org.springframework.beans.factory.support.ConstructorResolver.createArgumentArray(ConstructorResolver.java:791) ~[spring-beans-6.2.5.jar:6.2.5]
+	... 21 common frames omitted
+Caused by: org.springframework.beans.factory.BeanCreationException: Error creating bean with name 'vectorStore' defined in class path resource [com/example/zuoaiagent/config/VectorStoreConfig.class]: Driver org.postgresql.Driver claims to not accept jdbcUrl, ${DB_URL}
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.initializeBean(AbstractAutowireCapableBeanFactory.java:1812) ~[spring-beans-6.2.5.jar:6.2.5]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.doCreateBean(AbstractAutowireCapableBeanFactory.java:601) ~[spring-beans-6.2.5.jar:6.2.5]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.createBean(AbstractAutowireCapableBeanFactory.java:523) ~[spring-beans-6.2.5.jar:6.2.5]
+	at org.springframework.beans.factory.support.AbstractBeanFactory.lambda$doGetBean$0(AbstractBeanFactory.java:339) ~[spring-beans-6.2.5.jar:6.2.5]
+	at org.springframework.beans.factory.support.DefaultSingletonBeanRegistry.getSingleton(DefaultSingletonBeanRegistry.java:347) ~[spring-beans-6.2.5.jar:6.2.5]
+	at org.springframework.beans.factory.support.AbstractBeanFactory.doGetBean(AbstractBeanFactory.java:337) ~[spring-beans-6.2.5.jar:6.2.5]
+	at org.springframework.beans.factory.support.AbstractBeanFactory.getBean(AbstractBeanFactory.java:202) ~[spring-beans-6.2.5.jar:6.2.5]
+	at org.springframework.beans.factory.support.DefaultListableBeanFactory.doResolveDependency(DefaultListableBeanFactory.java:1609) ~[spring-beans-6.2.5.jar:6.2.5]
+	at org.springframework.beans.factory.support.DefaultListableBeanFactory.resolveDependency(DefaultListableBeanFactory.java:1555) ~[spring-beans-6.2.5.jar:6.2.5]
+	at org.springframework.beans.factory.annotation.AutowiredAnnotationBeanPostProcessor$AutowiredFieldElement.resolveFieldValue(AutowiredAnnotationBeanPostProcessor.java:785) ~[spring-beans-6.2.5.jar:6.2.5]
+	... 36 common frames omitted
+Caused by: java.lang.RuntimeException: Driver org.postgresql.Driver claims to not accept jdbcUrl, ${DB_URL}
+	at com.zaxxer.hikari.util.DriverDataSource.<init>(DriverDataSource.java:109) ~[HikariCP-5.1.0.jar:na]
+	at com.zaxxer.hikari.pool.PoolBase.initializeDataSource(PoolBase.java:327) ~[HikariCP-5.1.0.jar:na]
+	at com.zaxxer.hikari.pool.PoolBase.<init>(PoolBase.java:113) ~[HikariCP-5.1.0.jar:na]
+	at com.zaxxer.hikari.pool.HikariPool.<init>(HikariPool.java:91) ~[HikariCP-5.1.0.jar:na]
+	at com.zaxxer.hikari.HikariDataSource.getConnection(HikariDataSource.java:111) ~[HikariCP-5.1.0.jar:na]
+	at org.springframework.jdbc.datasource.DataSourceUtils.fetchConnection(DataSourceUtils.java:160) ~[spring-jdbc-6.2.5.jar:6.2.5]
+	at org.springframework.jdbc.datasource.DataSourceUtils.doGetConnection(DataSourceUtils.java:118) ~[spring-jdbc-6.2.5.jar:6.2.5]
+	at org.springframework.jdbc.datasource.DataSourceUtils.getConnection(DataSourceUtils.java:81) ~[spring-jdbc-6.2.5.jar:6.2.5]
+	at org.springframework.jdbc.core.JdbcTemplate.execute(JdbcTemplate.java:388) ~[spring-jdbc-6.2.5.jar:6.2.5]
+	at org.springframework.jdbc.core.JdbcTemplate.execute(JdbcTemplate.java:444) ~[spring-jdbc-6.2.5.jar:6.2.5]
+	at org.springframework.ai.vectorstore.pgvector.PgVectorStore.afterPropertiesSet(PgVectorStore.java:421) ~[spring-ai-pgvector-store-1.0.0.jar:1.0.0]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.invokeInitMethods(AbstractAutowireCapableBeanFactory.java:1859) ~[spring-beans-6.2.5.jar:6.2.5]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.initializeBean(AbstractAutowireCapableBeanFactory.java:1808) ~[spring-beans-6.2.5.jar:6.2.5]
+	... 45 common frames omitted
+
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  5.791 s
+[INFO] Finished at: 2026-09-01T23:39:34+08:00
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.springframework.boot:spring-boot-maven-plugin:3.4.4:run (default-cli) on project zuo-ai-agent: Process terminated with exit code: 1 -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoExecutionException

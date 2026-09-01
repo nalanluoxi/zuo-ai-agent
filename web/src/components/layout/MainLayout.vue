@@ -69,7 +69,31 @@
         <el-avatar :size="80" icon="UserFilled" />
         <el-descriptions :column="1" border class="mt">
           <el-descriptions-item label="用户名">{{ auth.userInfo?.username }}</el-descriptions-item>
-          <el-descriptions-item label="昵称">{{ auth.userInfo?.nickname }}</el-descriptions-item>
+          <el-descriptions-item label="昵称">
+            <div class="editable-field">
+              <span v-if="!editingNickname">{{ auth.userInfo?.nickname }}</span>
+              <el-input
+                v-else
+                v-model="newNickname"
+                size="small"
+                style="width: 150px"
+                @keyup.enter="saveNickname"
+              />
+              <el-button
+                v-if="!editingNickname"
+                size="small"
+                text
+                type="primary"
+                @click="editingNickname = true; newNickname = auth.userInfo?.nickname"
+              >
+                修改
+              </el-button>
+              <template v-else>
+                <el-button size="small" text type="primary" @click="saveNickname">保存</el-button>
+                <el-button size="small" text @click="editingNickname = false">取消</el-button>
+              </template>
+            </div>
+          </el-descriptions-item>
           <el-descriptions-item label="角色">{{ auth.userInfo?.roles?.join(',') || '普通用户' }}</el-descriptions-item>
           <el-descriptions-item label="租户ID">{{ auth.userInfo?.tenantId }}</el-descriptions-item>
         </el-descriptions>
@@ -79,11 +103,20 @@
 
     <!-- 修改密码弹窗 -->
     <el-dialog v-model="showPwd" title="修改密码" width="350px" append-to-body>
-      <el-input v-model="pwdForm.oldPwd" type="password" placeholder="旧密码" class="mb" />
-      <el-input v-model="pwdForm.newPwd" type="password" placeholder="新密码" class="mb" />
+      <el-form :model="pwdForm" label-width="80px">
+        <el-form-item label="旧密码">
+          <el-input v-model="pwdForm.oldPwd" type="password" placeholder="请输入旧密码" />
+        </el-form-item>
+        <el-form-item label="新密码">
+          <el-input v-model="pwdForm.newPwd" type="password" placeholder="请输入新密码" />
+        </el-form-item>
+        <el-form-item label="确认密码">
+          <el-input v-model="pwdForm.confirmPwd" type="password" placeholder="请再次输入新密码" />
+        </el-form-item>
+      </el-form>
       <template #footer>
         <el-button @click="showPwd = false">取消</el-button>
-        <el-button type="primary" @click="changePwd">确认</el-button>
+        <el-button type="primary" :loading="changingPwd" @click="changePwd">确认</el-button>
       </template>
     </el-dialog>
   </el-container>
@@ -95,13 +128,17 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
 import PermissionDenied from './PermissionDenied.vue'
 import { ElMessage } from 'element-plus'
+import request from '../../api/request'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const showProfile = ref(false)
 const showPwd = ref(false)
-const pwdForm = ref({ oldPwd: '', newPwd: '' })
+const pwdForm = ref({ oldPwd: '', newPwd: '', confirmPwd: '' })
+const editingNickname = ref(false)
+const newNickname = ref('')
+const changingPwd = ref(false)
 
 // 权限检查
 const allowed = computed(() => {
@@ -132,9 +169,62 @@ function handleLogout() {
   router.push('/login')
 }
 
-function changePwd() {
-  showPwd.value = false
-  ElMessage.success('密码修改成功')
+async function changePwd() {
+  if (!pwdForm.value.oldPwd || !pwdForm.value.newPwd || !pwdForm.value.confirmPwd) {
+    ElMessage.warning('请填写完整的密码信息')
+    return
+  }
+  if (pwdForm.value.newPwd !== pwdForm.value.confirmPwd) {
+    ElMessage.error('两次输入的新密码不一致')
+    return
+  }
+  if (pwdForm.value.newPwd.length < 6) {
+    ElMessage.error('新密码长度不能少于6位')
+    return
+  }
+
+  changingPwd.value = true
+  try {
+    const response = await request.post('/user/change-password', {
+      oldPassword: pwdForm.value.oldPwd,
+      newPassword: pwdForm.value.newPwd
+    })
+    if (response.success) {
+      ElMessage.success('密码修改成功')
+      showPwd.value = false
+      pwdForm.value = { oldPwd: '', newPwd: '', confirmPwd: '' }
+    } else {
+      ElMessage.error(response.message || '密码修改失败')
+    }
+  } catch (error) {
+    ElMessage.error('密码修改失败')
+  } finally {
+    changingPwd.value = false
+  }
+}
+
+async function saveNickname() {
+  if (!newNickname.value || !newNickname.value.trim()) {
+    ElMessage.warning('昵称不能为空')
+    return
+  }
+
+  try {
+    const response = await request.post('/user/change-nickname', {
+      nickname: newNickname.value.trim()
+    })
+    if (response.success) {
+      ElMessage.success('昵称修改成功')
+      if (auth.userInfo) {
+        auth.userInfo.nickname = newNickname.value
+      }
+      editingNickname.value = false
+    } else {
+      ElMessage.error(response.message || '昵称修改失败')
+    }
+  } catch (error) {
+    ElMessage.error('昵称修改失败')
+  }
 }
 </script>
 

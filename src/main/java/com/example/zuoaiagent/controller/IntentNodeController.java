@@ -45,7 +45,21 @@ public class IntentNodeController {
         if (tenantId != null) {
             node.setTenantId(tenantId);
         }
+
+        // 自动计算 level：根节点=1，子节点=父节点 level+1
+        if (node.getParentId() != null) {
+            IntentNodeDO parent = intentNodeMapper.selectById(node.getParentId());
+            if (parent != null && parent.getLevel() != null) {
+                node.setLevel((short) (parent.getLevel() + 1));
+            } else {
+                node.setLevel((short) 2);
+            }
+        } else {
+            node.setLevel((short) 1);
+        }
+
         intentNodeMapper.insert(node);
+        intentTreeService.refreshCache();
         return ResultUtils.success(node.getId());
     }
 
@@ -58,6 +72,7 @@ public class IntentNodeController {
         if (node.getLabel() != null && node.getLabel().isBlank()) node.setLabel(null);
         if (node.getDescription() != null && node.getDescription().isBlank()) node.setDescription(null);
         int rows = intentNodeMapper.updateById(node);
+        intentTreeService.refreshCache();
         return ResultUtils.success(rows > 0);
     }
 
@@ -75,11 +90,17 @@ public class IntentNodeController {
 
     /**
      * 查询全量意图节点（按层级排序）
+     * P19-P21 修复：添加租户过滤，只返回当前租户的节点
      */
     @GetMapping("/nodes")
     public BaseResponse<List<IntentNodeDO>> listNodes() {
+        Long tenantId = TenantContextHolder.getTenantId();
+        if (tenantId == null) {
+            return ResultUtils.success(List.of());
+        }
         List<IntentNodeDO> nodes = intentNodeMapper.selectList(
                 new LambdaQueryWrapper<IntentNodeDO>()
+                        .eq(IntentNodeDO::getTenantId, tenantId)
                         .eq(IntentNodeDO::getDeleted, (short) 0)
                         .orderByAsc(IntentNodeDO::getLevel)
                         .orderByAsc(IntentNodeDO::getSortOrder)

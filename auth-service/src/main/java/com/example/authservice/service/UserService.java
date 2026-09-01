@@ -73,8 +73,38 @@ public class UserService {
     public List<String> getUserRoleCodes(Long userId) {
         List<Long> roleIds = getUserRoles(userId);
         if (roleIds.isEmpty()) return List.of();
-        
+
         return roleMapper.selectList(new LambdaQueryWrapper<RoleDO>().in(RoleDO::getId, roleIds))
                 .stream().map(RoleDO::getRoleCode).toList();
+    }
+
+    /**
+     * 修改密码
+     */
+    @Transactional
+    public boolean changePassword(Long userId, String oldPassword, String newPassword) {
+        UserDO user = userMapper.selectById(userId);
+        if (user == null) return false;
+
+        // 验证旧密码
+        if (!BCrypt.checkpw(oldPassword, user.getPassword())) {
+            return false;
+        }
+
+        // 更新新密码
+        user.setPassword(BCrypt.hashpw(newPassword, BCrypt.gensalt()));
+        userMapper.updateById(user);
+        return true;
+    }
+
+    /**
+     * 修改昵称
+     */
+    @Transactional
+    public void updateNickname(Long userId, String nickname) {
+        UserDO user = userMapper.selectById(userId);
+        if (user == null) throw new RuntimeException("用户不存在");
+        user.setNickname(nickname);
+        userMapper.updateById(user);
     }
 }

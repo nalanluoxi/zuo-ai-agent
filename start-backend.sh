@@ -203,10 +203,10 @@ status() {
 
     echo ""
     echo "--- 后端服务 ---"
-    curl -s http://localhost:8100/api/auth/swagger-ui.html > /dev/null 2>&1 && echo "auth-service     ✅ http://localhost:8100/api/auth" || echo "auth-service     ❌"
-    curl -s http://localhost:8123/api/health 2>/dev/null | grep -q ok && echo "zuo-ai-agent     ✅ http://localhost:8123/api" || echo "zuo-ai-agent     ❌"
-    curl -s http://localhost:8200/api/log/health 2>/dev/null | grep -q ok && echo "log-monitor      ✅ http://localhost:8200/api/log" || echo "log-monitor      ❌"
-    curl -s http://localhost:9000/api/auth/me > /dev/null 2>&1 && echo "gateway-service  ✅ http://localhost:9000" || echo "gateway-service  ❌"
+    lsof -Pi :8100 -sTCP:LISTEN -t >/dev/null 2>&1 && echo "auth-service     ✅ http://localhost:8100/api/auth" || echo "auth-service     ❌"
+    lsof -Pi :8123 -sTCP:LISTEN -t >/dev/null 2>&1 && echo "zuo-ai-agent     ✅ http://localhost:8123/api" || echo "zuo-ai-agent     ❌"
+    lsof -Pi :8200 -sTCP:LISTEN -t >/dev/null 2>&1 && echo "log-monitor      ✅ http://localhost:8200/api/log" || echo "log-monitor      ❌"
+    lsof -Pi :9000 -sTCP:LISTEN -t >/dev/null 2>&1 && echo "gateway-service  ✅ http://localhost:9000" || echo "gateway-service  ❌"
 
     echo ""
     echo "日志目录: $LOG_DIR/"

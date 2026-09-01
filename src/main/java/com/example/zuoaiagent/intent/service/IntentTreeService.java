@@ -156,8 +156,12 @@ public class IntentTreeService {
      * 检查：1. 不能自指  2. 不能环形  3. 层级检查 4. 租户隔离
      */
     public void validateMove(Long nodeId, Long newParentId) {
-        if (nodeId == null || newParentId == null) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "节点 ID 和父节点 ID 不能为空");
+        if (nodeId == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "节点 ID 不能为空");
+        }
+        // newParentId == null 表示移动到根节点，合法操作，无需额外校验
+        if (newParentId == null) {
+            return;
         }
         
         Long tenantId = TenantContextHolder.getTenantId();
@@ -192,7 +196,7 @@ public class IntentTreeService {
             throw new BusinessException(ErrorCode.OPERATION_ERROR, "无权移动到此父节点");
         }
         
-        Short nodeLevel = node.getLevel() != null ? node.getLevel() : 0;
+        Short nodeLevel = node.getLevel() != null ? node.getLevel() : 1;
         Short parentLevel = newParent.getLevel() != null ? newParent.getLevel() : 0;
         
         if (nodeLevel <= parentLevel) {
@@ -229,15 +233,15 @@ public class IntentTreeService {
         if (nodeId == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "节点 ID 不能为空");
         }
-        
+
         Long tenantId = TenantContextHolder.getTenantId();
-        
+
         IntentNodeDO node = nodeCache.get(nodeId);
         if (node == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "节点不存在");
         }
-        
-        // P19-P21 修复：租户校验 - 防止删除其他租户的节点
+
+        // P19-P21 修复：租户校验 - 严格模式
         if (!Objects.equals(node.getTenantId(), tenantId)) {
             throw new BusinessException(ErrorCode.OPERATION_ERROR, "无权删除此节点");
         }
@@ -255,10 +259,8 @@ public class IntentTreeService {
         }
         
         // 执行逻辑删除
-        IntentNodeDO updateNode = new IntentNodeDO();
-        updateNode.setId(nodeId);
-        updateNode.setDeleted((short) 1);
-        intentNodeMapper.updateById(updateNode);
+        // 注意：@TableLogic 字段不会被 updateById 写入 SET 子句，必须调用 deleteById 才能真正逻辑删除
+        intentNodeMapper.deleteById(nodeId);
         
         // 刷新缓存
         refreshCache();

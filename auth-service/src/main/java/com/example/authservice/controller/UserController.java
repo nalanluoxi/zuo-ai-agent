@@ -1,6 +1,7 @@
 package com.example.authservice.controller;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
+import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.authservice.entity.UserDO;
 import com.example.authservice.service.UserService;
@@ -56,4 +57,45 @@ public class UserController {
     @GetMapping("/{id}/roles")
     @SaCheckLogin
     public List<Long> getUserRoles(@PathVariable Long id) { return userService.getUserRoles(id); }
+
+    /**
+     * 修改当前登录用户密码
+     */
+    @PostMapping("/change-password")
+    @SaCheckLogin
+    public Map<String, Object> changePassword(@RequestBody Map<String, String> body) {
+        String oldPassword = body.get("oldPassword");
+        String newPassword = body.get("newPassword");
+
+        if (oldPassword == null || newPassword == null) {
+            return Map.of("success", false, "message", "旧密码和新密码不能为空");
+        }
+
+        Long currentUserId = StpUtil.getLoginIdAsLong();
+        boolean success = userService.changePassword(currentUserId, oldPassword, newPassword);
+
+        if (success) {
+            return Map.of("success", true, "message", "密码修改成功");
+        } else {
+            return Map.of("success", false, "message", "旧密码错误");
+        }
+    }
+
+    /**
+     * 修改当前登录用户昵称
+     */
+    @PostMapping("/change-nickname")
+    @SaCheckLogin
+    public Map<String, Object> changeNickname(@RequestBody Map<String, String> body) {
+        String nickname = body.get("nickname");
+
+        if (nickname == null || nickname.trim().isEmpty()) {
+            return Map.of("success", false, "message", "昵称不能为空");
+        }
+
+        Long currentUserId = StpUtil.getLoginIdAsLong();
+        userService.updateNickname(currentUserId, nickname);
+
+        return Map.of("success", true, "message", "昵称修改成功");
+    }
 }

@@ -1,0 +1,99 @@
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.4.4)
+
+2026-09-01T23:50:33.853+08:00  INFO 69376 --- [zuo-ai-agent] [           main] c.e.zuoaiagent.ZuoAiAgentApplication     : Starting ZuoAiAgentApplication using Java 26.0.1 with PID 69376 (/Users/jiziyan/IdeaProjects/zuo-ai-agent/target/classes started by jiziyan in /Users/jiziyan/IdeaProjects/zuo-ai-agent)
+2026-09-01T23:50:33.854+08:00  INFO 69376 --- [zuo-ai-agent] [           main] c.e.zuoaiagent.ZuoAiAgentApplication     : The following 1 profile is active: "local"
+2026-09-01T23:50:34.484+08:00  INFO 69376 --- [zuo-ai-agent] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Multiple Spring Data modules found, entering strict repository configuration mode
+2026-09-01T23:50:34.485+08:00  INFO 69376 --- [zuo-ai-agent] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2026-09-01T23:50:34.499+08:00  INFO 69376 --- [zuo-ai-agent] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 8 ms. Found 0 Redis repository interfaces.
+2026-09-01T23:50:34.758+08:00  INFO 69376 --- [zuo-ai-agent] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8123 (http)
+2026-09-01T23:50:34.762+08:00  INFO 69376 --- [zuo-ai-agent] [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-09-01T23:50:34.762+08:00  INFO 69376 --- [zuo-ai-agent] [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.39]
+2026-09-01T23:50:34.781+08:00  INFO 69376 --- [zuo-ai-agent] [           main] o.a.c.c.C.[Tomcat].[localhost].[/api]    : Initializing Spring embedded WebApplicationContext
+2026-09-01T23:50:34.781+08:00  INFO 69376 --- [zuo-ai-agent] [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 905 ms
+2026-09-01T23:50:35.006+08:00  INFO 69376 --- [zuo-ai-agent] [           main] c.e.zuoaiagent.chat.ChatModelFactory     : [ChatModelFactory] 注册候选: id=ollama-qwen, model=qwen2.5:0.5b, provider=ollama
+2026-09-01T23:50:35.054+08:00  INFO 69376 --- [zuo-ai-agent] [           main] org.redisson.Version                     : Redisson 3.34.0
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::allocateMemory has been called by io.netty.util.internal.PlatformDependent0$2 (file:/Users/jiziyan/.m2/repository/io/netty/netty-common/4.1.119.Final/netty-common-4.1.119.Final.jar)
+WARNING: Please consider reporting this to the maintainers of class io.netty.util.internal.PlatformDependent0$2
+WARNING: sun.misc.Unsafe::allocateMemory will be removed in a future release
+2026-09-01T23:50:35.075+08:00  WARN 69376 --- [zuo-ai-agent] [           main] i.n.r.d.DnsServerAddressStreamProviders  : Can not find io.netty.resolver.dns.macos.MacOSDnsServerAddressStreamProvider in the classpath, fallback to system defaults. This may result in incorrect DNS resolutions on MacOS. Check whether you have a dependency on 'io.netty:netty-resolver-dns-native-macos'
+2026-09-01T23:50:35.139+08:00  INFO 69376 --- [zuo-ai-agent] [isson-netty-1-5] o.redisson.connection.ConnectionsHolder  : 1 connections initialized for localhost/127.0.0.1:6379
+2026-09-01T23:50:35.169+08:00  INFO 69376 --- [zuo-ai-agent] [sson-netty-1-20] o.redisson.connection.ConnectionsHolder  : 24 connections initialized for localhost/127.0.0.1:6379
+2026-09-01T23:50:35.280+08:00  INFO 69376 --- [zuo-ai-agent] [           main] c.e.z.k.embedding.EmbeddingModelFactory  : [EmbeddingModelFactory] 注册候选: id=ollama-qwen3, model=dengcao/Qwen3-Embedding-8B:F16, provider=ollama
+2026-09-01T23:50:35.323+08:00  INFO 69376 --- [zuo-ai-agent] [           main] o.s.a.v.pgvector.PgVectorStore           : Using the vector table name: vector_store. Is empty: false
+2026-09-01T23:50:35.324+08:00  INFO 69376 --- [zuo-ai-agent] [           main] o.s.a.v.pgvector.PgVectorStore           : Initializing PGVectorStore schema for table: vector_store in schema: public
+2026-09-01T23:50:35.324+08:00  INFO 69376 --- [zuo-ai-agent] [           main] o.s.a.v.pgvector.PgVectorStore           : vectorTableValidationsEnabled false
+2026-09-01T23:50:35.325+08:00  INFO 69376 --- [zuo-ai-agent] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-09-01T23:50:35.356+08:00  INFO 69376 --- [zuo-ai-agent] [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@31b571bf
+2026-09-01T23:50:35.356+08:00  INFO 69376 --- [zuo-ai-agent] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+Logging initialized using 'class org.apache.ibatis.logging.stdout.StdOutImpl' adapter.
+Use localhost address 
+Get LV9RJ71FQ4/10.48.255.25 network interface 
+Get network interface info: name:utun0 (utun0)
+Initialization Sequence datacenterId:0 workerId:31
+ _ _   |_  _ _|_. ___ _ |    _ 
+| | |\/|_)(_| | |_\  |_)||_|_\ 
+     /               |         
+                        3.5.6 
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@34ba9ff3] was not registered for synchronization because synchronization is not active
+WARNING: Final field sql in class org.apache.ibatis.mapping.BoundSql has been mutated reflectively by class org.apache.ibatis.reflection.invoker.SetFieldInvoker in unnamed module @1176dcec (file:/Users/jiziyan/.m2/repository/org/mybatis/mybatis/3.5.16/mybatis-3.5.16.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+JDBC Connection [HikariProxyConnection@1695488317 wrapping org.postgresql.jdbc.PgConnection@31b571bf] will not be managed by Spring
+==>  Preparing: SELECT id, tenant_id, parent_id, label, description, level, is_system, kb_id, sort_order, enabled, create_time, update_time, deleted FROM t_intent_node WHERE deleted = 0 AND (deleted = ?) ORDER BY level ASC, sort_order ASC
+==> Parameters: 0(Short)
+<==    Columns: id, tenant_id, parent_id, label, description, level, is_system, kb_id, sort_order, enabled, create_time, update_time, deleted
+<==        Row: 1, 1, null, 闲聊/通用, 用户问候、闲聊、系统类问题，如"你好"、"你是谁"、"今天天气怎么样", 1, 1, null, 0, 1, 2026-08-14 21:48:00.264357, 2026-08-14 21:48:00.264357, 0
+<==        Row: 2094701541821808642, 1, 2088265760345501700, 测试03, 测试, 1, 0, null, 0, 1, 2026-09-01 16:18:59.901, 2026-09-01 16:18:59.901, 0
+<==        Row: 2094806413447548930, 1, 2094806325165838338, 外科, 简单外科知识库, 1, 0, null, 0, 1, 2026-09-01 23:15:43.244, 2026-09-01 23:15:43.244, 0
+<==        Row: 2094806325165838338, 1, null, 医疗, 医疗领域知识库, 1, 0, 2094806705736011778, 0, 1, 2026-09-01 23:15:22.197, 2026-09-01 23:15:22.197, 0
+<==        Row: 2, 1, null, 金融, 金融工程、金融产品、金融市场相关问题, 1, 0, null, 1, 1, 2026-08-14 21:48:00.272352, 2026-08-14 21:48:00.272352, 0
+<==        Row: 5, 1, null, 宪法学, 宪法条文、公民权利、国家机构相关问题, 1, 0, null, 2, 1, 2026-08-14 21:48:00.273023, 2026-08-14 21:48:00.273023, 0
+<==        Row: 6, 1, 5, 宪法基础, 宪法基本原则、宪法历史、公民基本权利与义务, 2, 0, 2088276169332912129, 0, 1, 2026-08-14 21:48:00.273174, 2026-08-14 21:48:00.273174, 0
+<==        Row: 3, 1, 2, 金融工程, 金融工程技术、衍生品定价、风险管理相关问题, 2, 0, 2088276169332912129, 0, 1, 2026-08-14 21:48:00.272629, 2026-08-14 21:48:00.272629, 0
+<==        Row: 4, 1, 2, 投资估价, 股票估值、市盈率、投资分析相关问题, 2, 0, 2088276169332912129, 1, 1, 2026-08-14 21:48:00.272832, 2026-08-14 21:48:00.272832, 0
+<==      Total: 9
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@34ba9ff3]
+2026-09-01T23:50:35.512+08:00  INFO 69376 --- [zuo-ai-agent] [           main] c.e.z.intent.service.IntentTreeService   : [IntentTreeService] 意图缓存刷新完成，共 9 个节点
+2026-09-01T23:50:35.516+08:00  INFO 69376 --- [zuo-ai-agent] [           main] c.example.zuoaiagent.config.AsyncConfig  : 并行检索线程池初始化完成: core=4, max=16, queue=200
+2026-09-01T23:50:35.588+08:00  INFO 69376 --- [zuo-ai-agent] [           main] c.example.zuoaiagent.config.AsyncConfig  : 文档入库线程池初始化完成: core=2, max=8, queue=100
+____ ____    ___ ____ _  _ ____ _  _ 
+[__  |__| __  |  |  | |_/  |___ |\ | 
+___] |  |     |  |__| | \_ |___ | \| 
+https://sa-token.cc (v1.39.0)
+2026-09-01T23:50:35.902+08:00  INFO 69376 --- [zuo-ai-agent] [           main] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 1 endpoint beneath base path '/actuator'
+2026-09-01T23:50:35.934+08:00  INFO 69376 --- [zuo-ai-agent] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8123 (http) with context path '/api'
+2026-09-01T23:50:35.935+08:00  INFO 69376 --- [zuo-ai-agent] [           main] o.s.a.r.c.CachingConnectionFactory       : Attempting to connect to: [localhost:5672]
+2026-09-01T23:50:35.950+08:00  INFO 69376 --- [zuo-ai-agent] [           main] o.s.a.r.c.CachingConnectionFactory       : Created new connection: rabbitConnectionFactory#623ed5ed:0/SimpleConnection@4b7698af [delegate=amqp://admin@127.0.0.1:5672/, localPort=53679]
+2026-09-01T23:50:35.986+08:00  INFO 69376 --- [zuo-ai-agent] [           main] c.e.zuoaiagent.ZuoAiAgentApplication     : Started ZuoAiAgentApplication in 2.333 seconds (process running for 2.719)
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@689d7759] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@1967171028 wrapping org.postgresql.jdbc.PgConnection@31b571bf] will not be managed by Spring
+==>  Preparing: SELECT id, tenant_id, parent_id, label, description, level, is_system, kb_id, sort_order, enabled, create_time, update_time, deleted FROM t_intent_node WHERE deleted = 0 AND (deleted = ?) ORDER BY level ASC, sort_order ASC
+==> Parameters: 0(Short)
+<==    Columns: id, tenant_id, parent_id, label, description, level, is_system, kb_id, sort_order, enabled, create_time, update_time, deleted
+<==        Row: 1, 1, null, 闲聊/通用, 用户问候、闲聊、系统类问题，如"你好"、"你是谁"、"今天天气怎么样", 1, 1, null, 0, 1, 2026-08-14 21:48:00.264357, 2026-08-14 21:48:00.264357, 0
+<==        Row: 2094701541821808642, 1, 2088265760345501700, 测试03, 测试, 1, 0, null, 0, 1, 2026-09-01 16:18:59.901, 2026-09-01 16:18:59.901, 0
+<==        Row: 2094806413447548930, 1, 2094806325165838338, 外科, 简单外科知识库, 1, 0, null, 0, 1, 2026-09-01 23:15:43.244, 2026-09-01 23:15:43.244, 0
+<==        Row: 2094806325165838338, 1, null, 医疗, 医疗领域知识库, 1, 0, 2094806705736011778, 0, 1, 2026-09-01 23:15:22.197, 2026-09-01 23:15:22.197, 0
+<==        Row: 2, 1, null, 金融, 金融工程、金融产品、金融市场相关问题, 1, 0, null, 1, 1, 2026-08-14 21:48:00.272352, 2026-08-14 21:48:00.272352, 0
+<==        Row: 5, 1, null, 宪法学, 宪法条文、公民权利、国家机构相关问题, 1, 0, null, 2, 1, 2026-08-14 21:48:00.273023, 2026-08-14 21:48:00.273023, 0
+<==        Row: 6, 1, 5, 宪法基础, 宪法基本原则、宪法历史、公民基本权利与义务, 2, 0, 2088276169332912129, 0, 1, 2026-08-14 21:48:00.273174, 2026-08-14 21:48:00.273174, 0
+<==        Row: 3, 1, 2, 金融工程, 金融工程技术、衍生品定价、风险管理相关问题, 2, 0, 2088276169332912129, 0, 1, 2026-08-14 21:48:00.272629, 2026-08-14 21:48:00.272629, 0
+<==        Row: 4, 1, 2, 投资估价, 股票估值、市盈率、投资分析相关问题, 2, 0, 2088276169332912129, 1, 1, 2026-08-14 21:48:00.272832, 2026-08-14 21:48:00.272832, 0
+<==      Total: 9
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@689d7759]
+2026-09-01T23:50:36.009+08:00  INFO 69376 --- [zuo-ai-agent] [   scheduling-1] c.e.z.intent.service.IntentTreeService   : [IntentTreeService] 意图缓存刷新完成，共 9 个节点
+2026-09-01T23:50:40.233+08:00  INFO 69376 --- [zuo-ai-agent] [sson-netty-1-22] org.redisson.connection.DNSMonitor       : Try Redisson PRO with Proxy mode to use all ip addresses: [redis://127.0.0.1:6379, redis://0:0:0:0:0:0:0:1:6379]
+2026-09-01T23:52:37.087+08:00  INFO 69376 --- [zuo-ai-agent] [nio-8123-exec-3] o.a.c.c.C.[Tomcat].[localhost].[/api]    : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-09-01T23:52:37.088+08:00  INFO 69376 --- [zuo-ai-agent] [nio-8123-exec-3] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-09-01T23:52:37.093+08:00  INFO 69376 --- [zuo-ai-agent] [nio-8123-exec-3] o.s.web.servlet.DispatcherServlet        : Completed initialization in 5 ms

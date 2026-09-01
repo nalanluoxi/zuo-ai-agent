@@ -36,8 +36,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 const treeData = ref<any[]>([])
 const allNodes = ref<any[]>([])
 const showCreate = ref(false)
-const editingId = ref<number | null>(null)
-const form = reactive({ label: '', description: '', parentId: null as number | null })
+const editingId = ref<string | null>(null)
+const form = reactive({ label: '', description: '', parentId: null as string | null })
 
 onMounted(async () => { await loadTree() })
 
@@ -50,7 +50,7 @@ async function loadTree() {
   } catch {}
 }
 
-function buildTree(nodes: any[], parentId: number | null): any[] {
+function buildTree(nodes: any[], parentId: string | null): any[] {
   return nodes.filter((n: any) => n.parentId === parentId).map((n: any) => {
     const parentNode = nodes.find(p => p.id === parentId)
     return {
@@ -62,6 +62,7 @@ function buildTree(nodes: any[], parentId: number | null): any[] {
 }
 
 // 编辑时排除当前节点及其所有子孙节点（避免循环引用）
+// id 为雪花 ID（超过 JS 安全整数范围），全程按字符串比较，不做 Number() 转换
 const parentCandidates = computed(() => {
   if (!editingId.value) return allNodes.value
   const excludeIds = collectDescendantIds(editingId.value)
@@ -69,8 +70,8 @@ const parentCandidates = computed(() => {
   return allNodes.value.filter(n => !excludeIds.has(n.id))
 })
 
-function collectDescendantIds(id: number): Set<number> {
-  const result = new Set<number>()
+function collectDescendantIds(id: string): Set<string> {
+  const result = new Set<string>()
   const children = allNodes.value.filter(n => n.parentId === id)
   for (const child of children) {
     result.add(child.id)
@@ -95,7 +96,19 @@ function cancelDialog() {
 async function handleSave() {
   try {
     if (editingId.value) {
-      await request.put(`/intent/node/${editingId.value}`, { label: form.label, description: form.description, parentId: form.parentId })
+      // 编辑时保留所有现有字段，只更新允许修改的字段
+      const existingNode = allNodes.value.find(n => n.id === editingId.value)
+      await request.put(`/intent/node/${editingId.value}`, {
+        id: editingId.value,
+        label: form.label,
+        description: form.description,
+        parentId: form.parentId,
+        level: existingNode?.level,
+        isSystem: existingNode?.isSystem,
+        kbId: existingNode?.kbId,
+        sortOrder: existingNode?.sortOrder,
+        enabled: existingNode?.enabled
+      })
     } else {
       await request.post('/intent/node', { label: form.label, description: form.description, parentId: form.parentId })
     }
@@ -112,11 +125,11 @@ function editNode(node: any) {
   editingId.value = node.id
   form.label = node.label
   form.description = node.description
-  form.parentId = node.parentId
+  form.parentId = node.parentId ?? null
   showCreate.value = true
 }
 
-async function deleteNode(id: number) {
+async function deleteNode(id: string) {
   try {
     await ElMessageBox.confirm('确定删除此节点？')
     await request.delete(`/intent/node/${id}`)
@@ -130,7 +143,7 @@ async function deleteNode(id: number) {
   }
 }
 
-async function disableNode(id: number) {
+async function disableNode(id: string) {
   try {
     await ElMessageBox.confirm('禁用后，关联的知识库将自动路由到默认节点，确认禁用？')
     await request.put(`/intent/node/${id}/disable`)
@@ -139,7 +152,7 @@ async function disableNode(id: number) {
   } catch {}
 }
 
-async function enableNode(id: number) {
+async function enableNode(id: string) {
   try { await request.put(`/intent/node/${id}/enable`); ElMessage.success('已启用'); loadTree() } catch {}
 }
 </script>

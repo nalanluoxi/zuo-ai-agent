@@ -22,4 +22,10 @@ public class KnowledgeBaseCreateRequest {
 
     public String getReadability() { return readability; }
     public void setReadability(String readability) { this.readability = readability; }
+
+    /** 绑定的意图节点 ID 列表 */
+    private java.util.List<Long> intentNodeIds;
+
+    public java.util.List<Long> getIntentNodeIds() { return intentNodeIds; }
+    public void setIntentNodeIds(java.util.List<Long> intentNodeIds) { this.intentNodeIds = intentNodeIds; }
 }
