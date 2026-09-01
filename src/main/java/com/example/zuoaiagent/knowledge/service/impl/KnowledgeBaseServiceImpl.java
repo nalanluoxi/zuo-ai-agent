@@ -62,12 +62,16 @@ public class KnowledgeBaseServiceImpl implements com.example.zuoaiagent.knowledg
             throw new BusinessException(ErrorCode.OPERATION_ERROR, "知识库名称已存在：" + name);
         }
 
+        // 从租户上下文获取用户信息
+        Long userId = TenantContextHolder.getUserId();
+        String createdBy = userId != null ? String.valueOf(userId) : "system";
+
         KnowledgeBaseDO kbDO = KnowledgeBaseDO.builder()
                 .name(name)
                 .description(request.getDescription())
                 .tenantId(tenantId)  // P19-P21 修复：设置租户 ID
-                .createdBy("system")
-                .updatedBy("system")
+                .createdBy(createdBy)
+                .updatedBy(createdBy)
                 .deleted(0)
                 .build();
         knowledgeBaseMapper.insert(kbDO);
@@ -154,9 +158,10 @@ public class KnowledgeBaseServiceImpl implements com.example.zuoaiagent.knowledg
         if (tenantId == null) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "无法获取租户信息");
         }
-        
+
         LambdaQueryWrapper<KnowledgeBaseDO> queryWrapper = Wrappers.lambdaQuery(KnowledgeBaseDO.class)
                 .like(StringUtils.hasText(request.getName()), KnowledgeBaseDO::getName, request.getName())
+                .eq(StringUtils.hasText(request.getCreatedBy()), KnowledgeBaseDO::getCreatedBy, request.getCreatedBy())
                 .eq(KnowledgeBaseDO::getTenantId, tenantId)  // P19-P21 修复：只查询当前租户的知识库
                 .eq(KnowledgeBaseDO::getDeleted, 0)
                 .orderByDesc(KnowledgeBaseDO::getUpdateTime);
@@ -228,8 +233,15 @@ public class KnowledgeBaseServiceImpl implements com.example.zuoaiagent.knowledg
 
     @Override
     public IPage<KnowledgeBaseVO> search(String keyword, KnowledgeBasePageRequest request) {
+        // 添加租户隔离
+        Long tenantId = TenantContextHolder.getTenantId();
+        if (tenantId == null) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "无法获取租户信息");
+        }
+
         LambdaQueryWrapper<KnowledgeBaseDO> qw = Wrappers.lambdaQuery(KnowledgeBaseDO.class)
                 .and(w -> w.like(KnowledgeBaseDO::getName, keyword).or().like(KnowledgeBaseDO::getDescription, keyword))
+                .eq(KnowledgeBaseDO::getTenantId, tenantId)
                 .eq(KnowledgeBaseDO::getDeleted, 0)
                 .orderByDesc(KnowledgeBaseDO::getCreateTime);
         return knowledgeBaseMapper.selectPage(new Page<>(request.getCurrent(), request.getPageSize()), qw)

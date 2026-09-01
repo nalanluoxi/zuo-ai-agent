@@ -22,8 +22,10 @@ interface UserInfo {
 
 export const useAuthStore = defineStore('auth', () => {
   const token = ref(localStorage.getItem('satoken') || '')
-  const userInfo = ref<any>(null)
-  const tenantId = ref<number | null>(null)
+  // 刷新页面时从 localStorage 恢复 userInfo
+  const savedUserInfo = localStorage.getItem('userInfo')
+  const userInfo = ref<any>(savedUserInfo ? JSON.parse(savedUserInfo) : null)
+  const tenantId = ref<number | null>(userInfo.value?.tenantId ?? null)
 
   async function login(username: string, password: string) {
     const res = (await authApi.login(username, password)) as unknown as LoginResponse
@@ -61,7 +63,9 @@ export const useAuthStore = defineStore('auth', () => {
   function logout() {
     token.value = ''
     userInfo.value = null
+    tenantId.value = null
     localStorage.removeItem('satoken')
+    localStorage.removeItem('userInfo')
   }
 
   return { token, userInfo, tenantId, login, register, logout }

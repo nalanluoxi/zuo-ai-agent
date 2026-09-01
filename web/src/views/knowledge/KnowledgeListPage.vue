@@ -58,16 +58,16 @@
               <div class="kb-stats">
                 <span class="stat-item">
                   <el-icon><DocumentCopy /></el-icon>
-                  {{ kb.fileCount }} 个文件
+                  {{ kb.documentCount || 0 }} 个文件
                 </span>
                 <span class="stat-item">
                   <el-icon><User /></el-icon>
-                  {{ kb.owners.length }} 个 Owner
+                  {{ kb.createdBy || '系统' }}
                 </span>
               </div>
 
               <div class="kb-footer">
-                <span class="creator">创建者: {{ kb.creator }}</span>
+                <span class="creator">创建者: {{ kb.createdBy || '系统' }}</span>
                 <span class="time">{{ formatDate(kb.createTime) }}</span>
               </div>
             </el-card>
@@ -194,7 +194,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '../../api/request'
@@ -203,22 +203,21 @@ import { useAuthStore } from '../../stores/auth'
 const router = useRouter()
 const auth = useAuthStore()
 
-// 真实数据
-const allKnowledgeBases = ref<any[]>([])
-
 // Tab 相关
 const activeTab = ref('search')
 
-// 搜索 Tab 数据
+// 搜索 Tab 数据（分离数据源）
 const searchQuery = ref('')
 const filterReadability = ref('')
 const searchPage = ref(1)
 const totalSearch = ref(0)
+const searchResults = ref<any[]>([])
 
-// 我的知识库 Tab 数据
+// 我的知识库 Tab 数据（分离数据源）
 const mySearchQuery = ref('')
 const myPage = ref(1)
 const totalMy = ref(0)
+const myKnowledgeBases = ref<any[]>([])
 
 // 创建/编辑知识库表单
 const showCreateDialog = ref(false)
@@ -229,18 +228,20 @@ const createForm = ref({
   readability: 'private'
 })
 
-// 加载知识库数据
-onMounted(async () => {
-  await loadAllKnowledgeBases()
-})
+// debounce 计时器
+let searchTimer: ReturnType<typeof setTimeout> | null = null
+let mySearchTimer: ReturnType<typeof setTimeout> | null = null
 
-async function loadAllKnowledgeBases() {
+// 加载搜索 Tab 数据（后端搜索）
+async function loadSearchResults() {
   try {
-    const res = await request.get('/knowledge-base/page', {
-      params: { current: searchPage.value, pageSize: 20 }
-    }) as any
+    const params: any = { current: searchPage.value, pageSize: 20 }
+    if (searchQuery.value) {
+      params.name = searchQuery.value
+    }
+    const res = await request.get('/knowledge-base/page', { params }) as any
     const data = res.data || res
-    allKnowledgeBases.value = data.records || []
+    searchResults.value = data.records || []
     totalSearch.value = data.total || 0
   } catch (e) {
     console.error('加载知识库失败：', e)
@@ -248,38 +249,70 @@ async function loadAllKnowledgeBases() {
   }
 }
 
-// 计算属性
-const searchResults = computed(() => {
-  let results = allKnowledgeBases.value
-  
-  // 过滤可读性
-  if (filterReadability.value) {
-    results = results.filter(kb => kb.readability === filterReadability.value)
+// 加载我的知识库 Tab 数据（后端过滤 createdBy）
+async function loadMyKnowledgeBases() {
+  try {
+    const userId = auth.userInfo?.id || auth.userInfo?.loginId
+    const params: any = { current: myPage.value, pageSize: 20 }
+    if (userId != null) {
+      params.createdBy = String(userId)
+    }
+    if (mySearchQuery.value) {
+      params.name = mySearchQuery.value
+    }
+    const res = await request.get('/knowledge-base/page', { params }) as any
+    const data = res.data || res
+    myKnowledgeBases.value = data.records || []
+    totalMy.value = data.total || 0
+  } catch (e) {
+    console.error('加载我的知识库失败：', e)
+    ElMessage.error('加载我的知识库失败')
   }
-  
-  // 搜索
-  if (searchQuery.value) {
-    results = results.filter(kb => 
-      kb.name.includes(searchQuery.value) || 
-      kb.description?.includes(searchQuery.value)
-    )
-  }
-  
-  return results
+}
+
+// 加载知识库数据（根据当前 Tab）
+onMounted(async () => {
+  await loadSearchResults()
 })
 
-const myKnowledgeBases = computed(() => {
-  const currentUsername = auth.userInfo?.username || ''
-  let results = allKnowledgeBases.value.filter(kb => kb.createdBy === currentUsername)
-  
-  if (mySearchQuery.value) {
-    results = results.filter(kb => 
-      kb.name.includes(mySearchQuery.value)
-    )
-  }
-  
-  return results
+onUnmounted(() => {
+  if (searchTimer) clearTimeout(searchTimer)
+  if (mySearchTimer) clearTimeout(mySearchTimer)
 })
+
+// Tab 切换时加载对应数据
+watch(activeTab, (newTab) => {
+  if (newTab === 'search') {
+    loadSearchResults()
+  } else if (newTab === 'mine') {
+    loadMyKnowledgeBases()
+  }
+})
+
+// 搜索 debounce（300ms）
+const handleSearch = () => {
+  if (searchTimer) clearTimeout(searchTimer)
+  searchTimer = setTimeout(async () => {
+    searchPage.value = 1
+    await loadSearchResults()
+  }, 300)
+}
+
+const handleFilter = () => {
+  handleSearch()
+}
+
+const handleMySearch = () => {
+  if (mySearchTimer) clearTimeout(mySearchTimer)
+  mySearchTimer = setTimeout(async () => {
+    myPage.value = 1
+    await loadMyKnowledgeBases()
+  }, 300)
+}
+
+// 分页切换
+watch(searchPage, () => loadSearchResults())
+watch(myPage, () => loadMyKnowledgeBases())
 
 // 方法
 const formatDate = (date: any): string => {
@@ -305,18 +338,6 @@ const getReadabilityLabel = (readability: string): string => {
   return labelMap[readability] || readability || '私密'
 }
 
-const handleSearch = async () => {
-  await loadAllKnowledgeBases()
-}
-
-const handleFilter = () => {
-  handleSearch()
-}
-
-const handleMySearch = async () => {
-  await loadAllKnowledgeBases()
-}
-
 const navigateToDetail = (id: string) => {
   router.push(`/chat/knowledge/${id}`)
 }
@@ -338,15 +359,19 @@ const deleteKB = async (id: string) => {
       cancelButtonText: '取消',
       type: 'warning'
     })
-    
+
     await request.delete(`/knowledge-base/${id}`)
     ElMessage.success('删除成功')
-    await loadAllKnowledgeBases()
-  } catch (e) {
-    if (e !== 'cancel') {
-      console.error('删除失败：', e)
-      ElMessage.error('删除失败')
+    // 删除后重新加载当前 Tab 的数据
+    if (activeTab.value === 'mine') {
+      await loadMyKnowledgeBases()
+    } else {
+      await loadSearchResults()
     }
+  } catch (e: any) {
+    if (e?.toString()?.includes('cancel')) return
+    console.error('删除失败：', e)
+    ElMessage.error(e?.response?.data?.message || '删除失败')
   }
 }
 
@@ -355,7 +380,7 @@ const handleCreate = async () => {
     ElMessage.warning('请输入知识库名称')
     return
   }
-  
+
   try {
     if (editingKBId.value) {
       // 编辑模式
@@ -374,14 +399,19 @@ const handleCreate = async () => {
       })
       ElMessage.success('知识库创建成功')
     }
-    
+
     showCreateDialog.value = false
     editingKBId.value = null
     createForm.value = { name: '', description: '', readability: 'private' }
-    await loadAllKnowledgeBases()
-  } catch (e) {
+    // 创建/编辑后重新加载当前 Tab 的数据
+    if (activeTab.value === 'mine') {
+      await loadMyKnowledgeBases()
+    } else {
+      await loadSearchResults()
+    }
+  } catch (e: any) {
     console.error('操作失败：', e)
-    ElMessage.error('操作失败')
+    ElMessage.error(e?.response?.data?.message || '操作失败')
   }
 }
 </script>

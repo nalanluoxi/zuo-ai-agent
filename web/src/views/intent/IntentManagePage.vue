@@ -102,7 +102,10 @@ async function handleSave() {
     ElMessage.success(editingId.value ? '修改成功' : '创建成功')
     cancelDialog()
     loadTree()
-  } catch { ElMessage.error('操作失败') }
+  } catch (err: any) {
+    if (err?.toString()?.includes('cancel')) return
+    ElMessage.error(err?.response?.data?.message || '操作失败')
+  }
 }
 
 function editNode(node: any) {
@@ -119,7 +122,12 @@ async function deleteNode(id: number) {
     await request.delete(`/intent/node/${id}`)
     ElMessage.success('删除成功')
     loadTree()
-  } catch {}
+  } catch (err: any) {
+    // 用户取消确认框时不显示错误
+    if (err?.toString()?.includes('cancel')) return
+    const msg = err?.response?.data?.message || err?.message || '删除失败'
+    ElMessage.error(msg)
+  }
 }
 
 async function disableNode(id: number) {

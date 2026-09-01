@@ -6,6 +6,7 @@ import com.example.zuoaiagent.common.ResultUtils;
 import com.example.zuoaiagent.intent.entity.IntentNodeDO;
 import com.example.zuoaiagent.intent.mapper.IntentNodeMapper;
 import com.example.zuoaiagent.intent.service.IntentTreeService;
+import com.example.zuoaiagent.config.TenantContextHolder;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -39,6 +40,11 @@ public class IntentNodeController {
      */
     @PostMapping("/node")
     public BaseResponse<Long> createNode(@RequestBody IntentNodeDO node) {
+        // 从租户上下文获取 tenantId，确保删除时校验通过
+        Long tenantId = TenantContextHolder.getTenantId();
+        if (tenantId != null) {
+            node.setTenantId(tenantId);
+        }
         intentNodeMapper.insert(node);
         return ResultUtils.success(node.getId());
     }
