@@ -75,4 +75,8 @@ public class KnowledgeBaseVO {
 
     public java.util.List<String> getIntentNodeLabels() { return intentNodeLabels; }
     public void setIntentNodeLabels(java.util.List<String> intentNodeLabels) { this.intentNodeLabels = intentNodeLabels; }
+
+    /** 文件数别名（前端兼容） */
+    public Long getDocCount() { return documentCount; }
+    public void setDocCount(Long docCount) { this.documentCount = docCount; }
 }

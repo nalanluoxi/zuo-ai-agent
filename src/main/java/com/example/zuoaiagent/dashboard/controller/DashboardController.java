@@ -45,11 +45,12 @@ public class DashboardController {
     public BaseResponse<Map<String, Object>> getTokenTrend(
             @RequestParam(defaultValue = "week") String period,
             @RequestParam(required = false) String startDate,
-            @RequestParam(required = false) String endDate) {
+            @RequestParam(required = false) String endDate,
+            @RequestParam(required = false) String usageType) {
 
         DateRange range = parseRange(period, startDate, endDate);
         Long userId = TenantContextHolder.getUserId();
-        return ResultUtils.success(dashboardService.getTokenTrend(userId, range.days(), range.start(), range.end()));
+        return ResultUtils.success(dashboardService.getTokenTrend(userId, range.days(), range.start(), range.end(), usageType));
     }
 
     @GetMapping("/message-trend")
@@ -91,6 +92,59 @@ public class DashboardController {
             userId, range.days(), range.start(), range.end(), topN));
     }
 
+    @GetMapping("/ingestion/overview")
+    public BaseResponse<Map<String, Object>> getIngestionOverview(
+            @RequestParam(required = false) Long kbId) {
+        Long userId = TenantContextHolder.getUserId();
+        log.debug("Dashboard ingestion overview, userId={}, kbId={}", userId, kbId);
+        return ResultUtils.success(dashboardService.getIngestionOverview(userId, kbId));
+    }
+
+    @GetMapping("/ingestion/duration-stats")
+    public BaseResponse<Map<String, Object>> getIngestionDurationStats(
+            @RequestParam(required = false) Long kbId,
+            @RequestParam(defaultValue = "week") String period,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate) {
+
+        DateRange range = parseRange(period, startDate, endDate);
+        Long userId = TenantContextHolder.getUserId();
+        return ResultUtils.success(dashboardService.getIngestionDurationStats(
+                userId, kbId, range.days(), range.start(), range.end()));
+    }
+
+    @GetMapping("/ingestion/trend")
+    public BaseResponse<Map<String, Object>> getIngestionTrend(
+            @RequestParam(defaultValue = "week") String period,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate) {
+
+        DateRange range = parseRange(period, startDate, endDate);
+        Long userId = TenantContextHolder.getUserId();
+        return ResultUtils.success(dashboardService.getIngestionTrend(userId, range.days(), range.start(), range.end()));
+    }
+
+    private static final java.util.Set<String> RAG_STAGES =
+            java.util.Set.of("REWRITE", "CLASSIFY", "RETRIEVE", "RERANK", "LLM");
+
+    @GetMapping("/rag-stage-trend")
+    public BaseResponse<Map<String, Object>> getRagStageTrend(
+            @RequestParam String stage,
+            @RequestParam(defaultValue = "week") String period,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate) {
+
+        if (stage == null || !RAG_STAGES.contains(stage.toUpperCase())) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR,
+                "stage 只能选择 REWRITE/CLASSIFY/RETRIEVE/RERANK/LLM");
+        }
+
+        DateRange range = parseRange(period, startDate, endDate);
+        Long userId = TenantContextHolder.getUserId();
+        return ResultUtils.success(dashboardService.getRagStageTrend(
+                userId, stage.toUpperCase(), range.days(), range.start(), range.end()));
+    }
+
     record DateRange(int days, LocalDate start, LocalDate end) {}
 
     private DateRange parseRange(String period, String startDate, String endDate) {
@@ -99,8 +153,11 @@ public class DashboardController {
         return switch (period == null ? "week" : period) {
             case "day" -> new DateRange(1, today, today);
             case "week" -> new DateRange(7, today.minusDays(6), today);
-            case "month" -> new DateRange((int) today.getDayOfMonth(),
-                    today.withDayOfMonth(1), today);
+            case "month" -> {
+                LocalDate monthStart = today.withDayOfMonth(1);
+                LocalDate monthEnd = today.withDayOfMonth(today.lengthOfMonth());
+                yield new DateRange(today.lengthOfMonth(), monthStart, monthEnd);
+            }
             case "custom" -> {
                 if (startDate == null || endDate == null) {
                     throw new BusinessException(ErrorCode.PARAMS_ERROR,

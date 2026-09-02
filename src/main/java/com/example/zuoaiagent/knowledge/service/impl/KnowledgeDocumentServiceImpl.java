@@ -58,6 +58,11 @@ public class KnowledgeDocumentServiceImpl implements KnowledgeDocumentService {
 
     @Override
     public KnowledgeDocumentVO upload(Long kbId, MultipartFile file) {
+        return upload(kbId, file, null, "new");
+    }
+
+    @Override
+    public KnowledgeDocumentVO upload(Long kbId, MultipartFile file, String docName, String mode) {
         KnowledgeBaseDO kbDO = knowledgeBaseMapper.selectById(kbId);
         if (kbDO == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "知识库不存在");
@@ -78,31 +83,74 @@ public class KnowledgeDocumentServiceImpl implements KnowledgeDocumentService {
 
         String contentMd5 = DigestUtil.md5Hex(fileBytes);
 
-        KnowledgeDocumentDO existing = checkDuplicateInKnowledgeBase(kbId, contentMd5);
-        if (existing != null) {
-            log.info("文档已存在(同一知识库内MD5重复): docId={}, contentMd5={}", existing.getId(), contentMd5);
-            return BeanUtil.toBean(existing, KnowledgeDocumentVO.class);
+        // 覆盖模式：先清理同名文档的旧数据
+        if ("overwrite".equalsIgnoreCase(mode) && StringUtils.hasText(docName)) {
+            KnowledgeDocumentDO existing = findByNameInKnowledgeBase(kbId, docName);
+            if (existing != null) {
+                log.info("覆盖模式：清理旧文档 docId={}, docName={}", existing.getId(), docName);
+                // 清理向量
+                try {
+                    jdbcTemplate.update("DELETE FROM vector_store WHERE doc_id = ?", String.valueOf(existing.getId()));
+                } catch (Exception e) {
+                    log.warn("向量数据清理失败: docId={}", existing.getId(), e);
+                }
+                // 清理文件字节
+                if (StringUtils.hasText(existing.getFileUrl())) {
+                    try {
+                        jdbcTemplate.update("DELETE FROM t_knowledge_document_file WHERE storage_key = ?", existing.getFileUrl());
+                    } catch (Exception e) {
+                        log.warn("文件删除失败: storageKey={}", existing.getFileUrl(), e);
+                    }
+                }
+                // 逻辑删除旧文档（使用 jdbcTemplate 绕过 @TableLogic 拦截）
+                jdbcTemplate.update("UPDATE t_knowledge_document SET deleted = 1, updated_by = 'system', update_time = NOW() WHERE id = ?", existing.getId());
+            }
         }
 
+        // 使用自定义文件名或原始文件名
+        String finalDocName = (StringUtils.hasText(docName)) ? docName : originalFilename;
+
         KnowledgeDocumentDO documentDO = persistenceService.persist(
-                kbId, fileBytes, originalFilename, fileType, file.getContentType());
+                kbId, fileBytes, finalDocName, fileType, file.getContentType());
 
         Map<String, Object> message = new HashMap<>();
         message.put("docId", documentDO.getId());
         message.put("kbId", kbId);
         rabbitTemplate.convertAndSend(ingestionQueue, message);
-        log.info("文档入库消息已发送: docId={}, queue={}", documentDO.getId(), ingestionQueue);
+        log.info("文档入库消息已发送: docId={}, docName={}, queue={}", documentDO.getId(), finalDocName, ingestionQueue);
 
         return BeanUtil.toBean(documentDO, KnowledgeDocumentVO.class);
     }
 
-    private KnowledgeDocumentDO checkDuplicateInKnowledgeBase(Long kbId, String contentMd5) {
-        if (!StringUtils.hasText(contentMd5)) {
+    @Override
+    public Map<String, Object> checkDocName(Long kbId, String docName) {
+        Map<String, Object> result = new HashMap<>();
+        if (!StringUtils.hasText(docName)) {
+            result.put("exists", false);
+            return result;
+        }
+
+        KnowledgeDocumentDO existing = findByNameInKnowledgeBase(kbId, docName);
+        if (existing != null) {
+            result.put("exists", true);
+            result.put("docId", existing.getId());
+            result.put("docName", existing.getDocName());
+            result.put("contentMd5", existing.getContentMd5());
+            result.put("fileSize", existing.getFileSize());
+            result.put("status", existing.getStatus());
+        } else {
+            result.put("exists", false);
+        }
+        return result;
+    }
+
+    private KnowledgeDocumentDO findByNameInKnowledgeBase(Long kbId, String docName) {
+        if (!StringUtils.hasText(docName)) {
             return null;
         }
         LambdaQueryWrapper<KnowledgeDocumentDO> wrapper = Wrappers.lambdaQuery(KnowledgeDocumentDO.class)
                 .eq(KnowledgeDocumentDO::getKbId, kbId)
-                .eq(KnowledgeDocumentDO::getContentMd5, contentMd5)
+                .eq(KnowledgeDocumentDO::getDocName, docName)
                 .eq(KnowledgeDocumentDO::getDeleted, 0);
         return documentMapper.selectOne(wrapper);
     }
@@ -114,6 +162,19 @@ public class KnowledgeDocumentServiceImpl implements KnowledgeDocumentService {
         if (documentDO == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "文档不存在");
         }
+
+        // 1. 清理 PgVector 中的向量数据
+        try {
+            int deletedVectors = jdbcTemplate.update(
+                    "DELETE FROM vector_store WHERE doc_id = ?",
+                    String.valueOf(docId)
+            );
+            log.info("向量数据已清理: docId={}, deletedCount={}", docId, deletedVectors);
+        } catch (Exception e) {
+            log.warn("向量数据清理失败: docId={}", docId, e);
+        }
+
+        // 2. 清理文件字节数据
         if (StringUtils.hasText(documentDO.getFileUrl())) {
             try {
                 jdbcTemplate.update(
@@ -124,9 +185,13 @@ public class KnowledgeDocumentServiceImpl implements KnowledgeDocumentService {
                 log.warn("文件删除失败: storageKey={}", documentDO.getFileUrl(), e);
             }
         }
+
+        // 3. 逻辑删除文档记录
         documentDO.setDeleted(1);
         documentDO.setUpdatedBy("system");
         documentMapper.deleteById(documentDO);
+
+        log.info("文档已删除: docId={}", docId);
     }
 
     @Override
@@ -149,6 +214,37 @@ public class KnowledgeDocumentServiceImpl implements KnowledgeDocumentService {
         Page<KnowledgeDocumentDO> page = new Page<>(request.getCurrent(), request.getPageSize());
         return documentMapper.selectPage(page, queryWrapper)
                 .convert(each -> BeanUtil.toBean(each, KnowledgeDocumentVO.class));
+    }
+
+    @Override
+    public void reIngest(Long docId) {
+        KnowledgeDocumentDO documentDO = documentMapper.selectById(docId);
+        if (documentDO == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "文档不存在");
+        }
+
+        // 1. 清理 PgVector 中的向量数据
+        try {
+            int deletedVectors = jdbcTemplate.update(
+                    "DELETE FROM vector_store WHERE doc_id = ?",
+                    String.valueOf(docId)
+            );
+            log.info("向量数据已清理: docId={}, deletedCount={}", docId, deletedVectors);
+        } catch (Exception e) {
+            log.warn("向量数据清理失败: docId={}", docId, e);
+        }
+
+        // 2. 重置文档状态为待处理
+        documentDO.setStatus("pending");
+        documentDO.setUpdatedBy("system");
+        documentMapper.updateById(documentDO);
+
+        // 3. 发送消息到 RabbitMQ 重新触发 ETL
+        Map<String, Object> message = new HashMap<>();
+        message.put("docId", documentDO.getId());
+        message.put("kbId", documentDO.getKbId());
+        rabbitTemplate.convertAndSend(ingestionQueue, message);
+        log.info("文档重新入库消息已发送: docId={}, queue={}", documentDO.getId(), ingestionQueue);
     }
 
     private String detectFileType(String filename) {

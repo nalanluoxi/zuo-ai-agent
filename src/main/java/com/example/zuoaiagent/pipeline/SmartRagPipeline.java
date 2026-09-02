@@ -90,7 +90,7 @@ public class SmartRagPipeline {
                 if (memory != null) sysPrompt = memory + "\n" + sysPrompt;
                 ctx.setFinalSystemPrompt(sysPrompt);
                 traceService.finishRun(traceId, "SUCCESS", null, System.currentTimeMillis() - pipelineStart);
-                routingChatService.streamChat(ctx.getOriginalPrompt(), conId, sysPrompt, null, emitter, false, ctx.getUserId());
+                routingChatService.streamChat(ctx.getOriginalPrompt(), conId, sysPrompt, null, emitter, false, ctx.getUserId(), traceId);
                 return;
             }
 
@@ -107,7 +107,7 @@ public class SmartRagPipeline {
             ctx.setFinalSystemPrompt(finalSystemPrompt);
 
             traceService.finishRun(traceId, "SUCCESS", null, System.currentTimeMillis() - pipelineStart);
-            routingChatService.streamChat(ctx.getOriginalPrompt(), conId, finalSystemPrompt, null, emitter, false, ctx.getUserId());
+            routingChatService.streamChat(ctx.getOriginalPrompt(), conId, finalSystemPrompt, null, emitter, false, ctx.getUserId(), traceId);
 
         } catch (Exception e) {
             log.error("[SmartRagPipeline] traceId={} 流水线异常: {}", traceId, e.getMessage(), e);

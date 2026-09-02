@@ -58,7 +58,7 @@
               <div class="kb-stats">
                 <span class="stat-item">
                   <el-icon><DocumentCopy /></el-icon>
-                  {{ kb.documentCount || 0 }} 个文件
+                  {{ kb.documentCount || kb.docCount || 0 }} 个文件
                 </span>
                 <span class="stat-item">
                   <el-icon><User /></el-icon>
@@ -118,7 +118,9 @@
           <el-table :data="myKnowledgeBases" style="width: 100%">
             <el-table-column prop="name" label="知识库名称" width="200" />
             <el-table-column prop="description" label="描述" show-overflow-tooltip />
-            <el-table-column prop="fileCount" label="文件数" width="80" />
+            <el-table-column prop="documentCount" label="文件数" width="80">
+              <template #default="{ row }">{{ row.documentCount || row.docCount || 0 }}</template>
+            </el-table-column>
             <el-table-column prop="readability" label="可读性" width="100">
               <template #default="{ row }">
                 <el-tag :type="getReadabilityType(row.readability)">
@@ -133,15 +135,21 @@
             </el-table-column>
             <el-table-column label="操作" width="200" fixed="right">
               <template #default="{ row }">
-                <el-button text type="primary" @click="navigateToDetail(row.id)">
-                  详情
-                </el-button>
-                <el-button text type="primary" @click="editKB(row)">
-                  编辑
-                </el-button>
-                <el-button text type="danger" @click="deleteKB(row.id)">
-                  删除
-                </el-button>
+                <span class="action-btn-wrapper">
+                  <el-button text type="primary" @click="navigateToDetail(row.id)">
+                    详情
+                  </el-button>
+                </span>
+                <span class="action-btn-wrapper">
+                  <el-button text type="primary" @click="editKB(row)">
+                    编辑
+                  </el-button>
+                </span>
+                <span class="action-btn-wrapper">
+                  <el-button text type="danger" @click="deleteKB(row.id)">
+                    删除
+                  </el-button>
+                </span>
               </template>
             </el-table-column>
           </el-table>
@@ -185,20 +193,14 @@
           </el-select>
         </el-form-item>
         <el-form-item label="绑定意图节点">
-          <el-select
+          <el-cascader
             v-model="createForm.intentNodeIds"
-            multiple
-            filterable
+            :options="cascaderOptions"
+            :props="{ multiple: true, checkStrictly: false, emitPath: false }"
             placeholder="选择要绑定的意图节点（可选）"
             style="width: 100%"
-          >
-            <el-option
-              v-for="node in intentNodeList"
-              :key="node.id"
-              :label="node.label"
-              :value="node.id"
-            />
-          </el-select>
+            filterable
+          />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -211,11 +213,12 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '../../api/request'
 import { useAuthStore } from '../../stores/auth'
 
+const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 
@@ -239,6 +242,7 @@ const myKnowledgeBases = ref<any[]>([])
 const showCreateDialog = ref(false)
 const editingKBId = ref<string | null>(null)
 const intentNodeList = ref<any[]>([])
+const cascaderOptions = ref<any[]>([])
 const createForm = ref({
   name: '',
   description: '',
@@ -250,22 +254,28 @@ const createForm = ref({
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 let mySearchTimer: ReturnType<typeof setTimeout> | null = null
 
-// 加载意图节点列表（用于绑定选择）- 只显示叶子节点
+// 加载意图节点列表（用于绑定选择）
 async function loadIntentNodes() {
   try {
     const res = await request.get('/intent/nodes') as any
     const allNodes = res?.data || res || []
-
-    // 找出所有父节点 ID
-    const parentIds = new Set(
-      allNodes
-        .map((n: any) => n.parentId)
-        .filter((id: any) => id != null)
-    )
-
-    // 过滤出叶子节点（不在 parentId 集合中的节点）
-    intentNodeList.value = allNodes.filter((n: any) => !parentIds.has(n.id))
+    intentNodeList.value = allNodes
+    cascaderOptions.value = buildCascaderTree(allNodes, null)
   } catch { /* ignore */ }
+}
+
+// 构建 cascader 树结构
+function buildCascaderTree(nodes: any[], parentId: string | null): any[] {
+  return nodes
+    .filter((n: any) => String(n.parentId) === String(parentId))
+    .map((n: any) => {
+      const children = buildCascaderTree(nodes, n.id)
+      return {
+        value: n.id,
+        label: n.label,
+        children: children.length > 0 ? children : undefined
+      }
+    })
 }
 
 // 加载搜索 Tab 数据（后端搜索）
@@ -309,6 +319,17 @@ async function loadMyKnowledgeBases() {
 // 加载知识库数据（根据当前 Tab）
 onMounted(async () => {
   await loadSearchResults()
+})
+
+// 路由变化时刷新（从详情页返回等场景）
+watch(route, async () => {
+  if (route.path === '/chat/knowledge') {
+    if (activeTab.value === 'search') {
+      await loadSearchResults()
+    } else if (activeTab.value === 'mine') {
+      await loadMyKnowledgeBases()
+    }
+  }
 })
 
 onUnmounted(() => {
@@ -602,6 +623,14 @@ const handleCreate = async () => {
 
 :deep(.el-icon) {
   vertical-align: -3px;
+  margin-right: 4px;
+}
+
+.action-btn-wrapper {
+  display: inline-flex;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  overflow: hidden;
   margin-right: 4px;
 }
 </style>

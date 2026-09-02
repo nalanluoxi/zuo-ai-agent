@@ -18,6 +18,8 @@ import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.Map;
+
 /**
  * 知识库文档管理接口
  */
@@ -33,8 +35,19 @@ public class KnowledgeDocumentController {
      */
     @PostMapping(value = "/{kbId}/docs/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public BaseResponse<KnowledgeDocumentVO> upload(@PathVariable Long kbId,
-                                                    @RequestPart("file") MultipartFile file) {
-        return ResultUtils.success(knowledgeDocumentService.upload(kbId, file));
+                                                     @RequestPart("file") MultipartFile file,
+                                                     @RequestParam(required = false) String docName,
+                                                     @RequestParam(defaultValue = "new") String mode) {
+        return ResultUtils.success(knowledgeDocumentService.upload(kbId, file, docName, mode));
+    }
+
+    /**
+     * 检查知识库内是否存在同名文档
+     */
+    @GetMapping("/{kbId}/docs/check-name")
+    public BaseResponse<Map<String, Object>> checkDocName(@PathVariable Long kbId,
+                                                           @RequestParam String docName) {
+        return ResultUtils.success(knowledgeDocumentService.checkDocName(kbId, docName));
     }
 
     /**
@@ -61,5 +74,14 @@ public class KnowledgeDocumentController {
     public BaseResponse<IPage<KnowledgeDocumentVO>> page(@PathVariable Long kbId,
                                                          KnowledgeDocumentPageRequest request) {
         return ResultUtils.success(knowledgeDocumentService.page(kbId, request));
+    }
+
+    /**
+     * 重新入库文档（清理向量后重新触发 ETL）
+     */
+    @PostMapping("/docs/{docId}/re-ingest")
+    public BaseResponse<Boolean> reIngest(@PathVariable Long docId) {
+        knowledgeDocumentService.reIngest(docId);
+        return ResultUtils.success(true);
     }
 }

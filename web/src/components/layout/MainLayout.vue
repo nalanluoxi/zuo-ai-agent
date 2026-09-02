@@ -68,8 +68,8 @@
       <div class="profile-dialog">
         <el-avatar :size="80" icon="UserFilled" />
         <el-descriptions :column="1" border class="mt">
-          <el-descriptions-item label="用户名">{{ auth.userInfo?.username }}</el-descriptions-item>
-          <el-descriptions-item label="昵称">
+          <el-descriptions-item label="账号">{{ auth.userInfo?.username }}</el-descriptions-item>
+          <el-descriptions-item label="用户昵称">
             <div class="editable-field">
               <span v-if="!editingNickname">{{ auth.userInfo?.nickname }}</span>
               <el-input
@@ -95,7 +95,6 @@
             </div>
           </el-descriptions-item>
           <el-descriptions-item label="角色">{{ auth.userInfo?.roles?.join(',') || '普通用户' }}</el-descriptions-item>
-          <el-descriptions-item label="租户ID">{{ auth.userInfo?.tenantId }}</el-descriptions-item>
         </el-descriptions>
         <el-button type="primary" class="mt" @click="showPwd = true">修改密码</el-button>
       </div>
@@ -185,7 +184,7 @@ async function changePwd() {
 
   changingPwd.value = true
   try {
-    const response = await request.post('/user/change-password', {
+    const response = await request.post('/auth/user/change-password', {
       oldPassword: pwdForm.value.oldPwd,
       newPassword: pwdForm.value.newPwd
     })
@@ -210,7 +209,7 @@ async function saveNickname() {
   }
 
   try {
-    const response = await request.post('/user/change-nickname', {
+    const response = await request.post('/auth/user/change-nickname', {
       nickname: newNickname.value.trim()
     })
     if (response.success) {

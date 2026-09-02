@@ -35,29 +35,24 @@ public class IntentNodeController {
         this.intentTreeService = intentTreeService;
     }
 
+    private short calculateLevel(Long parentId) {
+        if (parentId == null) return 1;
+        IntentNodeDO parent = intentNodeMapper.selectById(parentId);
+        short level = parent != null && parent.getLevel() != null ? (short) (parent.getLevel() + 1) : 2;
+        if (level > 3) throw new RuntimeException("意图节点最多只能创建3级");
+        return level;
+    }
+
     /**
      * 创建意图节点
      */
     @PostMapping("/node")
     public BaseResponse<Long> createNode(@RequestBody IntentNodeDO node) {
-        // 从租户上下文获取 tenantId，确保删除时校验通过
         Long tenantId = TenantContextHolder.getTenantId();
         if (tenantId != null) {
             node.setTenantId(tenantId);
         }
-
-        // 自动计算 level：根节点=1，子节点=父节点 level+1
-        if (node.getParentId() != null) {
-            IntentNodeDO parent = intentNodeMapper.selectById(node.getParentId());
-            if (parent != null && parent.getLevel() != null) {
-                node.setLevel((short) (parent.getLevel() + 1));
-            } else {
-                node.setLevel((short) 2);
-            }
-        } else {
-            node.setLevel((short) 1);
-        }
-
+        node.setLevel(calculateLevel(node.getParentId()));
         intentNodeMapper.insert(node);
         intentTreeService.refreshCache();
         return ResultUtils.success(node.getId());
@@ -123,7 +118,14 @@ public class IntentNodeController {
         if (node.getParentId() != null && !node.getParentId().equals(intentNodeMapper.selectById(id).getParentId())) {
             intentTreeService.validateMove(id, node.getParentId());
         }
-        
+        // 校验层级不超过3级
+        if (node.getParentId() != null) {
+            IntentNodeDO parent = intentNodeMapper.selectById(node.getParentId());
+            if (parent != null && parent.getLevel() != null && parent.getLevel() >= 3) {
+                throw new RuntimeException("意图节点最多只能创建3级");
+            }
+        }
+
         node.setId(id);
         intentNodeMapper.updateById(node);
         intentTreeService.refreshCache();

@@ -133,23 +133,29 @@ embedding:
     # 熔断持续时间（毫秒），超过后转为 HALF_OPEN 进行探测
     open-duration-ms: 30000
   candidates:
-    # 主候选：本地 Ollama dengcao/Qwen3-Embedding-8B（需提前 ollama pull）
+    # 最高优先级：本地 Ollama bge-m3（专用 embedding 模型，1024 维，8192 token）
+    - id: ollama-bge-m3
+      provider: ollama
+      model: bge-m3
+      priority: 1
+      enabled: true
+    # 备用：本地 Ollama Qwen3-Embedding（已禁用，不支持 embedding API）
     - id: ollama-qwen3
       provider: ollama
       model: dengcao/Qwen3-Embedding-8B:F16
-      priority: 1
-      enabled: true
+      priority: 2
+      enabled: false
     # 备用候选 1：SiliconFlow Qwen3-Embedding-8B，维度 4096，无 512 token 限制（已禁用，API Key失效）
     - id: siliconflow-qwen3
       provider: openai
       model: Qwen/Qwen3-Embedding-8B
-      priority: 2
+      priority: 3
       enabled: false
     # 备用候选 2：SiliconFlow netease-youdao/bce-embedding-base_v1，维度 768，注意 512 token 上限
     - id: siliconflow-bce
       provider: openai
       model: netease-youdao/bce-embedding-base_v1
-      priority: 3
+      priority: 4
       enabled: false
 
 # 意图树缓存刷新配置

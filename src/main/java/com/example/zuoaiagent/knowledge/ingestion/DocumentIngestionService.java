@@ -92,13 +92,21 @@ public class DocumentIngestionService {
     /** 入库流水线配置 */
     private final IngestionProperties ingestionProperties;
 
+    /** ETL 入库日志服务 */
+    private final com.example.zuoaiagent.knowledge.service.IngestionLogService ingestionLogService;
+
+    /** Token 使用量统计服务 */
+    private final com.example.zuoaiagent.dashboard.service.TokenUsageService tokenUsageService;
+
     public DocumentIngestionService(FixedSizeChunker fixedSizeChunker,
                                     StructureAwareChunker structureAwareChunker,
                                     VectorStore vectorStore,
                                     KnowledgeDocumentMapper documentMapper,
                                     JdbcTemplate jdbcTemplate,
                                     MyDocumentEnricher documentEnricher,
-                                    IngestionProperties ingestionProperties) {
+                                    IngestionProperties ingestionProperties,
+                                    com.example.zuoaiagent.knowledge.service.IngestionLogService ingestionLogService,
+                                    com.example.zuoaiagent.dashboard.service.TokenUsageService tokenUsageService) {
         this.fixedSizeChunker = fixedSizeChunker;
         this.structureAwareChunker = structureAwareChunker;
         this.vectorStore = vectorStore;
@@ -106,6 +114,8 @@ public class DocumentIngestionService {
         this.jdbcTemplate = jdbcTemplate;
         this.documentEnricher = documentEnricher;
         this.ingestionProperties = ingestionProperties;
+        this.ingestionLogService = ingestionLogService;
+        this.tokenUsageService = tokenUsageService;
     }
 
     /** Tesseract tessdata 数据目录，macOS brew 安装路径：/usr/local/share/tessdata */
@@ -124,6 +134,12 @@ public class DocumentIngestionService {
     public void ingest(Long docId) {
         log.info("[入库] 开始处理文档 docId={}", docId);
 
+        // 创建入库日志对象
+        com.example.zuoaiagent.knowledge.entity.IngestionLogDO ingestionLog =
+            new com.example.zuoaiagent.knowledge.entity.IngestionLogDO();
+        ingestionLog.setDocId(docId);
+        ingestionLog.setStatus("processing");
+
         // 1. 读取文档元数据
         KnowledgeDocumentDO doc = documentMapper.selectById(docId);
         if (doc == null) {
@@ -131,28 +147,59 @@ public class DocumentIngestionService {
             return;
         }
 
+        // 设置日志基础信息
+        ingestionLog.setKbId(doc.getKbId());
+        ingestionLog.setFileType(doc.getFileType());
+        ingestionLog.setFileSize(doc.getFileSize());
+
+        long totalStartTime = System.currentTimeMillis();
+
         try {
-            // 2. 从数据库读取原始文件字节
+            // 阶段1: 文件加载
+            long stageStartTime = System.currentTimeMillis();
             byte[] fileBytes = fetchFileBytes(doc.getFileUrl());
             if (fileBytes == null || fileBytes.length == 0) {
                 throw new IllegalStateException("文件内容为空: storageKey=" + doc.getFileUrl());
             }
-            log.debug("[入库] docId={} 文件加载完成，大小={} bytes", docId, fileBytes.length);
+            long stageDuration = System.currentTimeMillis() - stageStartTime;
+            log.debug("[入库] docId={} 文件加载完成，大小={} bytes, 耗时={}ms", docId, fileBytes.length, stageDuration);
 
-            // 3. 解析文件为纯文本
+            // 记录upload阶段日志
+            ingestionLog.setStage("upload");
+            ingestionLog.setDurationMs((int) stageDuration);
+            ingestionLogService.logUpload(ingestionLog);
+
+            // 阶段2: 文本解析
+            stageStartTime = System.currentTimeMillis();
             String text = parseToText(fileBytes, doc.getFileType(), doc.getDocName());
             if (text == null || text.isBlank()) {
                 throw new IllegalStateException("文档解析结果为空: docId=" + docId);
             }
-            log.debug("[入库] docId={} 文本解析完成，长度={} chars", docId, text.length());
+            stageDuration = System.currentTimeMillis() - stageStartTime;
+            log.debug("[入库] docId={} 文本解析完成，长度={} chars, 耗时={}ms", docId, text.length(), stageDuration);
 
-            // 4. 选择分块策略：Markdown 使用结构感知，其他使用固定大小
+            // 记录parse阶段日志
+            ingestionLog.setStage("parse");
+            ingestionLog.setDurationMs((int) stageDuration);
+            ingestionLog.setTextLength(text.length());
+            ingestionLogService.logParse(ingestionLog);
+
+            // 阶段3: 文本分块
+            stageStartTime = System.currentTimeMillis();
             ChunkingStrategy strategy = selectStrategy(doc.getFileType());
             int chunkSize = ingestionProperties.getChunking().getChunkSize();
             int overlapSize = ingestionProperties.getChunking().getOverlapSize();
             List<String> chunks = strategy.chunk(text, chunkSize, overlapSize);
-            log.info("[入库] docId={} 分块完成，共 {} 块，策略={}，chunkSize={}，overlapSize={}",
-                    docId, chunks.size(), strategy.getType(), chunkSize, overlapSize);
+            stageDuration = System.currentTimeMillis() - stageStartTime;
+            log.info("[入库] docId={} 分块完成，共 {} 块，策略={}，chunkSize={}，overlapSize={}，耗时={}ms",
+                    docId, chunks.size(), strategy.getType(), chunkSize, overlapSize, stageDuration);
+
+            // 记录chunk阶段日志
+            ingestionLog.setStage("chunk");
+            ingestionLog.setDurationMs((int) stageDuration);
+            ingestionLog.setChunksCount(chunks.size());
+            ingestionLog.setStrategy(strategy.getType().name());
+            ingestionLogService.logChunk(ingestionLog);
 
             // 5. 构造 Spring AI Document 列表（附加基础元数据）
             List<Document> springDocs = new java.util.ArrayList<>(chunks.size());
@@ -164,8 +211,8 @@ public class DocumentIngestionService {
             // 6. 元数据增强（可选）：关键词 + 摘要
             springDocs = enrichDocuments(springDocs, docId);
 
-            // 7. 逐块写入 PgVector
-            //    vectorStore.add() 内部调用已配置的 EmbeddingModel 完成向量化
+            // 阶段4: 向量化写入PgVector
+            stageStartTime = System.currentTimeMillis();
             int successCount = 0;
             for (int i = 0; i < springDocs.size(); i++) {
                 try {
@@ -177,17 +224,64 @@ public class DocumentIngestionService {
                             docId, i + 1, springDocs.size(), e.getMessage());
                 }
             }
-            log.info("[入库] docId={} 向量写入完成，成功={}/{}", docId, successCount, springDocs.size());
+            stageDuration = System.currentTimeMillis() - stageStartTime;
+            log.info("[入库] docId={} 向量写入完成，成功={}/{}, 耗时={}ms", docId, successCount, springDocs.size(), stageDuration);
+
+            // 记录vectorize阶段日志
+            ingestionLog.setStage("vectorize");
+            ingestionLog.setDurationMs((int) stageDuration);
+            ingestionLog.setChunksSuccess(successCount);
+            ingestionLogService.logVectorize(ingestionLog);
+
+            // 记录 Embedding Token 使用量
+            if (successCount > 0) {
+                try {
+                    int embeddingTokens = 0;
+                    for (int i = 0; i < springDocs.size(); i++) {
+                        embeddingTokens += estimateTokens(springDocs.get(i).getFormattedContent());
+                    }
+                    String userId = doc.getCreatedBy() != null ? String.valueOf(doc.getCreatedBy()) : null;
+                    tokenUsageService.recordUsage(
+                            userId,
+                            null,  // embedding 没有 conversationId
+                            null,  // embedding 没有 messageId
+                            "bge-m3",
+                            embeddingTokens,
+                            0,     // embedding 没有 output tokens
+                            embeddingTokens,
+                            "EMBEDDING"
+                    );
+                    log.info("[入库] docId={} Embedding Token 使用量: {} tokens", docId, embeddingTokens);
+                } catch (Exception e) {
+                    log.warn("[入库] docId={} 记录 Token 使用量失败", docId, e);
+                }
+            }
+
+            // 计算总耗时
+            int totalDuration = (int) (System.currentTimeMillis() - totalStartTime);
+            ingestionLog.setTotalDurationMs(totalDuration);
 
             // 6. 全部块都失败时标记为 failed，否则标记为 success
             if (successCount == 0) {
                 updateStatus(docId, "failed");
+                ingestionLog.setStatus("failed");
+                ingestionLog.setErrorMessage("所有分块向量化均失败");
+                ingestionLogService.logFailed(ingestionLog, "所有分块向量化均失败");
             } else {
                 updateStatus(docId, "success");
+                ingestionLog.setStatus("success");
+                ingestionLogService.logComplete(ingestionLog);
             }
+
+            log.info("[入库] docId={} 入库完成，总耗时={}ms", docId, totalDuration);
 
         } catch (Exception e) {
             log.error("[入库] docId={} 入库失败", docId, e);
+            int totalDuration = (int) (System.currentTimeMillis() - totalStartTime);
+            ingestionLog.setTotalDurationMs(totalDuration);
+            ingestionLog.setStatus("failed");
+            ingestionLog.setErrorMessage(e.getMessage());
+            ingestionLogService.logFailed(ingestionLog, e.getMessage());
             // 6. 入库异常时更新文档状态为 failed
             updateStatus(docId, "failed");
         }
@@ -356,6 +450,17 @@ public class DocumentIngestionService {
         update.setUpdatedBy("system");
         documentMapper.updateById(update);
         log.info("[入库] docId={} 状态更新为 {}", docId, status);
+    }
+
+    /**
+     * 估算文本的 token 数量。
+     * 粗略估算：每 4 个字符约等于 1 个 token。
+     */
+    private int estimateTokens(String text) {
+        if (text == null || text.isEmpty()) {
+            return 0;
+        }
+        return (int) (text.length() / 4.0);
     }
 
     /**

@@ -17,6 +17,7 @@ import reactor.core.publisher.Flux;
 
 import com.example.zuoaiagent.dashboard.service.TokenUsageService;
 import com.example.zuoaiagent.prompt.PromptTemplateLoader;
+import com.example.zuoaiagent.trace.service.RagTraceRecordService;
 
 import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.chat.model.ChatResponse;
@@ -44,18 +45,21 @@ public class RoutingChatService {
     private final ChatMemory chatMemory;
     private final PromptTemplateLoader templateLoader;
     private final TokenUsageService tokenUsageService;
+    private final RagTraceRecordService traceService;
     private volatile String cachedSystemPrompt;
 
     public RoutingChatService(ChatModelFactory factory,
                               ChatCircuitBreaker circuitBreaker,
                               ChatMemory chatMemory,
                               PromptTemplateLoader templateLoader,
-                              TokenUsageService tokenUsageService) {
+                              TokenUsageService tokenUsageService,
+                              RagTraceRecordService traceService) {
         this.factory = factory;
         this.circuitBreaker = circuitBreaker;
         this.chatMemory = chatMemory;
         this.templateLoader = templateLoader;
         this.tokenUsageService = tokenUsageService;
+        this.traceService = traceService;
     }
 
     private String getDefaultSystemPrompt() {
@@ -112,11 +116,17 @@ public class RoutingChatService {
     public void streamChat(String prompt, String conversationId,
                            String systemPrompt, VectorStore vectorStore,
                            SseEmitter emitter, boolean internal, Long userId) {
+        streamChat(prompt, conversationId, systemPrompt, vectorStore, emitter, internal, userId, null);
+    }
+
+    public void streamChat(String prompt, String conversationId,
+                           String systemPrompt, VectorStore vectorStore,
+                           SseEmitter emitter, boolean internal, Long userId, String traceId) {
         for (ChatModelFactory.ChatModelEntry entry : factory.getCandidates()) {
             if (!circuitBreaker.allowCall(entry.id())) {
                 continue;
             }
-            if (tryStreamWithEntry(entry, prompt, conversationId, systemPrompt, vectorStore, emitter, internal, userId)) {
+            if (tryStreamWithEntry(entry, prompt, conversationId, systemPrompt, vectorStore, emitter, internal, userId, traceId)) {
                 return;
             }
         }
@@ -132,13 +142,17 @@ public class RoutingChatService {
     private boolean tryStreamWithEntry(ChatModelFactory.ChatModelEntry entry,
                                        String prompt, String conversationId,
                                        String systemPrompt, VectorStore vectorStore,
-                                       SseEmitter emitter, boolean internal, Long userId) {
+                                       SseEmitter emitter, boolean internal, Long userId, String traceId) {
         CompletableFuture<Boolean> probeFuture = new CompletableFuture<>();
         AtomicBoolean probeCompleted = new AtomicBoolean(false);
         AtomicBoolean sendFailed = new AtomicBoolean(false);
         StringBuilder responseAccumulator = new StringBuilder();
         long startTime = System.currentTimeMillis();
         int[] tokenUsage = new int[]{0, 0};
+
+        if (traceId != null) {
+            traceService.startNode(traceId, "llm", "增强生成", "LLM", null);
+        }
 
         Flux<ChatResponse> responseFlux = buildSpec(entry, prompt, conversationId, systemPrompt, vectorStore, internal)
                 .stream()
@@ -192,6 +206,10 @@ public class RoutingChatService {
                 error -> {
                     log.warn("[RoutingChatService] 候选 {} 流式调用失败: {}", entry.id(), error.getMessage());
                     circuitBreaker.markFailure(entry.id());
+                    if (traceId != null) {
+                        traceService.finishNode(traceId, "llm", "ERROR", error.getMessage(),
+                                System.currentTimeMillis() - startTime, null);
+                    }
                     if (!probeCompleted.get()) {
                         probeFuture.complete(false);
                     } else if (!sendFailed.get()) {
@@ -205,19 +223,18 @@ public class RoutingChatService {
                 },
                 () -> {
                     String fullResponse = responseAccumulator.toString();
+                    int inputTokens = tokenUsage[0];
+                    int outputTokens = tokenUsage[1];
+                    // 如果模型未返回真实 token（如 Ollama 某些版本），回退到估算
+                    if (inputTokens == 0 && outputTokens == 0 && !fullResponse.isEmpty()) {
+                        inputTokens = estimateTokens(prompt);
+                        outputTokens = estimateTokens(fullResponse);
+                        log.debug("[RoutingChatService] 模型未返回 token 统计，使用估算值: input={}, output={}", inputTokens, outputTokens);
+                    }
                     if (!internal && !fullResponse.isEmpty()) {
                         chatMemory.add(conversationId, new AssistantMessage(fullResponse));
 
-                        int inputTokens = tokenUsage[0];
-                        int outputTokens = tokenUsage[1];
-                        // 如果模型未返回真实 token（如 Ollama 某些版本），回退到估算
-                        if (inputTokens == 0 && outputTokens == 0) {
-                            inputTokens = estimateTokens(prompt);
-                            outputTokens = estimateTokens(fullResponse);
-                            log.debug("[RoutingChatService] 模型未返回 token 统计，使用估算值: input={}, output={}", inputTokens, outputTokens);
-                        }
                         int totalTokens = inputTokens + outputTokens;
-
                         try {
                             tokenUsageService.recordUsage(
                                 userId != null ? String.valueOf(userId) : null,
@@ -231,6 +248,10 @@ public class RoutingChatService {
                         } catch (Exception e) {
                             log.warn("记录 token 使用量失败", e);
                         }
+                    }
+                    if (traceId != null) {
+                        traceService.finishNode(traceId, "llm", "SUCCESS", null,
+                                System.currentTimeMillis() - startTime, null, inputTokens, outputTokens);
                     }
                     if (probeCompleted.get() && !sendFailed.get()) {
                         try {

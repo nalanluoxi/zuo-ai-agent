@@ -218,15 +218,15 @@ public class KnowledgeBaseServiceImpl implements com.example.zuoaiagent.knowledg
             vo.setIntentNodeLabels(intentNodeLabels);
         }
 
-        // 查询创建者用户名
+        // 查询创建者昵称（前端显示用户昵称而非账号）
         if (kbDO.getOwnerId() != null) {
             try {
-                String username = jdbcTemplate.queryForObject(
-                        "SELECT username FROM t_user WHERE id = ? AND deleted = 0",
+                String nickname = jdbcTemplate.queryForObject(
+                        "SELECT nickname FROM t_user WHERE id = ? AND deleted = 0",
                         String.class, kbDO.getOwnerId());
-                vo.setCreatedByUsername(username);
+                vo.setCreatedByUsername(nickname);
             } catch (Exception e) {
-                log.warn("查询创建者用户名失败，ownerId={}", kbDO.getOwnerId(), e);
+                log.warn("查询创建者昵称失败，ownerId={}", kbDO.getOwnerId(), e);
                 vo.setCreatedByUsername("未知用户");
             }
         }
@@ -274,19 +274,21 @@ public class KnowledgeBaseServiceImpl implements com.example.zuoaiagent.knowledg
                 .filter(Objects::nonNull)
                 .collect(Collectors.toList());
         if (!kbIds.isEmpty()) {
-            List<Map<String, Object>> rows = knowledgeDocumentMapper.selectMaps(
-                    Wrappers.query(KnowledgeDocumentDO.class)
-                            .select("kb_id AS kbId", "COUNT(1) AS docCount")
-                            .in("kb_id", kbIds)
-                            .eq("deleted", 0)
-                            .groupBy("kb_id")
-            );
-            docCountMap = rows.stream()
-                    .filter(r -> r.get("kbId") != null)
-                    .collect(Collectors.toMap(
-                            r -> Long.parseLong(r.get("kbId").toString()),
-                            r -> r.get("docCount") instanceof Number n ? n.longValue() : 0L
-                    ));
+            // 使用 jdbcTemplate 直接查询，避免 @TableLogic 注解干扰 selectMaps 的 alias 解析
+            String placeholders = kbIds.stream().map(id -> "?").collect(Collectors.joining(","));
+            try {
+                List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+                        "SELECT kb_id AS kbId, COUNT(1) AS docCount FROM t_knowledge_document WHERE kb_id IN (" + placeholders + ") AND deleted = 0 GROUP BY kb_id",
+                        kbIds.toArray());
+                docCountMap = rows.stream()
+                        .filter(r -> r.get("kbId") != null)
+                        .collect(Collectors.toMap(
+                                r -> Long.parseLong(r.get("kbId").toString()),
+                                r -> r.get("docCount") instanceof Number n ? n.longValue() : 0L
+                        ));
+            } catch (Exception e) {
+                log.warn("批量查询文档数量失败", e);
+            }
         }
 
         final Map<Long, Long> finalDocCountMap = docCountMap;
