@@ -20,7 +20,7 @@
               <el-icon><DataAnalysis /></el-icon>
               <span>全局看板</span>
             </div>
-            <div class="menu-item" @click="navigateTo('/manage/tenants')" v-if="hasPermission('SUPER_ADMIN')">
+            <div class="menu-item" @click="navigateTo('/manage/tenants')">
               <el-icon><OfficeBuilding /></el-icon>
               <span>租户管理</span>
             </div>
@@ -36,7 +36,7 @@
               <el-icon><Document /></el-icon>
               <span>日志系统</span>
             </div>
-            <div class="menu-item" @click="navigateTo('/manage/approvals')" v-if="hasPermission('SUPER_ADMIN')">
+            <div class="menu-item" @click="navigateTo('/manage/approvals')">
               <el-icon><DocumentChecked /></el-icon>
               <span>审批中心</span>
             </div>
@@ -60,7 +60,7 @@
     <!-- 内容区域 -->
     <el-main class="layout-main">
       <router-view v-if="allowed" />
-      <PermissionDenied v-else :page="route.path" />
+      <el-empty v-else description="暂无权限查看该页面数据" />
     </el-main>
 
     <!-- 个人信息弹窗 -->
@@ -94,7 +94,12 @@
               </template>
             </div>
           </el-descriptions-item>
-          <el-descriptions-item label="角色">{{ auth.userInfo?.roles?.join(',') || '普通用户' }}</el-descriptions-item>
+          <el-descriptions-item label="角色">
+              <template v-if="auth.userInfo?.roleNames?.length">
+                <el-tag v-for="r in auth.userInfo.roleNames" :key="r" size="small" type="warning" style="margin-right:4px">{{ r }}</el-tag>
+              </template>
+              <span v-else>普通用户</span>
+            </el-descriptions-item>
         </el-descriptions>
         <el-button type="primary" class="mt" @click="showPwd = true">修改密码</el-button>
       </div>
@@ -125,7 +130,6 @@
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
-import PermissionDenied from './PermissionDenied.vue'
 import { ElMessage } from 'element-plus'
 import request from '../../api/request'
 
@@ -139,25 +143,17 @@ const editingNickname = ref(false)
 const newNickname = ref('')
 const changingPwd = ref(false)
 
-// 权限检查
+// 页面权限检查：无 meta.page 的页面不限制；有 meta.page 的需要 READ 级别
 const allowed = computed(() => {
-  const requiredPermission = route.meta.permission as string
-  if (!requiredPermission) return true
-  return hasPermission(requiredPermission)
+  const pageCode = route.meta.page as string
+  if (!pageCode) return true
+  return auth.hasPageAccess(pageCode, 'READ')
 })
 
 // 当前页面标题
 const currentPageTitle = computed(() => {
   return (route.meta.title as string) || '首页'
 })
-
-function hasPermission(permission: string): boolean {
-  if (!auth.userInfo) return false
-  const perms = auth.userInfo.permissions || auth.userInfo.roles || []
-  // SUPER_ADMIN 有所有权限
-  if (perms.includes('SUPER_ADMIN')) return true
-  return perms.includes(permission)
-}
 
 function navigateTo(path: string) {
   router.push(path)
@@ -184,7 +180,7 @@ async function changePwd() {
 
   changingPwd.value = true
   try {
-    const response = await request.post('/auth/user/change-password', {
+    const response: any = await request.post('/auth/user/change-password', {
       oldPassword: pwdForm.value.oldPwd,
       newPassword: pwdForm.value.newPwd
     })
@@ -209,7 +205,7 @@ async function saveNickname() {
   }
 
   try {
-    const response = await request.post('/auth/user/change-nickname', {
+    const response: any = await request.post('/auth/user/change-nickname', {
       nickname: newNickname.value.trim()
     })
     if (response.success) {

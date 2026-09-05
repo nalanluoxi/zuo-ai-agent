@@ -36,7 +36,10 @@ sa-token:
   timeout: 2592000
   active-timeout: -1
   is-concurrent: true
-  is-share: true
+  # 每次登录生成独立新 token，杜绝切换账号时旧 token 被复用导致身份串号
+  is-share: false
+  # 不从 cookie 读取 token（token 只走 header），避免浏览器自动携带的旧 cookie 干扰身份识别
+  is-read-cookie: false
   token-style: tik
   is-log: true
 

@@ -77,7 +77,8 @@ public class AuthController {
         try {
             UserDO user = authService.currentUser();
             List<String> roleCodes = authService.getUserRoleCodes(user.getId());
-            
+            List<Map<String, String>> pagePermissions = authService.getUserPagePermissions(user.getId());
+
             Map<String, Object> data = new HashMap<>();
             data.put("loginId", user.getId());
             data.put("username", user.getUsername());
@@ -86,7 +87,13 @@ public class AuthController {
             data.put("tenantId", user.getTenantId());
             data.put("roles", roleCodes);
             data.put("permissions", roleCodes); // 兼容前端字段名
-            
+            data.put("pagePermissions", pagePermissions); // 页面级权限 [{pageCode, accessLevel}]
+            // "我的信息"展示：角色名称 + 隶属部门完整路径
+            data.put("roleNames", authService.getUserRoleNames(user.getId()));
+            data.put("teamPaths", authService.getUserTeamPaths(user.getId()));
+            // 部门归属明细（含部门内角色），前端判断"能否管理某部门"用
+            data.put("myTeams", authService.getUserTeams(user.getId()));
+
             return buildResponse(0, "ok", data);
         } catch (Exception e) {
             return buildResponse(1, e.getMessage(), null);

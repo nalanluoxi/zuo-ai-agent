@@ -140,8 +140,10 @@
                 {{ formatDate(row.createTime || row.createdAt || row.created_at) }}
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="200">
+            <el-table-column label="操作" width="280">
               <template #default="{ row }">
+                <el-button text type="primary" size="small" @click="previewFile(row.id)">查看</el-button>
+                <el-button text type="primary" size="small" @click="downloadFile(row.id)">下载</el-button>
                 <el-button text type="primary" size="small" @click="reIngestFile(row.id)">重新入库</el-button>
                 <el-button text type="danger" size="small" @click="deleteFile(row.id)">删除</el-button>
               </template>
@@ -295,15 +297,15 @@ const uploadFileName = ref('')
 const uploadFileSize = ref(0)
 const uploadFileRaw = ref<File | null>(null)
 const docConflictInfo = ref<{ exists: boolean; docId?: number; contentMd5?: string; status?: string }>({ exists: false })
-const conflictType = computed(() => {
+const conflictType = computed<string>(() => {
   if (!docConflictInfo.value.exists) return ''
   // 比较 MD5：前端无法计算文件 MD5，所以只要有同名就视为"不同内容"让用户确认
   return 'different-content'
 })
 
-const totalChunks = computed(() => files.value.reduce((s, f) => s + (f.chunks || 0), 0))
+const totalChunks = computed(() => files.value.reduce((s, f) => s + Number(f.chunks || 0), 0))
 const totalSizeMb = computed(() => {
-  const bytes = files.value.reduce((s, f) => s + (f.fileSize || f.file_size || 0), 0)
+  const bytes = files.value.reduce((s, f) => s + Number(f.fileSize || f.file_size || 0), 0)
   return Math.round((bytes / 1024 / 1024) * 100) / 100
 })
 
@@ -485,6 +487,26 @@ const reIngestFile = async (id: string) => {
   } catch (e) {
     if (e !== 'cancel') ElMessage.error('重新入库失败')
   }
+}
+
+const previewFile = (id: string) => {
+  // 在新窗口打开预览/下载；浏览器原生请求不带 header，token 走 query 参数
+  const token = localStorage.getItem('satoken') || ''
+  const url = `${request.defaults.baseURL}/knowledge-base/docs/${id}/download?satoken=${encodeURIComponent(token)}`
+  window.open(url, '_blank')
+}
+
+const downloadFile = (id: string) => {
+  // 触发浏览器下载；浏览器原生请求不带 header，token 走 query 参数
+  const token = localStorage.getItem('satoken') || ''
+  const url = `${request.defaults.baseURL}/knowledge-base/docs/${id}/download?satoken=${encodeURIComponent(token)}`
+  const link = document.createElement('a')
+  link.href = url
+  link.download = ''
+  link.target = '_blank'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
 }
 
 const deleteKB = async () => {

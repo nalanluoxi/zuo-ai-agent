@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.zuoaiagent.common.BaseResponse;
 import com.example.zuoaiagent.common.ResultUtils;
+import com.example.zuoaiagent.config.TenantContextHolder;
 import com.example.zuoaiagent.exception.BusinessException;
 import com.example.zuoaiagent.exception.ErrorCode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -26,19 +27,22 @@ public class ConversationController {
     private final JdbcTemplate jdbcTemplate;
 
     /**
-     * P22 增强：对话列表（分页、搜索、按用户过滤）
+     * P22 增强：对话列表（分页、搜索、按当前登录用户过滤）
+     * 数据隔离：强制从 TenantContextHolder 获取 userId，不依赖前端传参
      */
     @GetMapping
     public BaseResponse<Map<String, Object>> listConversations(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size,
-            @RequestParam(required = false) String search,
-            @RequestParam(required = false) String userId) {
+            @RequestParam(required = false) String search) {
         
         if (page < 1) page = 1;
         if (size < 1 || size > 100) size = 20;
         
         try {
+            // 数据隔离：强制获取当前用户 ID
+            Long userId = TenantContextHolder.getUserId();
+            
             // 构建查询 SQL
             StringBuilder sql = new StringBuilder(
                 "SELECT id, title, user_id, created_at, updated_at, " +
@@ -47,18 +51,16 @@ public class ConversationController {
             );
             List<Object> params = new ArrayList<>();
             
+            // 数据隔离：强制按当前用户过滤
+            sql.append(" AND user_id = ?");
+            params.add(userId);
+            
             // 搜索条件
             if (search != null && !search.trim().isEmpty()) {
                 sql.append(" AND (title LIKE ? OR id LIKE ?)");
                 String searchParam = "%" + search.trim() + "%";
                 params.add(searchParam);
                 params.add(searchParam);
-            }
-            
-            // 用户过滤条件
-            if (userId != null && !userId.trim().isEmpty()) {
-                sql.append(" AND user_id = ?");
-                params.add(userId);
             }
             
             // 排序和分页
@@ -76,16 +78,15 @@ public class ConversationController {
             StringBuilder countSql = new StringBuilder("SELECT COUNT(*) as total FROM t_conversation WHERE 1=1");
             List<Object> countParams = new ArrayList<>();
             
+            // 数据隔离：强制按当前用户过滤
+            countSql.append(" AND user_id = ?");
+            countParams.add(userId);
+            
             if (search != null && !search.trim().isEmpty()) {
                 countSql.append(" AND (title LIKE ? OR id LIKE ?)");
                 String searchParam = "%" + search.trim() + "%";
                 countParams.add(searchParam);
                 countParams.add(searchParam);
-            }
-            
-            if (userId != null && !userId.trim().isEmpty()) {
-                countSql.append(" AND user_id = ?");
-                countParams.add(userId);
             }
             
             Integer total = jdbcTemplate.queryForObject(countSql.toString(), Integer.class, countParams.toArray());
@@ -301,9 +302,13 @@ public class ConversationController {
         String conversationId = UUID.randomUUID().toString();
         
         try {
-            // 保存对话记录到数据库
-            String sql = "INSERT INTO t_conversation (id, title, created_at, updated_at) VALUES (?, ?, NOW(), NOW())";
-            jdbcTemplate.update(sql, conversationId, title);
+            // 获取当前用户和租户信息（数据隔离）
+            Long userId = TenantContextHolder.getUserId();
+            Long tenantId = TenantContextHolder.getTenantId();
+            
+            // 保存对话记录到数据库（包含 user_id 和 tenant_id 实现数据隔离）
+            String sql = "INSERT INTO t_conversation (id, title, user_id, tenant_id, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())";
+            jdbcTemplate.update(sql, conversationId, title, userId, tenantId);
             
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("conversationId", conversationId);

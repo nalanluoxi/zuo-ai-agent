@@ -8,19 +8,28 @@ import java.util.Map;
 public interface DbMonitorService {
 
     /**
-     * 获取 QPS 趋势
+     * 获取 QPS 趋势（事务数增量）
+     * @param period day(当天按小时)/week(近7天)/month(当月)/custom(自定义范围)
+     * @param startDate custom 时必填，yyyy-MM-dd
+     * @param endDate custom 时必填，yyyy-MM-dd
      */
-    Map<String, Object> getQpsTrend(int days);
+    Map<String, Object> getQpsTrend(String period, String startDate, String endDate);
 
     /**
-     * 获取访问流量趋势
+     * 获取访问流量趋势（读/写增量）
+     * @param period day(当天按小时)/week(近7天)/month(当月)/custom(自定义范围)
+     * @param startDate custom 时必填，yyyy-MM-dd
+     * @param endDate custom 时必填，yyyy-MM-dd
      */
-    Map<String, Object> getAccessTrend(int days);
+    Map<String, Object> getAccessTrend(String period, String startDate, String endDate);
 
     /**
      * 获取表空间趋势
+     * @param period day(当天按小时)/week(近7天)/month(当月)/custom(自定义范围)
+     * @param startDate custom 时必填，yyyy-MM-dd
+     * @param endDate custom 时必填，yyyy-MM-dd
      */
-    Map<String, Object> getTablespaceTrend(int days);
+    Map<String, Object> getTablespaceTrend(String period, String startDate, String endDate);
 
     /**
      * 获取慢查询列表

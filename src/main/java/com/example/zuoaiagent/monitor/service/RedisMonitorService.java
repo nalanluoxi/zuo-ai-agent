@@ -9,13 +9,27 @@ public interface RedisMonitorService {
 
     /**
      * 获取 QPS 趋势
+     * @param period day(当天按小时)/week(近7天)/month(当月)/custom(自定义范围)
+     * @param startDate custom 时必填，yyyy-MM-dd
+     * @param endDate custom 时必填，yyyy-MM-dd
      */
-    Map<String, Object> getQpsTrend(int days);
+    Map<String, Object> getQpsTrend(String period, String startDate, String endDate);
 
     /**
      * 获取内存趋势
+     * @param period day(当天按小时)/week(近7天)/month(当月)/custom(自定义范围)
+     * @param startDate custom 时必填，yyyy-MM-dd
+     * @param endDate custom 时必填，yyyy-MM-dd
      */
-    Map<String, Object> getMemoryTrend(int days);
+    Map<String, Object> getMemoryTrend(String period, String startDate, String endDate);
+
+    /**
+     * 获取延迟趋势（数据来源 t_redis_latency，每分钟采集）
+     * @param period day(当天按小时)/week(近7天)/month(当月)/custom(自定义范围)
+     * @param startDate custom 时必填，yyyy-MM-dd
+     * @param endDate custom 时必填，yyyy-MM-dd
+     */
+    Map<String, Object> getLatencyTrend(String period, String startDate, String endDate);
 
     /**
      * 获取 Key 分桶统计

@@ -42,7 +42,10 @@ if (token) {
     const info = { ...me, roles, permissions: roles, id: loginId }
     auth.userInfo = info
     localStorage.setItem('userInfo', JSON.stringify(info))
-  }).catch(() => {})
+  }).catch(() => {
+    // 刷新失败说明 token 已失效或用户信息异常，清理过期缓存，避免一直展示旧用户数据
+    auth.logout()
+  })
 }
 
 for (const [key, component] of Object.entries(ElementPlusIconsVue)) {

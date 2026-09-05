@@ -4,6 +4,7 @@ import com.example.zuoaiagent.dashboard.service.DashboardService;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.example.zuoaiagent.config.TenantContextHolder;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
@@ -74,7 +75,7 @@ public class DashboardServiceImpl implements DashboardService {
     }
 
     private Map<String, Object> getTokenTrendByHour(Long userId, LocalDate date, String usageType) {
-        String userIdFilter = " AND (user_id = ? OR user_id IS NULL) ";
+        String userIdFilter = " AND user_id = ? ";
         String usageTypeFilter = usageType != null ? " AND usage_type = ? " : "";
         Object[] baseParams = usageType != null
             ? new Object[]{date.format(DateTimeFormatter.ISO_DATE), userId, usageType}
@@ -131,7 +132,7 @@ public class DashboardServiceImpl implements DashboardService {
     }
 
     private Map<String, Object> getTokenTrendByDay(Long userId, LocalDate startDate, LocalDate endDate, String usageType) {
-        String userIdFilter = " AND (user_id = ? OR user_id IS NULL) ";
+        String userIdFilter = " AND user_id = ? ";
         String usageTypeFilter = usageType != null ? " AND usage_type = ? " : "";
         Object[] baseParams = usageType != null
             ? new Object[]{startDate.format(DateTimeFormatter.ISO_DATE), endDate.format(DateTimeFormatter.ISO_DATE), userId, usageType}
@@ -209,7 +210,7 @@ public class DashboardServiceImpl implements DashboardService {
     }
 
     private Map<String, Object> getMessageTrendByHour(Long userId, LocalDate date) {
-        String userIdFilter = " AND (c.user_id = ? OR c.user_id IS NULL) ";
+        String userIdFilter = " AND c.user_id = ? ";
 
         String sql = "SELECT " +
                     "EXTRACT(HOUR FROM m.create_time) as hour, " +
@@ -248,7 +249,7 @@ public class DashboardServiceImpl implements DashboardService {
     }
 
     private Map<String, Object> getMessageTrendByDay(Long userId, LocalDate startDate, LocalDate endDate) {
-        String userIdFilter = " AND (c.user_id = ? OR c.user_id IS NULL) ";
+        String userIdFilter = " AND c.user_id = ? ";
 
         String sql = "SELECT " +
                     "DATE(m.create_time) as date, " +
@@ -309,7 +310,7 @@ public class DashboardServiceImpl implements DashboardService {
     }
 
     private Map<String, Object> getRetrievalTrendByHour(Long userId, LocalDate date) {
-        String userIdFilter = " AND (user_id = ? OR user_id IS NULL) ";
+        String userIdFilter = " AND user_id = ? ";
 
         String sql = "SELECT " +
                     "EXTRACT(HOUR FROM created_at) as hour, " +
@@ -363,7 +364,7 @@ public class DashboardServiceImpl implements DashboardService {
     }
 
     private Map<String, Object> getRetrievalTrendByDay(Long userId, LocalDate startDate, LocalDate endDate) {
-        String userIdFilter = " AND (user_id = ? OR user_id IS NULL) ";
+        String userIdFilter = " AND user_id = ? ";
 
         String sql = "SELECT " +
                     "DATE(created_at) as date, " +
@@ -426,7 +427,12 @@ public class DashboardServiceImpl implements DashboardService {
     @Override
     public Map<String, Object> getTopKnowledgeBases(Long userId, int days, LocalDate startDate, LocalDate endDate, int topN) {
         try {
-            String userIdFilter = " AND (r.user_id = ? OR r.user_id IS NULL) ";
+            // userId 为空 = 全局（全局看板）；非空 = 个人视角
+            // 知识库可见性过滤：个人视角只显示 自己的 + 全局 PUBLIC + 本租户 TEAM，修复私密知识库名称泄露
+            String userIdFilter = userId != null ? " AND r.user_id = ? " : "";
+            String visibilityFilter = userId != null
+                    ? " AND (kb.owner_id = ? OR kb.visibility = 'PUBLIC' OR (kb.visibility = 'TEAM' AND kb.tenant_id = ?)) "
+                    : "";
             String sql = "SELECT " +
                         "kb.id, kb.name, kb.description, " +
                         "COUNT(DISTINCT r.conversation_id) as visit_count, " +
@@ -436,7 +442,7 @@ public class DashboardServiceImpl implements DashboardService {
                         "LEFT JOIN t_retrieval_log r ON kb.id::varchar = r.knowledge_base_id " +
                         "    AND r.created_at >= ?::timestamp AND r.created_at <= ?::timestamp " +
                         "    " + userIdFilter + " " +
-                        "WHERE kb.deleted = 0 " +
+                        "WHERE kb.deleted = 0 " + visibilityFilter +
                         "GROUP BY kb.id, kb.name, kb.description " +
                         "ORDER BY visit_count DESC " +
                         "LIMIT ?";
@@ -444,7 +450,16 @@ public class DashboardServiceImpl implements DashboardService {
             String startTs = startDate.atStartOfDay().toString();
             String endTs = endDate.atTime(23, 59, 59).toString();
 
-            List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, startTs, endTs, userId, topN);
+            List<Object> params = new ArrayList<>();
+            params.add(startTs);
+            params.add(endTs);
+            if (userId != null) {
+                params.add(userId);          // r.user_id
+                params.add(userId);          // kb.owner_id
+                params.add(TenantContextHolder.getTenantId()); // kb.tenant_id（TEAM 级别）
+            }
+            params.add(topN);
+            List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, params.toArray());
 
             return Map.of(
                 "topN", topN,
@@ -459,7 +474,7 @@ public class DashboardServiceImpl implements DashboardService {
     }
 
     private Map<String, Object> queryTokenStats(Long userId, LocalDate start, LocalDate end) {
-        String userIdFilter = " AND (user_id = ? OR user_id IS NULL) ";
+        String userIdFilter = " AND user_id = ? ";
 
         String sql = "SELECT " +
                     "COALESCE(SUM(input_tokens), 0) as input_tokens, " +
@@ -488,7 +503,7 @@ public class DashboardServiceImpl implements DashboardService {
 
     private Long queryMessageCount(Long userId, LocalDate start, LocalDate end) {
         try {
-            String userIdFilter = " AND (c.user_id = ? OR c.user_id IS NULL) ";
+            String userIdFilter = " AND c.user_id = ? ";
 
             String sql = "SELECT COUNT(*) FROM t_chat_message_raw m " +
                         "JOIN t_conversation c ON m.conversation_id = c.id " +
@@ -517,10 +532,14 @@ public class DashboardServiceImpl implements DashboardService {
                         "COUNT(DISTINCT doc_id) FILTER (WHERE stage = 'chunk' AND status = 'failed') as failed_chunk_files, " +
                         "COUNT(DISTINCT doc_id) FILTER (WHERE stage = 'complete' AND status = 'failed') as ingestion_failed_files " +
                         "FROM t_ingestion_log " +
-                        "WHERE kb_id IN (SELECT id FROM t_knowledge_base WHERE owner_id = ? AND deleted = 0)";
+                        "WHERE kb_id IN (SELECT id FROM t_knowledge_base WHERE deleted = 0"
+                        + (userId != null ? " AND owner_id = ?" : "") + ")";
 
             List<Object> params = new ArrayList<>();
-            params.add(userId);
+            // userId 为空 = 全局（全局看板）
+            if (userId != null) {
+                params.add(userId);
+            }
 
             if (kbId != null) {
                 sql += " AND kb_id = ?";
@@ -567,11 +586,14 @@ public class DashboardServiceImpl implements DashboardService {
                         "COALESCE(MAX(duration_ms), 0) as max_duration, " +
                         "COALESCE(MIN(duration_ms), 0) as min_duration " +
                         "FROM t_ingestion_log " +
-                        "WHERE kb_id IN (SELECT id FROM t_knowledge_base WHERE owner_id = ? AND deleted = 0) " +
+                        "WHERE kb_id IN (SELECT id FROM t_knowledge_base WHERE deleted = 0"
+                        + (userId != null ? " AND owner_id = ?" : "") + ") " +
                         "AND DATE(created_at) >= ?::date AND DATE(created_at) <= ?::date";
 
             List<Object> params = new ArrayList<>();
-            params.add(userId);
+            if (userId != null) {
+                params.add(userId);
+            }
             params.add(startDate.format(DateTimeFormatter.ISO_DATE));
             params.add(endDate.format(DateTimeFormatter.ISO_DATE));
 
@@ -629,12 +651,14 @@ public class DashboardServiceImpl implements DashboardService {
                     "COALESCE(AVG(CASE WHEN stage = 'complete' THEN total_duration_ms END), 0) as avg_duration_ms " +
                     "FROM t_ingestion_log " +
                     "WHERE DATE(created_at) = ?::date " +
-                    "AND kb_id IN (SELECT id FROM t_knowledge_base WHERE owner_id = ? AND deleted = 0) " +
+                    "AND kb_id IN (SELECT id FROM t_knowledge_base WHERE deleted = 0"
+                    + (userId != null ? " AND owner_id = ?" : "") + ") " +
                     "GROUP BY EXTRACT(HOUR FROM created_at) " +
                     "ORDER BY hour ASC";
 
-        List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql,
-            date.format(DateTimeFormatter.ISO_DATE), userId);
+        List<Map<String, Object>> rows = userId != null
+                ? jdbcTemplate.queryForList(sql, date.format(DateTimeFormatter.ISO_DATE), userId)
+                : jdbcTemplate.queryForList(sql, date.format(DateTimeFormatter.ISO_DATE));
 
         Map<Integer, long[]> dataMap = new LinkedHashMap<>();
         Map<Integer, Double> durationMap = new LinkedHashMap<>();
@@ -678,14 +702,19 @@ public class DashboardServiceImpl implements DashboardService {
                     "COALESCE(AVG(CASE WHEN stage = 'complete' THEN total_duration_ms END), 0) as avg_duration_ms " +
                     "FROM t_ingestion_log " +
                     "WHERE DATE(created_at) >= ?::date AND DATE(created_at) <= ?::date " +
-                    "AND kb_id IN (SELECT id FROM t_knowledge_base WHERE owner_id = ? AND deleted = 0) " +
+                    "AND kb_id IN (SELECT id FROM t_knowledge_base WHERE deleted = 0"
+                    + (userId != null ? " AND owner_id = ?" : "") + ") " +
                     "GROUP BY DATE(created_at) " +
                     "ORDER BY date ASC";
 
-        List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql,
-            startDate.format(DateTimeFormatter.ISO_DATE),
-            endDate.format(DateTimeFormatter.ISO_DATE),
-            userId);
+        List<Map<String, Object>> rows = userId != null
+                ? jdbcTemplate.queryForList(sql,
+                    startDate.format(DateTimeFormatter.ISO_DATE),
+                    endDate.format(DateTimeFormatter.ISO_DATE),
+                    userId)
+                : jdbcTemplate.queryForList(sql,
+                    startDate.format(DateTimeFormatter.ISO_DATE),
+                    endDate.format(DateTimeFormatter.ISO_DATE));
 
         Map<String, long[]> dataMap = new LinkedHashMap<>();
         Map<String, Double> durationMap = new LinkedHashMap<>();
@@ -752,7 +781,7 @@ public class DashboardServiceImpl implements DashboardService {
                     "LEFT JOIN t_conversation c ON r.conversation_id = c.id " +
                     "WHERE n.node_type = ? AND n.duration_ms IS NOT NULL " +
                     "AND DATE(n.start_time) = ?::date " +
-                    "AND (c.user_id = ? OR c.user_id IS NULL) " +
+                    "AND c.user_id = ? " +
                     "GROUP BY EXTRACT(HOUR FROM n.start_time) " +
                     "ORDER BY hour ASC";
 
@@ -799,7 +828,7 @@ public class DashboardServiceImpl implements DashboardService {
                     "LEFT JOIN t_conversation c ON r.conversation_id = c.id " +
                     "WHERE n.node_type = ? AND n.duration_ms IS NOT NULL " +
                     "AND DATE(n.start_time) >= ?::date AND DATE(n.start_time) <= ?::date " +
-                    "AND (c.user_id = ? OR c.user_id IS NULL) " +
+                    "AND c.user_id = ? " +
                     "GROUP BY DATE(n.start_time) " +
                     "ORDER BY date ASC";
 

@@ -12,6 +12,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 public class CorsConfig implements WebMvcConfigurer {
 
     private final AuthClientInterceptor authClientInterceptor;
+    private final PagePermissionInterceptor pagePermissionInterceptor;
     private final TraceInterceptor traceInterceptor;
 
     @Override
@@ -31,6 +32,18 @@ public class CorsConfig implements WebMvcConfigurer {
     public void addInterceptors(InterceptorRegistry registry) {
         // 方案 B：zuo-ai-agent 通过 auth-service 验证 token
         registry.addInterceptor(authClientInterceptor)
+                .addPathPatterns("/**")
+                .excludePathPatterns(
+                        "/health",
+                        "/swagger-ui/**",
+                        "/swagger-resources/**",
+                        "/v3/api-docs/**",
+                        "/doc.html/**",
+                        "/webjars/**"
+                );
+
+        // 页面级权限拦截（依赖 AuthClientInterceptor 已写入的上下文）
+        registry.addInterceptor(pagePermissionInterceptor)
                 .addPathPatterns("/**")
                 .excludePathPatterns(
                         "/health",

@@ -5,6 +5,7 @@ import com.example.zuoaiagent.common.ResultUtils;
 import com.example.zuoaiagent.exception.BusinessException;
 import com.example.zuoaiagent.exception.ErrorCode;
 import com.example.zuoaiagent.monitor.service.RedisMonitorService;
+import com.example.zuoaiagent.monitor.support.TrendRangeSupport;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -12,7 +13,7 @@ import java.util.Map;
 
 /**
  * P25：Redis 监控 API
- * 功能：QPS 趋势、内存趋势、热 Key、BigKey、分桶统计
+ * 功能：QPS 趋势、内存趋势、延迟趋势、热 Key、BigKey、分桶统计
  */
 @RestController
 @RequestMapping("/monitor/redis")
@@ -22,35 +23,56 @@ public class RedisMonitorController {
     private final RedisMonitorService redisMonitorService;
 
     /**
-     * P25：获取 Redis QPS 趋势
-     * @param days 统计天数（7/30）
-     * @return QPS 每日数据
+     * 获取 Redis QPS 趋势
+     * @param period day(当天按小时)/week(近7天)/month(当月)/custom(自定义范围)，兼容旧 days 参数
+     * @param startDate custom 时必填，yyyy-MM-dd
+     * @param endDate custom 时必填，yyyy-MM-dd
+     * @param days 旧版参数（7/30），period 为空时生效
      */
     @GetMapping("/qps-trend")
     public BaseResponse<Map<String, Object>> getQpsTrend(
-            @RequestParam(defaultValue = "7") int days) {
-        
-        if (days != 7 && days != 30) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "天数只能选择 7 或 30");
-        }
-        
-        return ResultUtils.success(redisMonitorService.getQpsTrend(days));
+            @RequestParam(required = false) String period,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate,
+            @RequestParam(required = false) Integer days) {
+
+        return ResultUtils.success(redisMonitorService.getQpsTrend(
+                TrendRangeSupport.normalizePeriod(period, days), startDate, endDate));
     }
 
     /**
-     * P25：获取 Redis 内存趋势
-     * @param days 统计天数（7/30）
-     * @return 内存使用数据
+     * 获取 Redis 内存趋势
+     * @param period day(当天按小时)/week(近7天)/month(当月)/custom(自定义范围)，兼容旧 days 参数
+     * @param startDate custom 时必填，yyyy-MM-dd
+     * @param endDate custom 时必填，yyyy-MM-dd
+     * @param days 旧版参数（7/30），period 为空时生效
      */
     @GetMapping("/memory-trend")
     public BaseResponse<Map<String, Object>> getMemoryTrend(
-            @RequestParam(defaultValue = "7") int days) {
-        
-        if (days != 7 && days != 30) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "天数只能选择 7 或 30");
-        }
-        
-        return ResultUtils.success(redisMonitorService.getMemoryTrend(days));
+            @RequestParam(required = false) String period,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate,
+            @RequestParam(required = false) Integer days) {
+
+        return ResultUtils.success(redisMonitorService.getMemoryTrend(
+                TrendRangeSupport.normalizePeriod(period, days), startDate, endDate));
+    }
+
+    /**
+     * 获取 Redis 延迟趋势（每分钟探测落库）
+     * @param period day(当天按小时)/week(近7天)/month(当月)/custom(自定义范围)
+     * @param startDate custom 时必填，yyyy-MM-dd
+     * @param endDate custom 时必填，yyyy-MM-dd
+     */
+    @GetMapping("/latency-trend")
+    public BaseResponse<Map<String, Object>> getLatencyTrend(
+            @RequestParam(required = false) String period,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate,
+            @RequestParam(required = false) Integer days) {
+
+        return ResultUtils.success(redisMonitorService.getLatencyTrend(
+                TrendRangeSupport.normalizePeriod(period, days), startDate, endDate));
     }
 
     /**

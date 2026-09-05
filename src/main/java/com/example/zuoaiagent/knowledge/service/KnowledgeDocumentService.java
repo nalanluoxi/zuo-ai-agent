@@ -41,4 +41,20 @@ public interface KnowledgeDocumentService {
 
     /** 重新入库文档（清理向量后重新触发 ETL） */
     void reIngest(Long docId);
+
+    /**
+     * 下载文档（返回文件二进制内容）
+     *
+     * @param docId 文档 ID
+     * @return 文件字节数组、文件名、MIME 类型
+     */
+    byte[] download(Long docId);
+
+    /**
+     * 获取文档文件信息（不返回内容）
+     *
+     * @param docId 文档 ID
+     * @return 文件名、MIME 类型、文件大小
+     */
+    Map<String, Object> getFileInfo(Long docId);
 }

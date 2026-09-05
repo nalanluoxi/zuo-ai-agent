@@ -18,119 +18,126 @@ public class DbMonitorServiceImpl implements DbMonitorService {
 
     private static final Logger log = LoggerFactory.getLogger(DbMonitorServiceImpl.class);
     private final JdbcTemplate jdbcTemplate;
+    private final com.example.zuoaiagent.monitor.support.TrendRangeSupport trendRangeSupport;
 
     @Override
-    public Map<String, Object> getQpsTrend(int days) {
+    public Map<String, Object> getQpsTrend(String period, String startDate, String endDate) {
+        var range = trendRangeSupport.resolve(period, startDate, endDate);
         try {
-            String sql = "SELECT " +
-                        "created_at::date as date, " +
-                        "COALESCE(SUM(query_count), 0) as qps, " +
-                        "COALESCE(AVG(query_count), 0) as avg_qps " +
+            // query_count 是 pg_stat_database 的累计值，按桶取增量（MAX-MIN）才是该时段事务数
+            String sql = "SELECT to_char(created_at, ?) as bucket, " +
+                        "COALESCE(MAX(query_count) - MIN(query_count), 0) as transactions, " +
+                        "COALESCE(MAX(query_count), 0) as total_count " +
                         "FROM t_db_qps " +
-                        "WHERE created_at >= CURRENT_DATE - ? * INTERVAL '1 day' " +
-                        "GROUP BY created_at::date " +
-                        "ORDER BY date ASC";
-            
-            List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, days);
-            
-            List<Map<String, Object>> trendData = new ArrayList<>();
+                        "WHERE created_at >= ? AND created_at < ? " +
+                        "GROUP BY bucket ORDER BY bucket ASC";
+
+            List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql,
+                    range.bucketFormat(), range.startTime(), range.endTime());
+
+            Map<String, Map<String, Object>> byBucket = new LinkedHashMap<>();
             for (Map<String, Object> row : rows) {
                 Map<String, Object> trend = new LinkedHashMap<>();
-                trend.put("date", row.get("date"));
-                trend.put("qps", ((Number) row.getOrDefault("qps", 0L)).longValue());
-                trend.put("avgQps", ((Number) row.getOrDefault("avg_qps", 0.0)).doubleValue());
-                trendData.add(trend);
+                trend.put("qps", ((Number) row.getOrDefault("transactions", 0L)).longValue());
+                trend.put("totalCount", ((Number) row.getOrDefault("total_count", 0L)).longValue());
+                byBucket.put(String.valueOf(row.get("bucket")), trend);
             }
-            
+
+            List<Map<String, Object>> trendData = trendRangeSupport.fillBuckets(
+                    range.buckets(), byBucket, () -> Map.of("qps", 0, "totalCount", 0));
+
             Map<String, Object> result = new LinkedHashMap<>();
-            result.put("days", days);
+            result.put("period", range.period());
             result.put("trendData", trendData);
             result.put("count", trendData.size());
-            
             return result;
         } catch (Exception e) {
             log.error("查询数据库 QPS 趋势失败：", e);
-            return Map.of("days", days, "trendData", List.of(), "count", 0);
+            return Map.of("period", range.period(), "trendData", List.of(), "count", 0);
         }
     }
 
     @Override
-    public Map<String, Object> getAccessTrend(int days) {
+    public Map<String, Object> getAccessTrend(String period, String startDate, String endDate) {
+        var range = trendRangeSupport.resolve(period, startDate, endDate);
         try {
-            String sql = "SELECT " +
-                        "created_at::date as date, " +
-                        "COALESCE(SUM(read_count), 0) as read_count, " +
-                        "COALESCE(SUM(write_count), 0) as write_count " +
+            // read_count/write_count 是累计值，按桶取增量（MAX-MIN）
+            String sql = "SELECT to_char(created_at, ?) as bucket, " +
+                        "COALESCE(MAX(read_count) - MIN(read_count), 0) as read_count, " +
+                        "COALESCE(MAX(write_count) - MIN(write_count), 0) as write_count " +
                         "FROM t_db_access " +
-                        "WHERE created_at >= CURRENT_DATE - ? * INTERVAL '1 day' " +
-                        "GROUP BY created_at::date " +
-                        "ORDER BY date ASC";
-            
-            List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, days);
-            
-            List<Map<String, Object>> trendData = new ArrayList<>();
+                        "WHERE created_at >= ? AND created_at < ? " +
+                        "GROUP BY bucket ORDER BY bucket ASC";
+
+            List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql,
+                    range.bucketFormat(), range.startTime(), range.endTime());
+
+            Map<String, Map<String, Object>> byBucket = new LinkedHashMap<>();
             for (Map<String, Object> row : rows) {
                 long read = ((Number) row.getOrDefault("read_count", 0L)).longValue();
                 long write = ((Number) row.getOrDefault("write_count", 0L)).longValue();
-                
+
                 Map<String, Object> trend = new LinkedHashMap<>();
-                trend.put("date", row.get("date"));
                 trend.put("readCount", read);
                 trend.put("writeCount", write);
                 trend.put("totalCount", read + write);
-                trendData.add(trend);
+                byBucket.put(String.valueOf(row.get("bucket")), trend);
             }
-            
+
+            List<Map<String, Object>> trendData = trendRangeSupport.fillBuckets(
+                    range.buckets(), byBucket, () -> Map.of("readCount", 0, "writeCount", 0, "totalCount", 0));
+
             Map<String, Object> result = new LinkedHashMap<>();
-            result.put("days", days);
+            result.put("period", range.period());
             result.put("trendData", trendData);
             result.put("count", trendData.size());
-            
             return result;
         } catch (Exception e) {
             log.error("查询数据库访问趋势失败：", e);
-            return Map.of("days", days, "trendData", List.of(), "count", 0);
+            return Map.of("period", range.period(), "trendData", List.of(), "count", 0);
         }
     }
 
     @Override
-    public Map<String, Object> getTablespaceTrend(int days) {
+    public Map<String, Object> getTablespaceTrend(String period, String startDate, String endDate) {
+        var range = trendRangeSupport.resolve(period, startDate, endDate);
         try {
-            String sql = "SELECT " +
-                        "created_at::date as date, " +
-                        "COALESCE(SUM(table_size), 0) as table_size, " +
-                        "COALESCE(SUM(index_size), 0) as index_size " +
+            String sql = "SELECT to_char(created_at, ?) as bucket, " +
+                        "COALESCE(MAX(table_size), 0) as table_size, " +
+                        "COALESCE(MAX(index_size), 0) as index_size " +
                         "FROM t_tablespace " +
-                        "WHERE created_at >= CURRENT_DATE - ? * INTERVAL '1 day' " +
-                        "GROUP BY created_at::date " +
-                        "ORDER BY date ASC";
-            
-            List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, days);
-            
-            List<Map<String, Object>> trendData = new ArrayList<>();
+                        "WHERE created_at >= ? AND created_at < ? " +
+                        "GROUP BY bucket ORDER BY bucket ASC";
+
+            List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql,
+                    range.bucketFormat(), range.startTime(), range.endTime());
+
+            Map<String, Map<String, Object>> byBucket = new LinkedHashMap<>();
             for (Map<String, Object> row : rows) {
                 long tableSize = ((Number) row.getOrDefault("table_size", 0L)).longValue();
                 long indexSize = ((Number) row.getOrDefault("index_size", 0L)).longValue();
-                
+
                 Map<String, Object> trend = new LinkedHashMap<>();
-                trend.put("date", row.get("date"));
                 trend.put("tableSize", formatBytes(tableSize));
                 trend.put("tableSizeBytes", tableSize);
                 trend.put("indexSize", formatBytes(indexSize));
                 trend.put("indexSizeBytes", indexSize);
                 trend.put("totalSize", formatBytes(tableSize + indexSize));
-                trendData.add(trend);
+                byBucket.put(String.valueOf(row.get("bucket")), trend);
             }
-            
+
+            List<Map<String, Object>> trendData = trendRangeSupport.fillBuckets(
+                    range.buckets(), byBucket,
+                    () -> Map.of("tableSize", "0 B", "tableSizeBytes", 0, "indexSize", "0 B", "indexSizeBytes", 0, "totalSize", "0 B"));
+
             Map<String, Object> result = new LinkedHashMap<>();
-            result.put("days", days);
+            result.put("period", range.period());
             result.put("trendData", trendData);
             result.put("count", trendData.size());
-            
             return result;
         } catch (Exception e) {
             log.error("查询表空间趋势失败：", e);
-            return Map.of("days", days, "trendData", List.of(), "count", 0);
+            return Map.of("period", range.period(), "trendData", List.of(), "count", 0);
         }
     }
 

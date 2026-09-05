@@ -104,29 +104,35 @@ public class RoutingChatService {
     public void streamChat(String prompt, String conversationId,
                            String systemPrompt, VectorStore vectorStore,
                            SseEmitter emitter) {
-        streamChat(prompt, conversationId, systemPrompt, vectorStore, emitter, false, null);
+        streamChat(prompt, conversationId, systemPrompt, vectorStore, emitter, false, null, null, "CONVERSATION");
     }
 
     public void streamChat(String prompt, String conversationId,
                            String systemPrompt, VectorStore vectorStore,
                            SseEmitter emitter, boolean internal) {
-        streamChat(prompt, conversationId, systemPrompt, vectorStore, emitter, internal, null);
+        streamChat(prompt, conversationId, systemPrompt, vectorStore, emitter, internal, null, null, "CONVERSATION");
     }
 
     public void streamChat(String prompt, String conversationId,
                            String systemPrompt, VectorStore vectorStore,
                            SseEmitter emitter, boolean internal, Long userId) {
-        streamChat(prompt, conversationId, systemPrompt, vectorStore, emitter, internal, userId, null);
+        streamChat(prompt, conversationId, systemPrompt, vectorStore, emitter, internal, userId, null, "CONVERSATION");
     }
 
     public void streamChat(String prompt, String conversationId,
                            String systemPrompt, VectorStore vectorStore,
                            SseEmitter emitter, boolean internal, Long userId, String traceId) {
+        streamChat(prompt, conversationId, systemPrompt, vectorStore, emitter, internal, userId, traceId, "CONVERSATION");
+    }
+
+    public void streamChat(String prompt, String conversationId,
+                           String systemPrompt, VectorStore vectorStore,
+                           SseEmitter emitter, boolean internal, Long userId, String traceId, String usageType) {
         for (ChatModelFactory.ChatModelEntry entry : factory.getCandidates()) {
             if (!circuitBreaker.allowCall(entry.id())) {
                 continue;
             }
-            if (tryStreamWithEntry(entry, prompt, conversationId, systemPrompt, vectorStore, emitter, internal, userId, traceId)) {
+            if (tryStreamWithEntry(entry, prompt, conversationId, systemPrompt, vectorStore, emitter, internal, userId, traceId, usageType)) {
                 return;
             }
         }
@@ -142,7 +148,7 @@ public class RoutingChatService {
     private boolean tryStreamWithEntry(ChatModelFactory.ChatModelEntry entry,
                                        String prompt, String conversationId,
                                        String systemPrompt, VectorStore vectorStore,
-                                       SseEmitter emitter, boolean internal, Long userId, String traceId) {
+                                       SseEmitter emitter, boolean internal, Long userId, String traceId, String usageType) {
         CompletableFuture<Boolean> probeFuture = new CompletableFuture<>();
         AtomicBoolean probeCompleted = new AtomicBoolean(false);
         AtomicBoolean sendFailed = new AtomicBoolean(false);
@@ -243,7 +249,8 @@ public class RoutingChatService {
                                 entry.modelName(),
                                 inputTokens,
                                 outputTokens,
-                                totalTokens
+                                totalTokens,
+                                usageType
                             );
                         } catch (Exception e) {
                             log.warn("记录 token 使用量失败", e);

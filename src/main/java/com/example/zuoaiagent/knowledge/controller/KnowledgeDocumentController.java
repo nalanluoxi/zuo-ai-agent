@@ -7,7 +7,10 @@ import com.example.zuoaiagent.knowledge.model.request.KnowledgeDocumentPageReque
 import com.example.zuoaiagent.knowledge.model.vo.KnowledgeDocumentVO;
 import com.example.zuoaiagent.knowledge.service.KnowledgeDocumentService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -83,5 +86,34 @@ public class KnowledgeDocumentController {
     public BaseResponse<Boolean> reIngest(@PathVariable Long docId) {
         knowledgeDocumentService.reIngest(docId);
         return ResultUtils.success(true);
+    }
+
+    /**
+     * 获取文档文件信息（不含内容）
+     */
+    @GetMapping("/docs/{docId}/file-info")
+    public BaseResponse<Map<String, Object>> getFileInfo(@PathVariable Long docId) {
+        return ResultUtils.success(knowledgeDocumentService.getFileInfo(docId));
+    }
+
+    /**
+     * 下载/预览文档
+     */
+    @GetMapping("/docs/{docId}/download")
+    public ResponseEntity<byte[]> download(@PathVariable Long docId) {
+        Map<String, Object> fileInfo = knowledgeDocumentService.getFileInfo(docId);
+        byte[] content = knowledgeDocumentService.download(docId);
+
+        String contentType = (String) fileInfo.getOrDefault("contentType", "application/octet-stream");
+        String docName = (String) fileInfo.get("docName");
+        Long fileSize = (Long) fileInfo.get("fileSize");
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType(contentType));
+        headers.setContentLength(fileSize != null ? fileSize : content.length);
+        // 浏览器内联预览（PDF/图片等），其他文件提供下载
+        headers.setContentDispositionFormData("inline", docName != null ? docName : "download");
+
+        return new ResponseEntity<>(content, headers, HttpStatus.OK);
     }
 }

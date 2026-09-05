@@ -19,8 +19,16 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(BusinessException.class)
-    public Map<String, Object> handleBusiness(BusinessException e) {
-        return Map.of("success", false, "message", e.getMessage(), "code", e.getCode());
+    public org.springframework.http.ResponseEntity<Map<String, Object>> handleBusiness(BusinessException e) {
+        // 业务异常返回真实 HTTP 状态码，前端 axios 走 reject 分支才能弹出失败原因
+        HttpStatus status = switch (e.getCode()) {
+            case 401 -> HttpStatus.UNAUTHORIZED;
+            case 403 -> HttpStatus.FORBIDDEN;
+            case 404 -> HttpStatus.NOT_FOUND;
+            default -> HttpStatus.BAD_REQUEST;
+        };
+        return org.springframework.http.ResponseEntity.status(status)
+                .body(Map.of("success", false, "message", e.getMessage(), "code", e.getCode()));
     }
 
     @ExceptionHandler(Exception.class)

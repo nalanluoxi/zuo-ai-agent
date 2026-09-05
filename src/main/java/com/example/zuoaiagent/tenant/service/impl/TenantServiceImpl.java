@@ -427,15 +427,17 @@ class DepartmentServiceImpl implements DepartmentService {
     @Override
     public Map<String, Object> getUsersByDepartment(Long tenantId, Long deptId, int page, int size) {
         try {
-            // t_team 没有关联用户表，直接查询该部门下的用户（按 tenant_id 过滤）
-            String sql = "SELECT id, username, nickname, email, status FROM t_user " +
-                        "WHERE tenant_id = ? AND deleted = 0 " +
-                        "ORDER BY create_time DESC LIMIT ? OFFSET ?";
+            // 通过 t_user_team 关联表查询部门下的用户
+            String sql = "SELECT u.id, u.username, u.nickname, u.email, u.status, ut.role_in_team as roleInTeam " +
+                        "FROM t_user u " +
+                        "INNER JOIN t_user_team ut ON u.id = ut.user_id " +
+                        "WHERE ut.team_id = ? AND u.deleted = 0 " +
+                        "ORDER BY u.create_time DESC LIMIT ? OFFSET ?";
             
-            List<Map<String, Object>> content = jdbcTemplate.queryForList(sql, tenantId, size, (page - 1) * size);
+            List<Map<String, Object>> content = jdbcTemplate.queryForList(sql, deptId, size, (page - 1) * size);
             
-            String countSql = "SELECT COUNT(*) as total FROM t_user WHERE tenant_id = ? AND deleted = 0";
-            Integer total = jdbcTemplate.queryForObject(countSql, Integer.class, tenantId);
+            String countSql = "SELECT COUNT(*) as total FROM t_user u INNER JOIN t_user_team ut ON u.id = ut.user_id WHERE ut.team_id = ? AND u.deleted = 0";
+            Integer total = jdbcTemplate.queryForObject(countSql, Integer.class, deptId);
             if (total == null) total = 0;
             
             Map<String, Object> result = new LinkedHashMap<>();
@@ -462,16 +464,27 @@ class DepartmentServiceImpl implements DepartmentService {
     @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> addUserToDepartment(Long tenantId, Long deptId, String userId) {
         try {
-            // t_team 没有关联用户表，用户通过 tenant_id 关联到租户
+            // 检查用户是否已在部门中
+            String checkSql = "SELECT COUNT(*) FROM t_user_team WHERE team_id = ? AND user_id = ?";
+            Integer exists = jdbcTemplate.queryForObject(checkSql, Integer.class, deptId, Long.valueOf(userId));
+            if (exists != null && exists > 0) {
+                throw new BusinessException(ErrorCode.OPERATION_ERROR, "用户已在该部门中");
+            }
+            
+            // 添加到部门（默认角色为 MEMBER）
+            String insertSql = "INSERT INTO t_user_team (user_id, team_id, role_in_team, create_time) VALUES (?, ?, 'MEMBER', NOW())";
+            jdbcTemplate.update(insertSql, Long.valueOf(userId), deptId);
+            
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("deptId", deptId);
             result.put("userId", userId);
-            result.put("tenantId", tenantId);
-            result.put("message", "用户已通过 tenant_id 关联到租户");
+            result.put("message", "用户已成功添加到部门");
             
             log.info("添加用户到部门 - deptId: {}, userId: {}", deptId, userId);
             
             return result;
+        } catch (BusinessException e) {
+            throw e;
         } catch (Exception e) {
             log.error("添加用户到部门失败：", e);
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "添加用户到部门失败");
@@ -482,10 +495,18 @@ class DepartmentServiceImpl implements DepartmentService {
     @Transactional(rollbackFor = Exception.class)
     public void removeUserFromDepartment(Long tenantId, Long deptId, String userId) {
         try {
-            // t_team 没有关联用户表
+            // 从 t_user_team 表中删除记录
+            String deleteSql = "DELETE FROM t_user_team WHERE team_id = ? AND user_id = ?";
+            int rows = jdbcTemplate.update(deleteSql, deptId, Long.valueOf(userId));
+            
+            if (rows == 0) {
+                throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "用户不在该部门中");
+            }
+            
             log.info("从部门移除用户 - deptId: {}, userId: {}", deptId, userId);
+        } catch (BusinessException e) {
+            throw e;
         } catch (Exception e) {
-            if (e instanceof BusinessException) throw e;
             log.error("移除用户失败：", e);
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "移除用户失败");
         }

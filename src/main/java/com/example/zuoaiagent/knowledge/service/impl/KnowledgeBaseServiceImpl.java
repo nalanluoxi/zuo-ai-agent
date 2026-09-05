@@ -196,10 +196,12 @@ public class KnowledgeBaseServiceImpl implements com.example.zuoaiagent.knowledg
 
     @Override
     public KnowledgeBaseVO getById(Long id) {
-        KnowledgeBaseDO kbDO = knowledgeBaseMapper.selectById(id);
+        // 绕过租户拦截器查询，再按可见性规则校验（PUBLIC 跨租户可见）
+        KnowledgeBaseDO kbDO = knowledgeBaseMapper.selectByIdIgnoreTenant(id);
         if (kbDO == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "知识库不存在");
         }
+        checkKbAccess(kbDO);
         KnowledgeBaseVO vo = BeanUtil.toBean(kbDO, KnowledgeBaseVO.class);
         // visibility → readability 映射（前端用 readability，DB 存 visibility）
         vo.setReadability(mapVisibilityToReadability(kbDO.getVisibility()));
@@ -235,6 +237,39 @@ public class KnowledgeBaseServiceImpl implements com.example.zuoaiagent.knowledg
     }
 
     /**
+     * 知识库访问校验：PUBLIC 全员可见；PRIVATE 仅创建者；TEAM 限同租户
+     * 无权限抛出 403
+     */
+    @Override
+    public void checkKbAccess(Long kbId) {
+        KnowledgeBaseDO kb = knowledgeBaseMapper.selectByIdIgnoreTenant(kbId);
+        if (kb == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "知识库不存在");
+        }
+        checkKbAccess(kb);
+    }
+
+    /**
+     * 知识库访问校验（对象版，避免重复查询）
+     */
+    public void checkKbAccess(KnowledgeBaseDO kb) {
+        if ("PUBLIC".equals(kb.getVisibility())) {
+            return;
+        }
+        Long currentUserId = TenantContextHolder.getUserId();
+        if (currentUserId != null && currentUserId.equals(kb.getOwnerId())) {
+            return;
+        }
+        if ("TEAM".equals(kb.getVisibility())) {
+            Long tenantId = TenantContextHolder.getTenantId();
+            if (tenantId != null && tenantId.equals(kb.getTenantId())) {
+                return;
+            }
+        }
+        throw new BusinessException(ErrorCode.FORBIDDEN_ERROR, "无权限访问该知识库");
+    }
+
+    /**
      * 将 DB 中的 visibility（PUBLIC/PRIVATE/TEAM）映射为前端 readability（public/private/team）
      */
     private String mapVisibilityToReadability(String visibility) {
@@ -252,21 +287,39 @@ public class KnowledgeBaseServiceImpl implements com.example.zuoaiagent.knowledg
 
     @Override
     public IPage<KnowledgeBaseVO> page(KnowledgeBasePageRequest request) {
-        // P19-P21 修复：添加租户隔离过滤
         Long tenantId = TenantContextHolder.getTenantId();
         if (tenantId == null) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "无法获取租户信息");
         }
 
+        Long currentUserId = TenantContextHolder.getUserId();
+
+        // 可见性规则（手动控制，不再依赖租户拦截器）：
+        // 1. 传了 createdBy（"我的知识库" Tab）→ 只查自己的
+        // 2. "搜索所有" Tab → 自己的 + 全局 PUBLIC（跨租户可见）+ 本租户 TEAM
         LambdaQueryWrapper<KnowledgeBaseDO> queryWrapper = Wrappers.lambdaQuery(KnowledgeBaseDO.class)
                 .like(StringUtils.hasText(request.getName()), KnowledgeBaseDO::getName, request.getName())
-                .eq(StringUtils.hasText(request.getCreatedBy()), KnowledgeBaseDO::getCreatedBy, request.getCreatedBy())
-                .eq(KnowledgeBaseDO::getTenantId, tenantId)  // P19-P21 修复：只查询当前租户的知识库
-                .eq(KnowledgeBaseDO::getDeleted, 0)
-                .orderByDesc(KnowledgeBaseDO::getUpdateTime);
+                .eq(KnowledgeBaseDO::getDeleted, 0);
+
+        if (StringUtils.hasText(request.getCreatedBy())) {
+            queryWrapper.eq(KnowledgeBaseDO::getOwnerId, currentUserId);
+        } else {
+            queryWrapper.and(w -> {
+                if (currentUserId != null) {
+                    w.eq(KnowledgeBaseDO::getOwnerId, currentUserId)
+                     .or().eq(KnowledgeBaseDO::getVisibility, "PUBLIC")
+                     .or(x -> x.eq(KnowledgeBaseDO::getVisibility, "TEAM")
+                               .eq(KnowledgeBaseDO::getTenantId, tenantId));
+                } else {
+                    w.eq(KnowledgeBaseDO::getVisibility, "PUBLIC");
+                }
+            });
+        }
+
+        queryWrapper.orderByDesc(KnowledgeBaseDO::getUpdateTime);
 
         Page<KnowledgeBaseDO> page = new Page<>(request.getCurrent(), request.getPageSize());
-        IPage<KnowledgeBaseDO> result = knowledgeBaseMapper.selectPage(page, queryWrapper);
+        IPage<KnowledgeBaseDO> result = knowledgeBaseMapper.selectPageIgnoreTenant(page, queryWrapper);
 
         Map<Long, Long> docCountMap = Map.of();
         List<Long> kbIds = result.getRecords().stream()
@@ -372,11 +425,28 @@ public class KnowledgeBaseServiceImpl implements com.example.zuoaiagent.knowledg
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "无法获取租户信息");
         }
 
+        Long currentUserId = TenantContextHolder.getUserId();
+
         LambdaQueryWrapper<KnowledgeBaseDO> qw = Wrappers.lambdaQuery(KnowledgeBaseDO.class)
                 .and(w -> w.like(KnowledgeBaseDO::getName, keyword).or().like(KnowledgeBaseDO::getDescription, keyword))
                 .eq(KnowledgeBaseDO::getTenantId, tenantId)
-                .eq(KnowledgeBaseDO::getDeleted, 0)
-                .orderByDesc(KnowledgeBaseDO::getCreateTime);
+                .eq(KnowledgeBaseDO::getDeleted, 0);
+
+        // 修复 visibility 过滤逻辑
+        if (StringUtils.hasText(request.getCreatedBy())) {
+            qw.eq(KnowledgeBaseDO::getOwnerId, currentUserId);
+        } else {
+            qw.and(w -> {
+                if (currentUserId != null) {
+                    w.eq(KnowledgeBaseDO::getOwnerId, currentUserId)
+                     .or().eq(KnowledgeBaseDO::getVisibility, "PUBLIC");
+                } else {
+                    w.eq(KnowledgeBaseDO::getVisibility, "PUBLIC");
+                }
+            });
+        }
+
+        qw.orderByDesc(KnowledgeBaseDO::getCreateTime);
         return knowledgeBaseMapper.selectPage(new Page<>(request.getCurrent(), request.getPageSize()), qw)
                 .convert(each -> {
                     KnowledgeBaseVO vo = BeanUtil.toBean(each, KnowledgeBaseVO.class);

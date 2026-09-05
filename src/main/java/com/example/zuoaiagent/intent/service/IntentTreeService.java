@@ -227,7 +227,7 @@ public class IntentTreeService {
     // -------------------- P5: 删除方法 --------------------
 
     /**
-     * P5 修复：删除意图节点（逻辑删除 + 子节点检查 + 租户隔离）
+     * P5 修复：删除意图节点（逻辑删除 + 子节点检查 + 租户隔离 + 系统节点保护）
      */
     public void deleteNode(Long nodeId) {
         if (nodeId == null) {
@@ -239,6 +239,11 @@ public class IntentTreeService {
         IntentNodeDO node = nodeCache.get(nodeId);
         if (node == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "节点不存在");
+        }
+
+        // 系统节点保护：不允许删除系统节点
+        if (node.getIsSystem() != null && node.getIsSystem() == 1) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "系统节点不可删除");
         }
 
         // P19-P21 修复：租户校验 - 严格模式

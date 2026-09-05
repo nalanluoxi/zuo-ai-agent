@@ -20,84 +20,124 @@ public class RedisMonitorServiceImpl implements RedisMonitorService {
     private static final Logger log = LoggerFactory.getLogger(RedisMonitorServiceImpl.class);
     private final JdbcTemplate jdbcTemplate;
     private final StringRedisTemplate redisTemplate;
+    private final com.example.zuoaiagent.monitor.support.TrendRangeSupport trendRangeSupport;
 
     private static final long BIGKEY_THRESHOLD = 1024 * 1024; // 1MB
 
     @Override
-    public Map<String, Object> getQpsTrend(int days) {
+    public Map<String, Object> getQpsTrend(String period, String startDate, String endDate) {
+        var range = trendRangeSupport.resolve(period, startDate, endDate);
         try {
-            String sql = "SELECT " +
-                        "created_at::date as date, " +
-                        "COALESCE(SUM(qps), 0) as qps, " +
-                        "COALESCE(AVG(qps), 0) as avg_qps " +
+            String sql = "SELECT to_char(created_at, ?) as bucket, " +
+                        "COALESCE(AVG(qps), 0) as avg_qps, " +
+                        "COALESCE(MAX(qps), 0) as max_qps " +
                         "FROM t_redis_qps " +
-                        "WHERE created_at >= CURRENT_DATE - ? * INTERVAL '1 day' " +
-                        "GROUP BY created_at::date " +
-                        "ORDER BY date ASC";
-            
-            List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, days);
-            
-            List<Map<String, Object>> trendData = new ArrayList<>();
+                        "WHERE created_at >= ? AND created_at < ? " +
+                        "GROUP BY bucket ORDER BY bucket ASC";
+
+            List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql,
+                    range.bucketFormat(), range.startTime(), range.endTime());
+
+            Map<String, Map<String, Object>> byBucket = new LinkedHashMap<>();
             for (Map<String, Object> row : rows) {
                 Map<String, Object> trend = new LinkedHashMap<>();
-                trend.put("date", row.get("date"));
-                trend.put("qps", ((Number) row.getOrDefault("qps", 0L)).longValue());
-                trend.put("avgQps", ((Number) row.getOrDefault("avg_qps", 0.0)).doubleValue());
-                trendData.add(trend);
+                trend.put("qps", Math.round(((Number) row.getOrDefault("avg_qps", 0.0)).doubleValue()));
+                trend.put("maxQps", ((Number) row.getOrDefault("max_qps", 0L)).longValue());
+                byBucket.put(String.valueOf(row.get("bucket")), trend);
             }
-            
+
+            List<Map<String, Object>> trendData = trendRangeSupport.fillBuckets(
+                    range.buckets(), byBucket, () -> Map.of("qps", 0, "maxQps", 0));
+
             Map<String, Object> result = new LinkedHashMap<>();
-            result.put("days", days);
+            result.put("period", range.period());
             result.put("trendData", trendData);
             result.put("count", trendData.size());
-            
             return result;
         } catch (Exception e) {
             log.error("查询 Redis QPS 趋势失败：", e);
-            return Map.of("days", days, "trendData", List.of(), "count", 0);
+            return Map.of("period", range.period(), "trendData", List.of(), "count", 0);
         }
     }
 
     @Override
-    public Map<String, Object> getMemoryTrend(int days) {
+    public Map<String, Object> getMemoryTrend(String period, String startDate, String endDate) {
+        var range = trendRangeSupport.resolve(period, startDate, endDate);
         try {
-            String sql = "SELECT " +
-                        "created_at::date as date, " +
+            String sql = "SELECT to_char(created_at, ?) as bucket, " +
                         "COALESCE(MAX(used_memory), 0) as used_memory, " +
                         "COALESCE(MAX(max_memory), 0) as max_memory, " +
                         "COALESCE(AVG(used_memory), 0) as avg_used " +
                         "FROM t_redis_memory " +
-                        "WHERE created_at >= CURRENT_DATE - ? * INTERVAL '1 day' " +
-                        "GROUP BY created_at::date " +
-                        "ORDER BY date ASC";
-            
-            List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, days);
-            
-            List<Map<String, Object>> trendData = new ArrayList<>();
+                        "WHERE created_at >= ? AND created_at < ? " +
+                        "GROUP BY bucket ORDER BY bucket ASC";
+
+            List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql,
+                    range.bucketFormat(), range.startTime(), range.endTime());
+
+            Map<String, Map<String, Object>> byBucket = new LinkedHashMap<>();
             for (Map<String, Object> row : rows) {
                 long usedMemory = ((Number) row.getOrDefault("used_memory", 0L)).longValue();
                 long maxMemory = ((Number) row.getOrDefault("max_memory", 0L)).longValue();
                 double memoryRate = maxMemory > 0 ? (usedMemory * 100.0) / maxMemory : 0.0;
-                
+
                 Map<String, Object> trend = new LinkedHashMap<>();
-                trend.put("date", row.get("date"));
                 trend.put("usedMemory", formatBytes(usedMemory));
                 trend.put("usedMemoryBytes", usedMemory);
                 trend.put("maxMemory", formatBytes(maxMemory));
                 trend.put("maxMemoryBytes", maxMemory);
                 trend.put("memoryRate", String.format("%.2f%%", memoryRate));
-                trendData.add(trend);
+                byBucket.put(String.valueOf(row.get("bucket")), trend);
             }
-            
+
+            List<Map<String, Object>> trendData = trendRangeSupport.fillBuckets(
+                    range.buckets(), byBucket,
+                    () -> Map.of("usedMemory", "0 B", "usedMemoryBytes", 0, "maxMemory", "0 B", "maxMemoryBytes", 0, "memoryRate", "0.00%"));
+
             Map<String, Object> result = new LinkedHashMap<>();
-            result.put("days", days);
+            result.put("period", range.period());
             result.put("trendData", trendData);
             result.put("count", trendData.size());
-            
             return result;
         } catch (Exception e) {
             log.error("查询 Redis 内存趋势失败：", e);
-            return Map.of("days", days, "trendData", List.of(), "count", 0);
+            return Map.of("period", range.period(), "trendData", List.of(), "count", 0);
+        }
+    }
+
+    @Override
+    public Map<String, Object> getLatencyTrend(String period, String startDate, String endDate) {
+        var range = trendRangeSupport.resolve(period, startDate, endDate);
+        try {
+            String sql = "SELECT to_char(created_at, ?) as bucket, " +
+                        "COALESCE(AVG(latency_ms), 0) as avg_latency, " +
+                        "COALESCE(MAX(latency_ms), 0) as max_latency " +
+                        "FROM t_redis_latency " +
+                        "WHERE created_at >= ? AND created_at < ? " +
+                        "GROUP BY bucket ORDER BY bucket ASC";
+
+            List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql,
+                    range.bucketFormat(), range.startTime(), range.endTime());
+
+            Map<String, Map<String, Object>> byBucket = new LinkedHashMap<>();
+            for (Map<String, Object> row : rows) {
+                Map<String, Object> trend = new LinkedHashMap<>();
+                trend.put("latencyMs", Math.round(((Number) row.getOrDefault("avg_latency", 0.0)).doubleValue()));
+                trend.put("maxLatencyMs", ((Number) row.getOrDefault("max_latency", 0L)).longValue());
+                byBucket.put(String.valueOf(row.get("bucket")), trend);
+            }
+
+            List<Map<String, Object>> trendData = trendRangeSupport.fillBuckets(
+                    range.buckets(), byBucket, () -> Map.of("latencyMs", 0, "maxLatencyMs", 0));
+
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("period", range.period());
+            result.put("trendData", trendData);
+            result.put("count", trendData.size());
+            return result;
+        } catch (Exception e) {
+            log.error("查询 Redis 延迟趋势失败：", e);
+            return Map.of("period", range.period(), "trendData", List.of(), "count", 0);
         }
     }
 

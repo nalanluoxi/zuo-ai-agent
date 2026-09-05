@@ -115,7 +115,7 @@ public class ChatServiceImpl implements ChatService {
     @Override
     public void streamChatWithRag(String prompt, String conversationId, String name, SseEmitter emitter) {
         String systemPrompt = templateLoader.render(SYSTEM_MASTER_TEMPLATE, Map.of("name", name, "domain", "各领域"));
-        routingChatService.streamChat(prompt, conversationId, systemPrompt, vectorStore, emitter);
+        routingChatService.streamChat(prompt, conversationId, systemPrompt, vectorStore, emitter, false, null, null, "RAG");
     }
 
 
@@ -145,7 +145,7 @@ public class ChatServiceImpl implements ChatService {
         String systemPrompt = templateLoader.render(SYSTEM_MASTER_TEMPLATE, Map.of("name", name, "domain", domain));
         String finalSystemPrompt = systemPrompt + "\n\n【参考知识库内容】\n" + context;
 
-        routingChatService.streamChat(prompt, conversationId, finalSystemPrompt, null, emitter);
+        routingChatService.streamChat(prompt, conversationId, finalSystemPrompt, null, emitter, false, null, null, "RAG");
     }
 
     @Override

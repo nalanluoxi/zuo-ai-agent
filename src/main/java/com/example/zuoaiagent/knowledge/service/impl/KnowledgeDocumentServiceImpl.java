@@ -14,6 +14,7 @@ import com.example.zuoaiagent.knowledge.mapper.KnowledgeBaseMapper;
 import com.example.zuoaiagent.knowledge.mapper.KnowledgeDocumentMapper;
 import com.example.zuoaiagent.knowledge.model.request.KnowledgeDocumentPageRequest;
 import com.example.zuoaiagent.knowledge.model.vo.KnowledgeDocumentVO;
+import com.example.zuoaiagent.knowledge.service.KnowledgeBaseService;
 import com.example.zuoaiagent.knowledge.service.KnowledgeDocumentPersistenceService;
 import com.example.zuoaiagent.knowledge.service.KnowledgeDocumentService;
 import org.slf4j.Logger;
@@ -37,6 +38,7 @@ public class KnowledgeDocumentServiceImpl implements KnowledgeDocumentService {
 
     private final KnowledgeDocumentMapper documentMapper;
     private final KnowledgeBaseMapper knowledgeBaseMapper;
+    private final KnowledgeBaseService knowledgeBaseService;
     private final JdbcTemplate jdbcTemplate;
     private final KnowledgeDocumentPersistenceService persistenceService;
     private final RabbitTemplate rabbitTemplate;
@@ -46,11 +48,13 @@ public class KnowledgeDocumentServiceImpl implements KnowledgeDocumentService {
 
     public KnowledgeDocumentServiceImpl(KnowledgeDocumentMapper documentMapper,
                                         KnowledgeBaseMapper knowledgeBaseMapper,
+                                        KnowledgeBaseService knowledgeBaseService,
                                         JdbcTemplate jdbcTemplate,
                                         KnowledgeDocumentPersistenceService persistenceService,
                                         RabbitTemplate rabbitTemplate) {
         this.documentMapper = documentMapper;
         this.knowledgeBaseMapper = knowledgeBaseMapper;
+        this.knowledgeBaseService = knowledgeBaseService;
         this.jdbcTemplate = jdbcTemplate;
         this.persistenceService = persistenceService;
         this.rabbitTemplate = rabbitTemplate;
@@ -205,6 +209,8 @@ public class KnowledgeDocumentServiceImpl implements KnowledgeDocumentService {
 
     @Override
     public IPage<KnowledgeDocumentVO> page(Long kbId, KnowledgeDocumentPageRequest request) {
+        // 先校验知识库访问权限（PUBLIC 知识库支持跨租户查看文档）
+        knowledgeBaseService.checkKbAccess(kbId);
         LambdaQueryWrapper<KnowledgeDocumentDO> queryWrapper = Wrappers.lambdaQuery(KnowledgeDocumentDO.class)
                 .eq(KnowledgeDocumentDO::getKbId, kbId)
                 .eq(KnowledgeDocumentDO::getDeleted, 0)
@@ -212,7 +218,7 @@ public class KnowledgeDocumentServiceImpl implements KnowledgeDocumentService {
                 .eq(StringUtils.hasText(request.getStatus()), KnowledgeDocumentDO::getStatus, request.getStatus())
                 .orderByDesc(KnowledgeDocumentDO::getCreateTime);
         Page<KnowledgeDocumentDO> page = new Page<>(request.getCurrent(), request.getPageSize());
-        return documentMapper.selectPage(page, queryWrapper)
+        return documentMapper.selectPageIgnoreTenant(page, queryWrapper)
                 .convert(each -> BeanUtil.toBean(each, KnowledgeDocumentVO.class));
     }
 
@@ -253,5 +259,50 @@ public class KnowledgeDocumentServiceImpl implements KnowledgeDocumentService {
         }
         int dot = filename.lastIndexOf('.');
         return dot >= 0 ? filename.substring(dot + 1).toLowerCase() : "unknown";
+    }
+
+    @Override
+    public byte[] download(Long docId) {
+        KnowledgeDocumentDO documentDO = documentMapper.selectById(docId);
+        if (documentDO == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "文档不存在");
+        }
+        // 访问校验：PUBLIC 知识库的文档可跨租户下载，PRIVATE 仅创建者
+        knowledgeBaseService.checkKbAccess(documentDO.getKbId());
+        if (!StringUtils.hasText(documentDO.getFileUrl())) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "文件未存储");
+        }
+
+        // 从 t_knowledge_document_file 表中读取文件二进制内容
+        String sql = "SELECT content FROM t_knowledge_document_file WHERE storage_key = ?";
+        byte[] content = jdbcTemplate.queryForObject(sql, byte[].class, documentDO.getFileUrl());
+        if (content == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "文件内容不存在");
+        }
+        return content;
+    }
+
+    @Override
+    public Map<String, Object> getFileInfo(Long docId) {
+        KnowledgeDocumentDO documentDO = documentMapper.selectById(docId);
+        if (documentDO == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "文档不存在");
+        }
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("docId", docId);
+        result.put("docName", documentDO.getDocName());
+        result.put("fileType", documentDO.getFileType());
+        result.put("fileSize", documentDO.getFileSize());
+        result.put("storageKey", documentDO.getFileUrl());
+
+        // 查询 MIME 类型
+        if (StringUtils.hasText(documentDO.getFileUrl())) {
+            String sql = "SELECT content_type FROM t_knowledge_document_file WHERE storage_key = ?";
+            String contentType = jdbcTemplate.queryForObject(sql, String.class, documentDO.getFileUrl());
+            result.put("contentType", contentType);
+        }
+
+        return result;
     }
 }

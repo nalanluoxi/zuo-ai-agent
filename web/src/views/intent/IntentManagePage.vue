@@ -86,24 +86,6 @@ function buildTree(nodes: any[], parentId: string | null): any[] {
   })
 }
 
-const parentCandidates = computed(() => {
-  if (!editingId.value) return allNodes.value
-  const excludeIds = collectDescendantIds(editingId.value)
-  excludeIds.add(editingId.value)
-  return allNodes.value.filter(n => !excludeIds.has(n.id))
-})
-
-function collectDescendantIds(id: string): Set<string> {
-  const result = new Set<string>()
-  const children = allNodes.value.filter(n => n.parentId === id)
-  for (const child of children) {
-    result.add(child.id)
-    const descendants = collectDescendantIds(child.id)
-    descendants.forEach(d => result.add(d))
-  }
-  return result
-}
-
 const dialogTitle = computed(() => {
   if (editingId.value) return '编辑节点'
   return createMode.value === 'top' ? '新建顶级节点' : '新建子节点'

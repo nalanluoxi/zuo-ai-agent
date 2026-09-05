@@ -49,7 +49,7 @@
                   <el-radio-button value="custom">自定义</el-radio-button>
                 </el-radio-group>
               </div>
-              <div v-if="tokenPeriod === 'custom'" class="header-bottom">
+              <div class="header-bottom">
                 <el-date-picker
                   v-model="tokenDateRange"
                   type="daterange"
@@ -81,7 +81,7 @@
                   <el-radio-button value="custom">自定义</el-radio-button>
                 </el-radio-group>
               </div>
-              <div v-if="msgPeriod === 'custom'" class="header-bottom">
+              <div class="header-bottom">
                 <el-date-picker
                   v-model="msgDateRange"
                   type="daterange"
@@ -117,7 +117,7 @@
                   <el-radio-button value="custom">自定义</el-radio-button>
                 </el-radio-group>
               </div>
-              <div v-if="retrievalPeriod === 'custom'" class="header-bottom">
+              <div class="header-bottom">
                 <el-date-picker
                   v-model="retrievalDateRange"
                   type="daterange"
@@ -168,7 +168,7 @@
                   <el-radio-button value="custom">自定义</el-radio-button>
                 </el-radio-group>
               </div>
-              <div v-if="durationPeriod === 'custom'" class="header-bottom">
+              <div class="header-bottom">
                 <el-date-picker
                   v-model="durationDateRange"
                   type="daterange"
@@ -207,7 +207,7 @@
                   <el-input-number v-model="topN" :min="1" :max="20" size="small" @change="loadTopKB" style="width:120px" />
                 </div>
               </div>
-              <div v-if="kbPeriod === 'custom'" class="header-bottom">
+              <div class="header-bottom">
                 <el-date-picker
                   v-model="kbDateRange"
                   type="daterange"
@@ -277,7 +277,7 @@
                   <el-radio-button value="custom">自定义</el-radio-button>
                 </el-radio-group>
               </div>
-              <div v-if="ingestionPeriod === 'custom'" class="header-bottom">
+              <div class="header-bottom">
                 <el-date-picker
                   v-model="ingestionDateRange"
                   type="daterange"
@@ -309,7 +309,7 @@
                   <el-radio-button value="custom">自定义</el-radio-button>
                 </el-radio-group>
               </div>
-              <div v-if="state.period === 'custom'" class="header-bottom">
+              <div class="header-bottom">
                 <el-date-picker
                   v-model="state.dateRange"
                   type="daterange"

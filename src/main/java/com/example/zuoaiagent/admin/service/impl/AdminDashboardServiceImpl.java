@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.util.*;
 
 /**
@@ -246,36 +247,102 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
     }
 
     @Override
-    public Map<String, Object> getTokenTrend(int days) {
+    public Map<String, Object> getTokenTrend(LocalDate start, LocalDate end, Long userId) {
         try {
-            String sql = "SELECT " +
-                "DATE(created_at) as date, " +
-                "COALESCE(SUM(input_tokens), 0) as input_tokens, " +
-                "COALESCE(SUM(output_tokens), 0) as output_tokens " +
-                "FROM t_token_usage " +
-                "WHERE created_at >= CURRENT_DATE - (? || ' days')::INTERVAL " +
-                "GROUP BY DATE(created_at) " +
-                "ORDER BY date ASC";
-            
-            List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, days);
-            List<Map<String, Object>> trendData = new ArrayList<>();
-            
-            for (Map<String, Object> row : rows) {
-                long input = ((Number) row.get("input_tokens")).longValue();
-                long output = ((Number) row.get("output_tokens")).longValue();
-                Map<String, Object> trend = new LinkedHashMap<>();
-                trend.put("date", row.get("date"));
-                trend.put("inputTokens", input);
-                trend.put("outputTokens", output);
-                trend.put("totalTokens", input + output);
-                trendData.add(trend);
+            boolean isToday = start.equals(end) && start.equals(LocalDate.now());
+            if (isToday) {
+                return getTokenTrendByHour(start, userId);
+            } else {
+                return getTokenTrendByDay(start, end, userId);
             }
-            
-            return Map.of("days", days, "trendData", trendData);
         } catch (Exception e) {
             log.error("查询 Token 趋势失败：", e);
-            return Map.of("days", days, "trendData", List.of());
+            return Map.of("trendData", List.of());
         }
+    }
+
+    private Map<String, Object> getTokenTrendByHour(LocalDate date, Long userId) {
+        String sql = "SELECT " +
+            "EXTRACT(HOUR FROM created_at) as hour, " +
+            "COALESCE(SUM(input_tokens), 0) as input_tokens, " +
+            "COALESCE(SUM(output_tokens), 0) as output_tokens " +
+            "FROM t_token_usage " +
+            "WHERE DATE(created_at) = ?::date" +
+            (userId != null ? " AND user_id = ?" : "") +
+            " GROUP BY EXTRACT(HOUR FROM created_at) ORDER BY hour ASC";
+
+        List<Object> params = new ArrayList<>();
+        params.add(date.format(java.time.format.DateTimeFormatter.ISO_DATE));
+        if (userId != null) params.add(userId);
+
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, params.toArray());
+
+        // 补全 24 小时数据
+        Map<Integer, long[]> dataMap = new LinkedHashMap<>();
+        for (Map<String, Object> row : rows) {
+            int hour = ((Number) row.get("hour")).intValue();
+            long input = ((Number) row.get("input_tokens")).longValue();
+            long output = ((Number) row.get("output_tokens")).longValue();
+            dataMap.put(hour, new long[]{input, output});
+        }
+
+        List<Map<String, Object>> trendData = new ArrayList<>();
+        for (int h = 0; h < 24; h++) {
+            long[] values = dataMap.getOrDefault(h, new long[]{0, 0});
+            Map<String, Object> trend = new LinkedHashMap<>();
+            trend.put("hour", h);
+            trend.put("date", String.format("%02d:00", h));
+            trend.put("inputTokens", values[0]);
+            trend.put("outputTokens", values[1]);
+            trend.put("totalTokens", values[0] + values[1]);
+            trendData.add(trend);
+        }
+
+        return Map.of("date", date.toString(), "granularity", "hour", "trendData", trendData);
+    }
+
+    private Map<String, Object> getTokenTrendByDay(LocalDate start, LocalDate end, Long userId) {
+        String sql = "SELECT " +
+            "DATE(created_at) as date, " +
+            "COALESCE(SUM(input_tokens), 0) as input_tokens, " +
+            "COALESCE(SUM(output_tokens), 0) as output_tokens " +
+            "FROM t_token_usage " +
+            "WHERE DATE(created_at) >= ?::date AND DATE(created_at) <= ?::date" +
+            (userId != null ? " AND user_id = ?" : "") +
+            " GROUP BY DATE(created_at) ORDER BY date ASC";
+
+        List<Object> params = new ArrayList<>();
+        params.add(start.format(java.time.format.DateTimeFormatter.ISO_DATE));
+        params.add(end.format(java.time.format.DateTimeFormatter.ISO_DATE));
+        if (userId != null) params.add(userId);
+
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, params.toArray());
+
+        // 补全日期范围内所有天的数据
+        Map<String, long[]> dataMap = new LinkedHashMap<>();
+        for (Map<String, Object> row : rows) {
+            String dateStr = row.get("date").toString();
+            long input = ((Number) row.get("input_tokens")).longValue();
+            long output = ((Number) row.get("output_tokens")).longValue();
+            dataMap.put(dateStr, new long[]{input, output});
+        }
+
+        List<Map<String, Object>> trendData = new ArrayList<>();
+        long totalDays = java.time.temporal.ChronoUnit.DAYS.between(start, end) + 1;
+        for (int i = 0; i < totalDays; i++) {
+            LocalDate d = start.plusDays(i);
+            String dateStr = d.toString();
+            long[] values = dataMap.getOrDefault(dateStr, new long[]{0, 0});
+            Map<String, Object> trend = new LinkedHashMap<>();
+            trend.put("date", dateStr);
+            trend.put("inputTokens", values[0]);
+            trend.put("outputTokens", values[1]);
+            trend.put("totalTokens", values[0] + values[1]);
+            trendData.add(trend);
+        }
+
+        return Map.of("startDate", start.toString(), "endDate", end.toString(),
+                      "days", (int) totalDays, "granularity", "day", "trendData", trendData);
     }
 
     @Override
@@ -320,44 +387,109 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
     }
 
     @Override
-    public Map<String, Object> getUserActivityTrend(int days) {
+    public Map<String, Object> getUserActivityTrend(LocalDate start, LocalDate end, Long userId) {
         try {
-            String sql = "SELECT " +
-                "DATE(created_at) as date, " +
-                "COUNT(DISTINCT user_id) as active_users " +
-                "FROM t_conversation " +
-                "WHERE created_at >= CURRENT_DATE - (? || ' days')::INTERVAL " +
-                "GROUP BY DATE(created_at) " +
-                "ORDER BY date ASC";
-            
-            List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, days);
-            List<Map<String, Object>> trendData = new ArrayList<>();
-            
-            for (Map<String, Object> row : rows) {
-                Map<String, Object> trend = new LinkedHashMap<>();
-                trend.put("date", row.get("date"));
-                trend.put("activeUsers", ((Number) row.get("active_users")).longValue());
-                trendData.add(trend);
+            boolean isToday = start.equals(end) && start.equals(LocalDate.now());
+            if (isToday) {
+                return getUserActivityTrendByHour(start, userId);
+            } else {
+                return getUserActivityTrendByDay(start, end, userId);
             }
-            
-            return Map.of("days", days, "trendData", trendData);
         } catch (Exception e) {
             log.error("查询用户活跃度趋势失败：", e);
-            return Map.of("days", days, "trendData", List.of());
+            return Map.of("trendData", List.of());
         }
+    }
+
+    private Map<String, Object> getUserActivityTrendByHour(LocalDate date, Long userId) {
+        String sql = "SELECT " +
+            "EXTRACT(HOUR FROM created_at) as hour, " +
+            "COUNT(DISTINCT user_id) as active_users " +
+            "FROM t_token_usage " +
+            "WHERE DATE(created_at) = ?::date AND user_id IS NOT NULL" +
+            (userId != null ? " AND user_id = ?" : "") +
+            " GROUP BY EXTRACT(HOUR FROM created_at) ORDER BY hour ASC";
+
+        List<Object> params = new ArrayList<>();
+        params.add(date.format(java.time.format.DateTimeFormatter.ISO_DATE));
+        if (userId != null) params.add(userId);
+
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, params.toArray());
+
+        // 补全 24 小时数据
+        Map<Integer, Long> dataMap = new LinkedHashMap<>();
+        for (Map<String, Object> row : rows) {
+            int hour = ((Number) row.get("hour")).intValue();
+            long active = ((Number) row.get("active_users")).longValue();
+            dataMap.put(hour, active);
+        }
+
+        List<Map<String, Object>> trendData = new ArrayList<>();
+        for (int h = 0; h < 24; h++) {
+            long active = dataMap.getOrDefault(h, 0L);
+            Map<String, Object> trend = new LinkedHashMap<>();
+            trend.put("hour", h);
+            trend.put("date", String.format("%02d:00", h));
+            trend.put("activeUsers", active);
+            trendData.add(trend);
+        }
+
+        return Map.of("date", date.toString(), "granularity", "hour", "trendData", trendData);
+    }
+
+    private Map<String, Object> getUserActivityTrendByDay(LocalDate start, LocalDate end, Long userId) {
+        String sql = "SELECT " +
+            "DATE(created_at) as date, " +
+            "COUNT(DISTINCT user_id) as active_users " +
+            "FROM t_token_usage " +
+            "WHERE DATE(created_at) >= ?::date AND DATE(created_at) <= ?::date " +
+            "AND user_id IS NOT NULL" +
+            (userId != null ? " AND user_id = ?" : "") +
+            " GROUP BY DATE(created_at) ORDER BY date ASC";
+
+        List<Object> params = new ArrayList<>();
+        params.add(start.format(java.time.format.DateTimeFormatter.ISO_DATE));
+        params.add(end.format(java.time.format.DateTimeFormatter.ISO_DATE));
+        if (userId != null) params.add(userId);
+
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, params.toArray());
+
+        // 补全日期范围内所有天的数据
+        Map<String, Long> dataMap = new LinkedHashMap<>();
+        for (Map<String, Object> row : rows) {
+            String dateStr = row.get("date").toString();
+            long active = ((Number) row.get("active_users")).longValue();
+            dataMap.put(dateStr, active);
+        }
+
+        List<Map<String, Object>> trendData = new ArrayList<>();
+        long totalDays = java.time.temporal.ChronoUnit.DAYS.between(start, end) + 1;
+        for (int i = 0; i < totalDays; i++) {
+            LocalDate d = start.plusDays(i);
+            String dateStr = d.toString();
+            long active = dataMap.getOrDefault(dateStr, 0L);
+            Map<String, Object> trend = new LinkedHashMap<>();
+            trend.put("date", dateStr);
+            trend.put("activeUsers", active);
+            trendData.add(trend);
+        }
+
+        return Map.of("startDate", start.toString(), "endDate", end.toString(),
+                      "days", (int) totalDays, "granularity", "day", "trendData", trendData);
     }
 
     @Override
     public Map<String, Object> getTopActiveUsers(int limit) {
         try {
+            // 改用 t_token_usage 表统计活跃用户（因为 t_conversation.user_id 可能为 NULL）
             String sql = "SELECT " +
-                "u.id as user_id, u.username, " +
-                "COUNT(c.id) as conversation_count, " +
-                "MAX(c.created_at) as last_active_at " +
+                "u.id as user_id, u.username, u.nickname, " +
+                "COUNT(DISTINCT t.conversation_id) as conversation_count, " +
+                "MAX(t.created_at) as last_active_at " +
                 "FROM t_user u " +
-                "JOIN t_conversation c ON u.id = c.user_id " +
-                "WHERE u.deleted = 0 " +
-                "GROUP BY u.id, u.username " +
+                "JOIN t_token_usage t ON u.id = t.user_id " +
+                "WHERE u.deleted = 0 AND t.user_id IS NOT NULL " +
+                "GROUP BY u.id, u.username, u.nickname " +
                 "ORDER BY conversation_count DESC " +
                 "LIMIT ?";
             
@@ -373,14 +505,14 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
     public Map<String, Object> getTopTokenUsers(int limit) {
         try {
             String sql = "SELECT " +
-                "u.id as user_id, u.username, " +
+                "u.id as user_id, u.username, u.nickname, " +
                 "COALESCE(SUM(t.input_tokens), 0) as input_tokens, " +
                 "COALESCE(SUM(t.output_tokens), 0) as output_tokens, " +
                 "COALESCE(SUM(t.total_tokens), 0) as total_tokens " +
                 "FROM t_user u " +
                 "LEFT JOIN t_token_usage t ON u.id = t.user_id " +
                 "WHERE u.deleted = 0 " +
-                "GROUP BY u.id, u.username " +
+                "GROUP BY u.id, u.username, u.nickname " +
                 "ORDER BY total_tokens DESC " +
                 "LIMIT ?";
             
@@ -428,49 +560,342 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
     }
 
     @Override
-    public Map<String, Object> getStageLatency(int limit) {
+    public Map<String, Object> getStageLatency(int limit, LocalDate start, LocalDate end, Long userId) {
         try {
-            String sql = "SELECT " +
-                "node_type, node_name, " +
-                "AVG(duration_ms) as avg_duration, " +
-                "MAX(duration_ms) as max_duration, " +
-                "MIN(duration_ms) as min_duration, " +
-                "COUNT(*) as count " +
-                "FROM t_rag_trace_node " +
-                "WHERE status = 'SUCCESS' AND deleted = 0 " +
-                "GROUP BY node_type, node_name " +
-                "ORDER BY avg_duration DESC";
-            
-            List<Map<String, Object>> stages = jdbcTemplate.queryForList(sql);
-            
-            // 获取每个阶段的 TopN 慢请求
-            for (Map<String, Object> stage : stages) {
-                String nodeType = (String) stage.get("node_type");
-                String topNSql = "SELECT " +
-                    "trace_id, duration_ms, create_time " +
-                    "FROM t_rag_trace_node " +
-                    "WHERE node_type = ? AND status = 'SUCCESS' AND deleted = 0 " +
-                    "ORDER BY duration_ms DESC " +
-                    "LIMIT ?";
-                
-                stage.put("topSlowRequests", jdbcTemplate.queryForList(topNSql, nodeType, limit));
-                
-                // 添加中文显示名
-                String displayName = switch (nodeType) {
-                    case "REWRITE" -> "查询改写";
-                    case "CLASSIFY" -> "意图分类";
-                    case "RETRIEVE" -> "文档检索";
-                    case "RERANK" -> "结果精排";
-                    case "PROMPT" -> "Prompt组装";
-                    default -> nodeType;
-                };
-                stage.put("stageDisplayName", displayName);
+            boolean isToday = start.equals(end) && start.equals(LocalDate.now());
+
+            // 阶段命名与个人看板统一
+            String[] allStages = {"REWRITE", "CLASSIFY", "RETRIEVE", "RERANK", "PROMPT", "LLM"};
+            Map<String, String> stageNames = Map.of(
+                "REWRITE", "提示词改写",
+                "CLASSIFY", "预编写文档（意图识别）",
+                "RETRIEVE", "检索",
+                "RERANK", "Rerank 重排序",
+                "PROMPT", "Prompt 组装",
+                "LLM", "增强生成"
+            );
+
+            if (isToday) {
+                return getStageLatencyByHour(start, allStages, stageNames, userId);
+            } else {
+                return getStageLatencyByDay(start, end, allStages, stageNames, userId);
             }
-            
-            return Map.of("stages", stages);
         } catch (Exception e) {
             log.error("查询阶段耗时统计失败：", e);
             return Map.of("stages", List.of());
+        }
+    }
+
+    private Map<String, Object> getStageLatencyByHour(LocalDate date, String[] allStages, Map<String, String> stageNames, Long userId) {
+        // userId 非空时按用户过滤（trace_node → trace_run → conversation）
+        String userJoin = userId != null
+                ? " JOIN t_rag_trace_run r ON n.trace_id = r.trace_id JOIN t_conversation c ON r.conversation_id = c.id "
+                : "";
+        String userFilter = userId != null ? " AND c.user_id = ? " : "";
+        String sql = "SELECT " +
+            "n.node_type, " +
+            "EXTRACT(HOUR FROM n.create_time) as hour, " +
+            "AVG(n.duration_ms) as avg_duration, " +
+            "MAX(n.duration_ms) as max_duration, " +
+            "MIN(n.duration_ms) as min_duration, " +
+            "COUNT(*) as count " +
+            "FROM t_rag_trace_node n " + userJoin +
+            "WHERE n.status = 'SUCCESS' AND n.deleted = 0 " +
+            "AND DATE(n.create_time) = ?::date " + userFilter +
+            "GROUP BY n.node_type, EXTRACT(HOUR FROM n.create_time) " +
+            "ORDER BY hour ASC, n.node_type ASC";
+
+        List<Map<String, Object>> rows = userId != null
+                ? jdbcTemplate.queryForList(sql, date, userId)
+                : jdbcTemplate.queryForList(sql, date);
+        
+        List<Map<String, Object>> stageTrends = new ArrayList<>();
+        for (String stage : allStages) {
+            Map<String, Object> stageData = new LinkedHashMap<>();
+            stageData.put("nodeType", stage);
+            stageData.put("displayName", stageNames.get(stage));
+            
+            Map<Integer, Map<String, Object>> hourDataMap = new LinkedHashMap<>();
+            for (Map<String, Object> row : rows) {
+                if (stage.equals(row.get("node_type"))) {
+                    int hour = ((Number) row.get("hour")).intValue();
+                    hourDataMap.put(hour, row);
+                }
+            }
+            
+            List<Map<String, Object>> trendData = new ArrayList<>();
+            long sumAvg = 0, sumMax = 0, sumMin = 0, sumCount = 0;
+            boolean hasData = false;
+            
+            for (int h = 0; h < 24; h++) {
+                Map<String, Object> trend = new LinkedHashMap<>();
+                trend.put("label", String.format("%02d:00", h));
+                
+                Map<String, Object> rowData = hourDataMap.get(h);
+                if (rowData != null) {
+                    long avg = ((Number) rowData.get("avg_duration")).longValue();
+                    long max = ((Number) rowData.get("max_duration")).longValue();
+                    long min = ((Number) rowData.get("min_duration")).longValue();
+                    long count = ((Number) rowData.get("count")).longValue();
+                    
+                    trend.put("avgDurationMs", avg);
+                    trend.put("maxDurationMs", max);
+                    trend.put("minDurationMs", min);
+                    trend.put("count", count);
+                    
+                    sumAvg += avg * count;
+                    sumMax = Math.max(sumMax, max);
+                    sumMin = hasData ? Math.min(sumMin, min) : min;
+                    sumCount += count;
+                    hasData = true;
+                } else {
+                    trend.put("avgDurationMs", 0L);
+                    trend.put("maxDurationMs", 0L);
+                    trend.put("minDurationMs", 0L);
+                    trend.put("count", 0L);
+                }
+                trendData.add(trend);
+            }
+            
+            stageData.put("trendData", trendData);
+            stageData.put("granularity", "hour");
+            stageData.put("avgDurationMs", sumCount > 0 ? sumAvg / sumCount : 0L);
+            stageData.put("maxDurationMs", sumMax);
+            stageData.put("minDurationMs", sumMin);
+            stageData.put("totalCalls", sumCount);
+            
+            stageTrends.add(stageData);
+        }
+        
+        return Map.of("date", date.toString(), "granularity", "hour", "stages", stageTrends);
+    }
+
+    private Map<String, Object> getStageLatencyByDay(LocalDate start, LocalDate end, String[] allStages, Map<String, String> stageNames, Long userId) {
+        String userJoin = userId != null
+                ? " JOIN t_rag_trace_run r ON n.trace_id = r.trace_id JOIN t_conversation c ON r.conversation_id = c.id "
+                : "";
+        String userFilter = userId != null ? " AND c.user_id = ? " : "";
+        String sql = "SELECT " +
+            "n.node_type, DATE(n.create_time) as date, " +
+            "AVG(n.duration_ms) as avg_duration, " +
+            "MAX(n.duration_ms) as max_duration, " +
+            "MIN(n.duration_ms) as min_duration, " +
+            "COUNT(*) as count " +
+            "FROM t_rag_trace_node n " + userJoin +
+            "WHERE n.status = 'SUCCESS' AND n.deleted = 0 " +
+            "AND DATE(n.create_time) >= ?::date AND DATE(n.create_time) <= ?::date " + userFilter +
+            "GROUP BY n.node_type, DATE(n.create_time) " +
+            "ORDER BY date ASC, n.node_type ASC";
+
+        List<Map<String, Object>> rows = userId != null
+                ? jdbcTemplate.queryForList(sql, start, end, userId)
+                : jdbcTemplate.queryForList(sql, start, end);
+        
+        List<Map<String, Object>> stageTrends = new ArrayList<>();
+        long totalDays = java.time.temporal.ChronoUnit.DAYS.between(start, end) + 1;
+        
+        for (String stage : allStages) {
+            Map<String, Object> stageData = new LinkedHashMap<>();
+            stageData.put("nodeType", stage);
+            stageData.put("displayName", stageNames.get(stage));
+            
+            Map<String, Map<String, Object>> dateDataMap = new LinkedHashMap<>();
+            for (Map<String, Object> row : rows) {
+                if (stage.equals(row.get("node_type"))) {
+                    String dateStr = row.get("date").toString();
+                    dateDataMap.put(dateStr, row);
+                }
+            }
+            
+            List<Map<String, Object>> trendData = new ArrayList<>();
+            long sumAvg = 0, sumMax = 0, sumMin = 0, sumCount = 0;
+            boolean hasData = false;
+            
+            for (int i = 0; i < totalDays; i++) {
+                LocalDate d = start.plusDays(i);
+                String dateStr = d.toString();
+                
+                Map<String, Object> trend = new LinkedHashMap<>();
+                trend.put("label", dateStr);
+                
+                Map<String, Object> rowData = dateDataMap.get(dateStr);
+                if (rowData != null) {
+                    long avg = ((Number) rowData.get("avg_duration")).longValue();
+                    long max = ((Number) rowData.get("max_duration")).longValue();
+                    long min = ((Number) rowData.get("min_duration")).longValue();
+                    long count = ((Number) rowData.get("count")).longValue();
+                    
+                    trend.put("avgDurationMs", avg);
+                    trend.put("maxDurationMs", max);
+                    trend.put("minDurationMs", min);
+                    trend.put("count", count);
+                    
+                    sumAvg += avg * count;
+                    sumMax = Math.max(sumMax, max);
+                    sumMin = hasData ? Math.min(sumMin, min) : min;
+                    sumCount += count;
+                    hasData = true;
+                } else {
+                    trend.put("avgDurationMs", 0L);
+                    trend.put("maxDurationMs", 0L);
+                    trend.put("minDurationMs", 0L);
+                    trend.put("count", 0L);
+                }
+                trendData.add(trend);
+            }
+            
+            stageData.put("trendData", trendData);
+            stageData.put("granularity", "day");
+            stageData.put("avgDurationMs", sumCount > 0 ? sumAvg / sumCount : 0L);
+            stageData.put("maxDurationMs", sumMax);
+            stageData.put("minDurationMs", sumMin);
+            stageData.put("totalCalls", sumCount);
+            
+            stageTrends.add(stageData);
+        }
+        
+        return Map.of("startDate", start.toString(), "endDate", end.toString(),
+                      "days", (int) totalDays, "granularity", "day", "stages", stageTrends);
+    }
+
+    @Override
+    public List<Map<String, Object>> getUserList() {
+        try {
+            String sql = "SELECT id, username, nickname FROM t_user WHERE deleted = 0 ORDER BY id";
+            return jdbcTemplate.queryForList(sql);
+        } catch (Exception e) {
+            log.error("查询用户列表失败：", e);
+            return List.of();
+        }
+    }
+
+    @Override
+    public Map<String, Object> getKbStats(Long userId) {
+        try {
+            // userId 非空时只统计该用户名下（owner_id）的知识库
+            String kbScope = userId != null ? " AND owner_id = ? " : "";
+            String sql = "SELECT " +
+                    "(SELECT COUNT(*) FROM t_knowledge_base WHERE deleted = 0" + kbScope + ") as kb_count, " +
+                    "(SELECT COUNT(*) FROM t_knowledge_document d WHERE d.deleted = 0 AND d.kb_id IN " +
+                    "   (SELECT id FROM t_knowledge_base WHERE deleted = 0" + kbScope + ")) as doc_count, " +
+                    "(SELECT COALESCE(SUM(d.file_size), 0) FROM t_knowledge_document d WHERE d.deleted = 0 AND d.kb_id IN " +
+                    "   (SELECT id FROM t_knowledge_base WHERE deleted = 0" + kbScope + ")) as total_size_bytes, " +
+                    "(SELECT COALESCE(SUM(l.chunks_count), 0) FROM t_ingestion_log l WHERE l.stage = 'chunk' AND l.kb_id IN " +
+                    "   (SELECT id FROM t_knowledge_base WHERE deleted = 0" + kbScope + ")) as total_chunks";
+
+            Map<String, Object> row = userId != null
+                    ? jdbcTemplate.queryForMap(sql, userId, userId, userId, userId)
+                    : jdbcTemplate.queryForMap(sql);
+
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("kbCount", ((Number) row.getOrDefault("kb_count", 0L)).longValue());
+            result.put("docCount", ((Number) row.getOrDefault("doc_count", 0L)).longValue());
+            result.put("totalChunks", ((Number) row.getOrDefault("total_chunks", 0L)).longValue());
+            long totalSizeBytes = ((Number) row.getOrDefault("total_size_bytes", 0L)).longValue();
+            result.put("totalSizeBytes", totalSizeBytes);
+            result.put("totalSizeMb", Math.round(totalSizeBytes / 1024.0 / 1024.0 * 100.0) / 100.0);
+            return result;
+        } catch (Exception e) {
+            log.error("查询知识库统计失败：", e);
+            return Map.of("kbCount", 0L, "docCount", 0L, "totalChunks", 0L, "totalSizeBytes", 0L, "totalSizeMb", 0.0);
+        }
+    }
+
+    @Override
+    public Map<String, Object> getTraceDetails(String keyword, LocalDate start, LocalDate end, int page, int pageSize, Long userId) {        try {
+            // 构建查询条件
+            StringBuilder whereClause = new StringBuilder();
+            List<Object> params = new ArrayList<>();
+
+            whereClause.append("r.deleted = 0 ");
+            whereClause.append("AND DATE(r.create_time) >= ?::date ");
+            whereClause.append("AND DATE(r.create_time) <= ?::date ");
+            params.add(start);
+            params.add(end);
+
+            // 按用户过滤（全链路详情用户下拉）
+            if (userId != null) {
+                whereClause.append("AND c.user_id = ? ");
+                params.add(userId);
+            }
+
+            if (keyword != null && !keyword.trim().isEmpty()) {
+                whereClause.append("AND (u.username ILIKE ? OR u.nickname ILIKE ?) ");
+                String kw = "%" + keyword.trim() + "%";
+                params.add(kw);
+                params.add(kw);
+            }
+            
+            // 查询总数
+            String countSql = "SELECT COUNT(*) FROM t_rag_trace_run r " +
+                             "LEFT JOIN t_conversation c ON r.conversation_id = c.id " +
+                             "LEFT JOIN t_user u ON c.user_id = u.id " +
+                             "WHERE " + whereClause;
+            Integer total = jdbcTemplate.queryForObject(countSql, Integer.class, params.toArray());
+            
+            // 查询分页数据
+            String sql = "SELECT r.id, r.trace_id, r.conversation_id, r.original_prompt, " +
+                        "r.status, r.duration_ms, r.create_time, " +
+                        "c.user_id, u.username, u.nickname " +
+                        "FROM t_rag_trace_run r " +
+                        "LEFT JOIN t_conversation c ON r.conversation_id = c.id " +
+                        "LEFT JOIN t_user u ON c.user_id = u.id " +
+                        "WHERE " + whereClause +
+                        "ORDER BY r.create_time DESC " +
+                        "LIMIT ? OFFSET ?";
+            
+            params.add(pageSize);
+            params.add((page - 1) * pageSize);
+            
+            List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, params.toArray());
+            
+            // 构建响应
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("total", total != null ? total : 0);
+            result.put("page", page);
+            result.put("pageSize", pageSize);
+            result.put("data", rows);
+            
+            return result;
+        } catch (Exception e) {
+            log.error("查询链路详情失败：", e);
+            return Map.of("total", 0, "page", page, "pageSize", pageSize, "data", List.of());
+        }
+    }
+
+    @Override
+    public Map<String, Object> getTraceDetailByTraceId(String traceId) {
+        try {
+            // 查询 run 信息
+            String runSql = "SELECT r.id, r.trace_id, r.conversation_id, r.original_prompt, " +
+                           "r.status, r.duration_ms, r.create_time, " +
+                           "c.user_id, u.username, u.nickname " +
+                           "FROM t_rag_trace_run r " +
+                           "LEFT JOIN t_conversation c ON r.conversation_id = c.id " +
+                           "LEFT JOIN t_user u ON c.user_id = u.id " +
+                           "WHERE r.trace_id = ? AND r.deleted = 0";
+            
+            List<Map<String, Object>> runs = jdbcTemplate.queryForList(runSql, traceId);
+            if (runs.isEmpty()) {
+                return Map.of("found", false, "message", "链路不存在");
+            }
+            
+            Map<String, Object> run = runs.get(0);
+            
+            // 查询节点信息
+            String nodeSql = "SELECT id, node_id, node_name, node_type, status, duration_ms, " +
+                            "input_data, output_data, error_message, prompt_tokens, completion_tokens " +
+                            "FROM t_rag_trace_node " +
+                            "WHERE trace_id = ? AND deleted = 0 " +
+                            "ORDER BY start_time ASC";
+            
+            List<Map<String, Object>> nodes = jdbcTemplate.queryForList(nodeSql, traceId);
+            run.put("nodes", nodes);
+            
+            return Map.of("found", true, "data", run);
+        } catch (Exception e) {
+            log.error("查询链路详情失败：", e);
+            return Map.of("found", false, "message", "查询失败");
         }
     }
 }

@@ -60,10 +60,28 @@ public class AuthClientInterceptor implements HandlerInterceptor {
                         TenantContextHolder.setUserId(userId);
                         log.debug("设置用户上下文: userId={}", userId);
                     }
+                    // 3. 提取页面权限列表 [{pageCode, accessLevel}] → Map<pageCode, accessLevel>
+                    Object pagePermissions = data.get("pagePermissions");
+                    if (pagePermissions instanceof java.util.List<?> list) {
+                        Map<String, String> permMap = new java.util.HashMap<>();
+                        for (Object item : list) {
+                            if (item instanceof Map<?, ?> m
+                                    && m.get("pageCode") != null && m.get("accessLevel") != null) {
+                                permMap.put(String.valueOf(m.get("pageCode")), String.valueOf(m.get("accessLevel")));
+                            }
+                        }
+                        TenantContextHolder.setPagePermissions(permMap);
+                    }
                 }
+
+                return true;
             }
 
-            return true;
+            // /me 返回非 0（token 无效或 auth-service 异常）：拒绝请求，
+            // 不能放行——放行会导致后续业务在没有用户上下文的情况下写入数据（如无归属的对话）
+            log.warn("Token 验证返回非 0 code，拒绝请求: {}", result != null ? result.get("code") : "null");
+            response.setStatus(401);
+            return false;
         } catch (Exception e) {
             log.warn("Token 验证失败: {}", e.getMessage());
             response.setStatus(401);

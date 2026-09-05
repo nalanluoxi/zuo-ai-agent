@@ -26,6 +26,11 @@ public interface KnowledgeBaseService {
     /** 分页查询知识库列表 */
     IPage<KnowledgeBaseVO> page(KnowledgeBasePageRequest request);
 
+    /**
+     * 知识库访问校验：PUBLIC 全员可见；PRIVATE 仅创建者；TEAM 限同租户；无权限抛 403
+     */
+    void checkKbAccess(Long kbId);
+
     void disable(Long id);
     void enable(Long id);
     IPage<KnowledgeBaseVO> search(String keyword, KnowledgeBasePageRequest request);

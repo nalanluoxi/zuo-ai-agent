@@ -5,6 +5,7 @@ import com.example.zuoaiagent.common.ResultUtils;
 import com.example.zuoaiagent.exception.BusinessException;
 import com.example.zuoaiagent.exception.ErrorCode;
 import com.example.zuoaiagent.monitor.service.DbMonitorService;
+import com.example.zuoaiagent.monitor.support.TrendRangeSupport;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -22,48 +23,57 @@ public class DbMonitorController {
     private final DbMonitorService dbMonitorService;
 
     /**
-     * P26：获取数据库 QPS 趋势
-     * @param days 统计天数（7/30）
+     * 获取数据库 QPS 趋势（事务数增量）
+     * @param period day(当天按小时)/week(近7天)/month(当月)/custom(自定义范围)，兼容旧 days 参数
+     * @param startDate custom 时必填，yyyy-MM-dd
+     * @param endDate custom 时必填，yyyy-MM-dd
+     * @param days 旧版参数（7/30），period 为空时生效
      */
     @GetMapping("/qps-trend")
     public BaseResponse<Map<String, Object>> getQpsTrend(
-            @RequestParam(defaultValue = "7") int days) {
-        
-        if (days != 7 && days != 30) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "天数只能选择 7 或 30");
-        }
-        
-        return ResultUtils.success(dbMonitorService.getQpsTrend(days));
+            @RequestParam(required = false) String period,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate,
+            @RequestParam(required = false) Integer days) {
+
+        return ResultUtils.success(dbMonitorService.getQpsTrend(
+                TrendRangeSupport.normalizePeriod(period, days), startDate, endDate));
     }
 
     /**
-     * P26：获取数据库访问流量趋势
-     * @param days 统计天数（7/30）
+     * 获取数据库访问流量趋势（读/写增量）
+     * @param period day(当天按小时)/week(近7天)/month(当月)/custom(自定义范围)，兼容旧 days 参数
+     * @param startDate custom 时必填，yyyy-MM-dd
+     * @param endDate custom 时必填，yyyy-MM-dd
+     * @param days 旧版参数（7/30），period 为空时生效
      */
     @GetMapping("/access-trend")
     public BaseResponse<Map<String, Object>> getAccessTrend(
-            @RequestParam(defaultValue = "7") int days) {
-        
-        if (days != 7 && days != 30) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "天数只能选择 7 或 30");
-        }
-        
-        return ResultUtils.success(dbMonitorService.getAccessTrend(days));
+            @RequestParam(required = false) String period,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate,
+            @RequestParam(required = false) Integer days) {
+
+        return ResultUtils.success(dbMonitorService.getAccessTrend(
+                TrendRangeSupport.normalizePeriod(period, days), startDate, endDate));
     }
 
     /**
-     * P26：获取表空间趋势
-     * @param days 统计天数（7/30）
+     * 获取表空间趋势
+     * @param period day(当天按小时)/week(近7天)/month(当月)/custom(自定义范围)，兼容旧 days 参数
+     * @param startDate custom 时必填，yyyy-MM-dd
+     * @param endDate custom 时必填，yyyy-MM-dd
+     * @param days 旧版参数（7/30），period 为空时生效
      */
     @GetMapping("/tablespace-trend")
     public BaseResponse<Map<String, Object>> getTablespaceTrend(
-            @RequestParam(defaultValue = "7") int days) {
-        
-        if (days != 7 && days != 30) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "天数只能选择 7 或 30");
-        }
-        
-        return ResultUtils.success(dbMonitorService.getTablespaceTrend(days));
+            @RequestParam(required = false) String period,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate,
+            @RequestParam(required = false) Integer days) {
+
+        return ResultUtils.success(dbMonitorService.getTablespaceTrend(
+                TrendRangeSupport.normalizePeriod(period, days), startDate, endDate));
     }
 
     /**

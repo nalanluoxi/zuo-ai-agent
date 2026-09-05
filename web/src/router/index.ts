@@ -18,6 +18,7 @@ import LogsPage from '../views/monitor/LogsPage.vue'
 import AdminDashboardPage from '../views/manage/AdminDashboardPage.vue'
 import TenantPage from '../views/manage/TenantPage.vue'
 import ApprovalsPage from '../views/manage/ApprovalsPage.vue'
+import TraceDetailPage from '../views/manage/TraceDetailPage.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -39,53 +40,59 @@ const router = createRouter({
             {
               path: '',
               component: ChatPage,
-              meta: { 
+              meta: {
                 requiresLogin: true,
-                title: '对话聊天'
+                title: '对话聊天',
+                page: 'chat'
               }
             },
             {
               path: 'knowledge',
               component: KnowledgeListPage,
-              meta: { 
+              meta: {
                 requiresLogin: true,
-                title: '知识库'
+                title: '知识库',
+                page: 'knowledge'
               }
             },
             {
               path: 'knowledge/:id',
               component: () => import('../views/knowledge/KnowledgeDetailPage.vue'),
-              meta: { 
+              meta: {
                 requiresLogin: true,
-                title: '知识库详情'
+                title: '知识库详情',
+                page: 'knowledge'
               }
             },
             {
               path: 'intent',
               component: IntentManagePage,
-              meta: { 
+              meta: {
                 requiresLogin: true,
-                title: '意图管理'
+                title: '意图管理',
+                page: 'intent'
               }
             },
             {
               path: 'dashboard',
               component: DashboardPage,
-              meta: { 
+              meta: {
                 requiresLogin: true,
-                title: '个人看板'
+                title: '个人看板',
+                page: 'dashboard'
               }
             }
           ]
         },
 
-        // 监控模块（无 Sidebar）
+        // 监控模块（无 Sidebar）- 需要 SUPER_ADMIN 权限
         {
           path: 'monitor/redis',
           component: RedisMonitorPage,
           meta: { 
             requiresLogin: true,
-            title: 'Redis 监控'
+            title: 'Redis 监控',
+            page: 'monitor:redis'
           }
         },
         {
@@ -93,7 +100,8 @@ const router = createRouter({
           component: DbMonitorPage,
           meta: { 
             requiresLogin: true,
-            title: 'DB 监控'
+            title: 'DB 监控',
+            page: 'monitor:db'
           }
         },
         {
@@ -101,17 +109,28 @@ const router = createRouter({
           component: LogsPage,
           meta: { 
             requiresLogin: true,
-            title: '日志系统'
+            title: '日志系统',
+            page: 'monitor:logs'
           }
         },
 
-        // 管理模块
+        // 管理模块 - 部分需要 SUPER_ADMIN 权限
         {
           path: 'manage/dashboard',
           component: AdminDashboardPage,
-          meta: { 
+          meta: {
             requiresLogin: true,
-            title: '全局看板'
+            title: '全局看板',
+            page: 'manage:dashboard'
+          }
+        },
+        {
+          path: 'manage/trace/:traceId',
+          component: TraceDetailPage,
+          meta: {
+            requiresLogin: true,
+            title: '链路详情',
+            page: 'manage:trace'
           }
         },
         {
@@ -119,7 +138,8 @@ const router = createRouter({
           component: TenantPage,
           meta: { 
             requiresLogin: true,
-            title: '租户管理'
+            title: '租户管理',
+            page: 'manage:tenants'
           }
         },
         {
@@ -127,7 +147,8 @@ const router = createRouter({
           component: ApprovalsPage,
           meta: { 
             requiresLogin: true,
-            title: '审批中心'
+            title: '审批中心',
+            page: 'manage:approvals'
           }
         }
       ]

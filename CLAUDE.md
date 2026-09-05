@@ -109,3 +109,18 @@ src/test/
 ## Notes
 
 - The `springdoc` config in `application.yaml` references `com.yupi.zuoaiagent.controller` (mismatched package name) — the actual controller package is `com.example.zuoaiagent.controller`. Fix this if adding more controllers and expecting them to appear in Swagger.
+
+## 页面级权限系统（2026-09 新增）
+
+- 页面清单注册在 `t_permission`（`resource_type='PAGE'`，perm_code 如 `monitor:redis`）；角色-页面权限存 `t_role_permission.access_level`（READ/WRITE/ADMIN）。
+- auth-service `/me` 返回 `pagePermissions`；注册自动分配 `USER` 角色；SUPER_ADMIN 全量放行。
+- 主服务 `PagePermissionInterceptor` 按路径前缀校验（`/admin/**`→manage:dashboard、`/monitor/redis|db/**`→对应页面），GET 需 READ、写需 WRITE，无权限返回 403。
+- 前端路由用 `meta.page`（不再是 `meta.permission`）；`MainLayout` 菜单全量显示，无 READ 权限显示空状态；配置入口在「租户管理 → 角色权限」tab。
+- SQL 变更均为手动迁移文件（`*/src/main/resources/sql/phase*.sql`），新增表/列需新建 phase 文件并由人工执行。
+
+## 组织模型（2026-09 切换）
+
+- 已从"每人注册一个租户"切换为**统一默认组织（tenant_id=1）**：注册即加入，不再新建租户。
+- 组织架构（t_team）**全局可见**，不按租户过滤；部门成员管理规则：页面 ADMIN 可管所有部门，页面 WRITE 必须是该部门负责人。
+- 知识库可见性：PRIVATE 按 owner 隔离；PUBLIC 全局可见；TEAM 同租户（=同组织）共享。
+- auth-service 与主服务的 ID 全部 Jackson Long→String 序列化（雪花 id 防 JS 精度丢失），前端 id 一律按字符串处理。
