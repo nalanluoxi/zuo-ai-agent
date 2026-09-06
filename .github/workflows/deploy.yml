@@ -25,6 +25,7 @@ jobs:
     name: Build & Push Images
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         service:
           - name: zuo-ai-agent
@@ -65,6 +66,8 @@ jobs:
           context: ${{ matrix.service.context }}
           file: ${{ matrix.service.dockerfile }}
           push: true
+          provenance: false
+          sbom: false
           tags: |
             ${{ env.ACR_REGISTRY }}/${{ env.ACR_NAMESPACE }}/${{ env.APP_PREFIX }}-${{ matrix.service.name }}:${{ env.TAG }}
             ${{ env.ACR_REGISTRY }}/${{ env.ACR_NAMESPACE }}/${{ env.APP_PREFIX }}-${{ matrix.service.name }}:${{ github.sha }}
