@@ -14,6 +14,7 @@ import reactor.core.publisher.Flux;
 @Slf4j
 public class MyLoggerAdvisor implements CallAdvisor, StreamAdvisor {
 
+
     //针对于非流式处理
     @Override
     public ChatClientResponse adviseCall(ChatClientRequest chatClientRequest, CallAdvisorChain chain) {
