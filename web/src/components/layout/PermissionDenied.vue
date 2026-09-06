@@ -17,6 +17,8 @@ import { useAuthStore } from '../../stores/auth'
 import { ElMessage } from 'element-plus'
 
 const props = defineProps<{ page: string }>()
+// TODO: page prop 预留，后续接入权限跳转逻辑
+void props
 const auth = useAuthStore()
 const userRole = computed(() => auth.userInfo?.roles?.join(',') || '普通用户')
 
