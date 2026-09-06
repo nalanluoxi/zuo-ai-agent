@@ -48,6 +48,58 @@ check_prerequisites() {
 }
 
 # ============================================
+# 初始化 Ollama 模型
+# ============================================
+init_ollama_models() {
+    section "初始化 Ollama 模型"
+    
+    local ollama_container="zuo-ollama"
+    local models=("qwen2.5:7b" "dengcao/Qwen3-Embedding-8B:F16")
+    
+    # 检查 Ollama 容器是否运行
+    if ! docker ps --format '{{.Names}}' | grep -q "^${ollama_container}$"; then
+        warn "Ollama 容器未运行，跳过模型初始化"
+        return 0
+    fi
+    
+    # 等待 Ollama 服务就绪
+    info "等待 Ollama 服务就绪..."
+    local retries=0
+    while [ $retries -lt 30 ]; do
+        if docker exec "$ollama_container" ollama list &>/dev/null; then
+            info "Ollama 服务就绪 ✅"
+            break
+        fi
+        sleep 2
+        ((retries++))
+    done
+    
+    if [ $retries -eq 30 ]; then
+        warn "Ollama 服务启动超时，跳过模型初始化"
+        return 0
+    fi
+    
+    # 检查并拉取模型
+    for model in "${models[@]}"; do
+        if docker exec "$ollama_container" ollama list 2>/dev/null | grep -qF "$model"; then
+            info "模型 $model 已存在 ✅"
+        else
+            info "正在拉取模型 $model ..."
+            if docker exec "$ollama_container" ollama pull "$model"; then
+                info "模型 $model 拉取成功 ✅"
+            else
+                warn "模型 $model 拉取失败 ❌（可稍后手动执行: docker exec $ollama_container ollama pull $model）"
+            fi
+        fi
+    done
+    
+    # 显示当前模型列表
+    echo ""
+    info "当前 Ollama 模型列表："
+    docker exec "$ollama_container" ollama list
+}
+
+# ============================================
 # 1. 启动所有服务
 # ============================================
 start() {
@@ -60,6 +112,9 @@ start() {
 
     info "等待服务启动..."
     sleep 5
+    
+    # 初始化 Ollama 模型
+    init_ollama_models
 
     status
 }
@@ -102,6 +157,9 @@ update() {
 
     # 清理悬空镜像
     docker image prune -f
+
+    # 初始化 Ollama 模型
+    init_ollama_models
 
     info "更新完成"
     status
