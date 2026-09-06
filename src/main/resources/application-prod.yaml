@@ -31,7 +31,15 @@ spring:
         options:
           model: netease-youdao/bce-embedding-base_v1
     ollama:
-      enabled: false  # 生产环境不启用本地 Ollama
+      base-url: ${OLLAMA_HOST:http://localhost:11434}
+      chat:
+        enabled: true
+        options:
+          model: qwen2.5:7b
+      embedding:
+        enabled: true
+        options:
+          model: dengcao/Qwen3-Embedding-8B:F16
   rabbitmq:
     host: ${RABBITMQ_HOST:localhost}
     port: ${RABBITMQ_PORT:5672}

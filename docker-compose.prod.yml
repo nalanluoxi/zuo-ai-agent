@@ -71,6 +71,23 @@ services:
     networks:
       - zuo-network
 
+  ollama:
+    image: ollama/ollama:latest
+    container_name: zuo-ollama
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:11434:11434"
+    volumes:
+      - /opt/zuo-ai-agent/data/ollama:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:11434/api/tags || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - zuo-network
+
   # ============================================
   # 后端服务
   # ============================================
@@ -127,6 +144,7 @@ services:
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
       DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY}
       SILICONFLOW_API_KEY: ${SILICONFLOW_API_KEY}
+      OLLAMA_HOST: http://ollama:11434
     ports:
       - "127.0.0.1:8123:8123"
     depends_on:
@@ -137,6 +155,8 @@ services:
       rabbitmq:
         condition: service_healthy
       auth-service:
+        condition: service_healthy
+      ollama:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8123/api/health || exit 1"]
