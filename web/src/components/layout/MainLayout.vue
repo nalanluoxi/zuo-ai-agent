@@ -36,6 +36,10 @@
               <el-icon><Document /></el-icon>
               <span>日志系统</span>
             </div>
+            <div class="menu-item" @click="navigateTo('/manage/rag-lab')">
+              <el-icon><Setting /></el-icon>
+              <span>RAG 实验室</span>
+            </div>
             <div class="menu-item" @click="navigateTo('/manage/approvals')">
               <el-icon><DocumentChecked /></el-icon>
               <span>审批中心</span>

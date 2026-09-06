@@ -3,6 +3,7 @@ package com.example.zuoaiagent.intent.service;
 import com.example.zuoaiagent.chat.RoutingChatService;
 import com.example.zuoaiagent.intent.entity.IntentNodeDO;
 import com.example.zuoaiagent.intent.model.IntentResult;
+import com.example.zuoaiagent.log.LogTransaction;
 import com.example.zuoaiagent.prompt.PromptTemplateLoader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,7 +31,14 @@ public class IntentClassifier {
         this.templateLoader = templateLoader;
     }
 
-    public IntentResult classify(String query) {
+    /**
+     * 意图分类（使用 DB 配置中的置信度）。
+     *
+     * @param query           查询文本
+     * @param highConfidence  高置信度阈值（从 DB 配置读取）
+     */
+    @LogTransaction(name = "意图识别", eventType = "INTENT_CLASSIFY")
+    public IntentResult classify(String query, double highConfidence) {
         if (query == null || query.isBlank()) {
             return IntentResult.unknown();
         }
@@ -71,7 +79,7 @@ public class IntentClassifier {
                 return IntentResult.system(nodeId, node.getLabel());
             }
 
-            IntentResult result = new IntentResult(nodeId, node.getLabel(), HIGH_CONFIDENCE, false, node.getKbId());
+            IntentResult result = new IntentResult(nodeId, node.getLabel(), highConfidence, false, node.getKbId());
             log.debug("[IntentClassifier] 分类结果: {}, query={}", result, query);
             return result;
 
@@ -82,5 +90,12 @@ public class IntentClassifier {
             log.warn("[IntentClassifier] 分类异常，降级为 unknown。原因: {}", e.getMessage());
             return IntentResult.unknown();
         }
+    }
+
+    /**
+     * 意图分类（使用默认高置信度 0.85）。
+     */
+    public IntentResult classify(String query) {
+        return classify(query, HIGH_CONFIDENCE);
     }
 }

@@ -28,6 +28,14 @@ public interface RagTraceRecordService {
     void startRun(String traceId, String conversationId, String originalPrompt);
 
     /**
+     * 设置灰度标签（异步更新已插入的 run 记录）。
+     *
+     * @param traceId 链路 ID
+     * @param grayTag 灰度标签（BASELINE/TAG_A/TAG_B）
+     */
+    void setGrayTag(String traceId, String grayTag);
+
+    /**
      * 流水线结束，更新 run 记录（status=SUCCESS/ERROR，填写耗时）。
      *
      * @param traceId      链路 ID

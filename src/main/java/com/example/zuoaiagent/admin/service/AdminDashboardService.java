@@ -92,8 +92,9 @@ public interface AdminDashboardService {
      * @param end 结束日期（含）
      * @param page 页码（从1开始）
      * @param pageSize 每页大小
+     * @param grayTag 灰度标签过滤（可选：BASELINE/TAG_A/TAG_B）
      */
-    Map<String, Object> getTraceDetails(String keyword, LocalDate start, LocalDate end, int page, int pageSize, Long userId);
+    Map<String, Object> getTraceDetails(String keyword, LocalDate start, LocalDate end, int page, int pageSize, Long userId, String grayTag);
 
     /**
      * 知识库统计（全局看板）：知识库数/文档数/分块总数/总大小

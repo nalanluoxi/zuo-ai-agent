@@ -45,6 +45,9 @@ public class RagTraceRunDO {
     /** 总耗时（毫秒） */
     private Long durationMs;
 
+    /** 灰度标签：BASELINE / TAG_A / TAG_B */
+    private String grayTag;
+
     @TableField(fill = FieldFill.INSERT)
     private Date createTime;
 
@@ -82,6 +85,9 @@ public class RagTraceRunDO {
 
     public Long getDurationMs() { return durationMs; }
     public void setDurationMs(Long durationMs) { this.durationMs = durationMs; }
+
+    public String getGrayTag() { return grayTag; }
+    public void setGrayTag(String grayTag) { this.grayTag = grayTag; }
 
     public Date getCreateTime() { return createTime; }
     public void setCreateTime(Date createTime) { this.createTime = createTime; }

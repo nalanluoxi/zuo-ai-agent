@@ -38,6 +38,18 @@ public class LogCollectService {
                 appLog.setStackTrace((String) entry.getOrDefault("stackTrace", null));
                 appLog.setLogTs(LocalDateTime.now());
                 appLog.setCreateTime(LocalDateTime.now());
+
+                // Phase 4: CAT 风格扩展字段
+                appLog.setLogType((String) entry.getOrDefault("logType", "normal"));
+                appLog.setSpanId((String) entry.getOrDefault("spanId", null));
+                appLog.setParentTraceId((String) entry.getOrDefault("parentTraceId", null));
+                appLog.setEventType((String) entry.getOrDefault("eventType", null));
+                Object nodeIdObj = entry.get("nodeId");
+                if (nodeIdObj instanceof Number) {
+                    appLog.setNodeId(((Number) nodeIdObj).longValue());
+                }
+                appLog.setMetadata((String) entry.getOrDefault("metadata", null));
+
                 appLogMapper.insert(appLog);
             }
             log.debug("批量收集日志 {} 条", batch.size());

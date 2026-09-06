@@ -279,6 +279,7 @@ public class AdminDashboardController {
      * @param endDate 自定义结束日期（period=custom 时必填）
      * @param page 页码（从1开始）
      * @param pageSize 每页大小
+     * @param grayTag 灰度标签过滤（可选：BASELINE/TAG_A/TAG_B）
      */
     @GetMapping("/trace-details")
     public BaseResponse<Map<String, Object>> getTraceDetails(
@@ -288,10 +289,11 @@ public class AdminDashboardController {
             @RequestParam(required = false) String endDate,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int pageSize,
-            @RequestParam(required = false) Long userId) {
+            @RequestParam(required = false) Long userId,
+            @RequestParam(required = false) String grayTag) {
         DateRange range = parseRange(period, startDate, endDate);
         return ResultUtils.success(adminDashboardService.getTraceDetails(
-                keyword, range.start(), range.end(), page, pageSize, userId));
+                keyword, range.start(), range.end(), page, pageSize, userId, grayTag));
     }
 
     /**

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <!-- 控制台输出 -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- 日志监控 Appender（异步批量发送到 log-monitor-service） -->
+    <appender name="LOG_MONITOR" class="com.example.zuoaiagent.log.LogMonitorAppender">
+        <serviceName>zuo-ai-agent</serviceName>
+        <logMonitorUrl>http://localhost:8200/api/log/collect</logMonitorUrl>
+        <batchSize>100</batchSize>
+        <flushIntervalSeconds>3</flushIntervalSeconds>
+        <queueSize>10000</queueSize>
+    </appender>
+
+    <!-- 开发环境：只输出到控制台 -->
+    <springProfile name="dev">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE" />
+        </root>
+    </springProfile>
+
+    <!-- 默认/生产环境：同时输出到控制台和日志监控 -->
+    <springProfile name="default,prod">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE" />
+            <appender-ref ref="LOG_MONITOR" />
+        </root>
+    </springProfile>
+
+    <!-- 无 spring profile 时：默认同时输出 -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE" />
+        <appender-ref ref="LOG_MONITOR" />
+    </root>
+
+</configuration>

@@ -1,6 +1,7 @@
 package com.example.zuoaiagent.rag;
 
 import com.example.zuoaiagent.chat.RoutingChatService;
+import com.example.zuoaiagent.log.LogTransaction;
 import com.example.zuoaiagent.prompt.PromptTemplateLoader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,6 +25,7 @@ public class QueryRewriter {
         this.templateLoader = templateLoader;
     }
 
+    @LogTransaction(name = "查询改写", eventType = "REWRITE")
     public String rewrite(String query) {
         if (query == null || query.isBlank()) {
             return query;

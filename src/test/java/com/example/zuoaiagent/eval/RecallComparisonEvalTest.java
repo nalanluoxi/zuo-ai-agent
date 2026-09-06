@@ -130,7 +130,7 @@ class RecallComparisonEvalTest {
         int hitCount = 0;
 
         for (EvalCase c : EVAL_SET) {
-            List<Document> docs = multiChannelRetriever.retrieve(c.query(), c.kbId(), TOP_K);
+            List<Document> docs = multiChannelRetriever.retrieve(c.query(), c.kbId());
             boolean hit = isHit(docs, c.goldKeywords());
             hitCount += hit ? 1 : 0;
             System.out.printf("  %-40s → %s（合并 %d 个文档块）%n",
@@ -154,7 +154,7 @@ class RecallComparisonEvalTest {
         int hitCount = 0;
 
         for (EvalCase c : EVAL_SET) {
-            List<Document> retrieved = multiChannelRetriever.retrieve(c.query(), c.kbId(), TOP_K);
+            List<Document> retrieved = multiChannelRetriever.retrieve(c.query(), c.kbId());
             List<Document> reranked = documentReranker.rerank(c.query(), retrieved, RERANK_TOP_K);
             boolean hit = isHit(reranked, c.goldKeywords());
             hitCount += hit ? 1 : 0;
@@ -198,7 +198,7 @@ class RecallComparisonEvalTest {
             boolean pureOk = isHit(pureDocs, c.goldKeywords());
 
             // 双路
-            List<Document> dualDocs = multiChannelRetriever.retrieve(c.query(), c.kbId(), TOP_K);
+            List<Document> dualDocs = multiChannelRetriever.retrieve(c.query(), c.kbId());
             boolean dualOk = isHit(dualDocs, c.goldKeywords());
 
             // 双路 + Rerank

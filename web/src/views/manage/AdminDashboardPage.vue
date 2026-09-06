@@ -225,115 +225,6 @@
       <el-empty v-if="stageLatency.length === 0" description="暂无数据" />
     </el-card>
 
-    <!-- 全链路详情列表 -->
-    <el-card>
-      <template #header>
-        <div class="card-header">
-          <div class="header-top">
-            <div style="display:flex;align-items:center;gap:8px">
-              <span style="font-weight:bold">全链路详情</span>
-              <el-select
-                v-model="traceUserId"
-                placeholder="全部用户"
-                clearable
-                filterable
-                size="small"
-                style="width:140px"
-                @change="loadTraceDetails"
-              >
-                <el-option
-                  v-for="user in userList"
-                  :key="user.id"
-                  :label="user.nickname || user.username"
-                  :value="user.id"
-                />
-              </el-select>
-              <el-input 
-                v-model="traceSearchKeyword" 
-                placeholder="搜索用户名/昵称" 
-                clearable 
-                size="small" 
-                style="width:160px"
-                @keyup.enter="loadTraceDetails"
-                @clear="loadTraceDetails"
-              />
-            </div>
-            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-              <el-radio-group v-model="traceDetailPeriod" size="small" @change="handleTraceDetailPeriodChange">
-                <el-radio-button value="day">天</el-radio-button>
-                <el-radio-button value="week">近 7 天</el-radio-button>
-                <el-radio-button value="month">当月</el-radio-button>
-                <el-radio-button value="custom">自定义</el-radio-button>
-              </el-radio-group>
-              <el-date-picker
-                v-model="traceDetailDateRange"
-                type="daterange"
-                range-separator="至"
-                start-placeholder="开始日期"
-                end-placeholder="结束日期"
-                format="YYYY-MM-DD"
-                value-format="YYYY-MM-DD"
-                size="small"
-                style="width:240px"
-                @change="loadTraceDetails"
-              />
-              <el-button size="small" @click="loadTraceDetails">搜索</el-button>
-            </div>
-          </div>
-        </div>
-      </template>
-      <el-table :data="traceDetails" stripe row-key="traceId">
-        <el-table-column label="用户" width="150">
-          <template #default="{ row }">
-            <div>
-              <div v-if="row.nickname" style="font-weight:500">{{ row.nickname }}</div>
-              <div style="color:#666;font-size:12px">{{ row.username || '匿名用户' }}</div>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="原始问题" min-width="300">
-          <template #default="{ row }">
-            <el-button
-              v-if="row.originalPrompt"
-              type="primary"
-              link
-              class="prompt-link"
-              @click="showPromptDialog(row.originalPrompt)"
-            >
-              <span class="prompt-text">{{ row.originalPrompt }}</span>
-            </el-button>
-            <span v-else style="color:#999">无</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="createTime" label="发起时间" width="160" />
-        <el-table-column label="耗时(ms)" width="100">
-          <template #default="{ row }">{{ Math.round(row.durationMs || 0) }}</template>
-        </el-table-column>
-        <el-table-column prop="status" label="状态" width="80">
-          <template #default="{ row }">
-            <el-tag :type="row.status === 'SUCCESS' ? 'success' : row.status === 'ERROR' ? 'danger' : 'warning'" size="small">
-              {{ row.status }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="100" fixed="right">
-          <template #default="{ row }">
-            <el-button type="primary" size="small" link @click="goTraceDetail(row)">查看详情</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-      <div style="margin-top:16px;display:flex;justify-content:flex-end">
-        <el-pagination
-          v-model:current-page="traceDetailPage"
-          v-model:page-size="traceDetailPageSize"
-          :page-sizes="[10, 20, 50, 100]"
-          :total="traceDetailTotal"
-          layout="total, sizes, prev, pager, next, jumper"
-          @size-change="loadTraceDetails"
-          @current-change="loadTraceDetails"
-        />
-      </div>
-    </el-card>
 
     <!-- 知识库统计 -->
     <el-card class="mb">
@@ -453,6 +344,142 @@
       </el-col>
     </el-row>
 
+    <!-- 全链路详情列表（移到最底部） -->
+    <el-card>
+      <template #header>
+        <div class="card-header">
+          <div class="header-top">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="font-weight:bold">全链路详情</span>
+              <el-select
+                v-model="traceUserId"
+                placeholder="全部用户"
+                clearable
+                filterable
+                size="small"
+                style="width:140px"
+                @change="loadTraceDetails"
+              >
+                <el-option
+                  v-for="user in userList"
+                  :key="user.id"
+                  :label="user.nickname || user.username"
+                  :value="user.id"
+                />
+              </el-select>
+              <el-input 
+                v-model="traceSearchKeyword" 
+                placeholder="搜索用户名/昵称" 
+                clearable 
+                size="small" 
+                style="width:160px"
+                @keyup.enter="loadTraceDetails"
+                @clear="loadTraceDetails"
+              />
+              <el-select
+                v-model="traceGrayTag"
+                placeholder="全部流量"
+                clearable
+                size="small"
+                style="width:130px"
+                @change="loadTraceDetails"
+              >
+                <el-option label="全部流量" value="" />
+                <el-option label="仅灰度" value="GRAY" />
+                <el-option label="BASELINE" value="BASELINE" />
+                <el-option label="TAG_A" value="TAG_A" />
+                <el-option label="TAG_B" value="TAG_B" />
+              </el-select>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <el-radio-group v-model="traceDetailPeriod" size="small" @change="handleTraceDetailPeriodChange">
+                <el-radio-button value="day">天</el-radio-button>
+                <el-radio-button value="week">近 7 天</el-radio-button>
+                <el-radio-button value="month">当月</el-radio-button>
+                <el-radio-button value="custom">自定义</el-radio-button>
+              </el-radio-group>
+              <el-date-picker
+                v-model="traceDetailDateRange"
+                type="daterange"
+                range-separator="至"
+                start-placeholder="开始日期"
+                end-placeholder="结束日期"
+                format="YYYY-MM-DD"
+                value-format="YYYY-MM-DD"
+                size="small"
+                style="width:240px"
+                @change="loadTraceDetails"
+              />
+              <el-button size="small" @click="loadTraceDetails">搜索</el-button>
+            </div>
+          </div>
+        </div>
+      </template>
+      <el-table :data="traceDetails" stripe row-key="traceId">
+        <el-table-column label="用户" width="150">
+          <template #default="{ row }">
+            <div>
+              <div v-if="row.nickname" style="font-weight:500">{{ row.nickname }}</div>
+              <div style="color:#666;font-size:12px">{{ row.username || '匿名用户' }}</div>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="原始问题" min-width="300">
+          <template #default="{ row }">
+            <el-button
+              v-if="row.originalPrompt"
+              type="primary"
+              link
+              class="prompt-link"
+              @click="showPromptDialog(row.originalPrompt)"
+            >
+              <span class="prompt-text">{{ row.originalPrompt }}</span>
+            </el-button>
+            <span v-else style="color:#999">无</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="耗时(ms)" width="100">
+          <template #default="{ row }">{{ Math.round(row.durationMs || 0) }}</template>
+        </el-table-column>
+        <el-table-column prop="status" label="状态" width="100">
+          <template #default="{ row }">
+            <el-tag :type="row.status === 'SUCCESS' ? 'success' : row.status === 'ERROR' ? 'danger' : 'warning'" size="small">
+              {{ row.status }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="发起时间" width="200">
+          <template #default="{ row }">
+            <span style="white-space:nowrap">{{ row.createTime }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="分组" width="100">
+          <template #default="{ row }">
+            <el-tag v-if="row.grayTag && row.grayTag !== 'BASELINE'" :type="row.grayTag === 'TAG_A' ? '' : 'warning'" size="small">
+              {{ row.grayTag }}
+            </el-tag>
+            <span v-else style="color:#999;font-size:12px">-</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="100" fixed="right">
+          <template #default="{ row }">
+            <el-button type="primary" size="small" link @click="goTraceDetail(row)">查看详情</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <div style="margin-top:16px;display:flex;justify-content:flex-end">
+        <el-pagination
+          v-model:current-page="traceDetailPage"
+          v-model:page-size="traceDetailPageSize"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="traceDetailTotal"
+          layout="total, sizes, prev, pager, next, jumper"
+          @size-change="loadTraceDetails"
+          @current-change="loadTraceDetails"
+        />
+      </div>
+    </el-card>
+
     <!-- 原始问题查看对话框 -->
     <el-dialog v-model="promptDialogVisible" title="原始问题" width="60%">
       <pre style="max-height:500px;overflow:auto;background:#f5f7fa;padding:12px;border-radius:4px;font-size:13px;white-space:pre-wrap;word-break:break-all">{{ promptDialogContent }}</pre>
@@ -493,6 +520,7 @@ const traceDetailPageSize = ref(20)
 const traceDetailTotal = ref(0)
 const traceDetails = ref<any[]>([])
 const traceUserId = ref<number | null>(null)
+const traceGrayTag = ref('')
 
 // 阶段耗时筛选
 const stageUserId = ref<number | null>(null)
@@ -885,7 +913,7 @@ async function loadStageLatency() {
           grid: { left: '10%', right: '5%', bottom: '20%', top: '10%' },
           xAxis: {
             type: 'category',
-            data: trendData.length > 0 ? trendData.map((d: any) => d.date) : ['暂无数据']
+            data: trendData.length > 0 ? trendData.map((d: any) => d.label) : ['暂无数据']
           },
           yAxis: { type: 'value', name: 'ms' },
           series: [
@@ -945,6 +973,9 @@ async function loadTraceDetails() {
     if (traceUserId.value) {
       params.userId = traceUserId.value
     }
+    if (traceGrayTag.value) {
+      params.grayTag = traceGrayTag.value
+    }
     const res = await request.get('/admin/dashboard/trace-details', { params }) as any
     const data = res.data || res
     traceDetailTotal.value = data.total || 0
@@ -967,6 +998,7 @@ function mapTraceRow(item: any) {
     status: item.status,
     durationMs: item.duration_ms ?? item.durationMs,
     createTime: formatDateTime(item.create_time ?? item.createTime),
+    grayTag: item.gray_tag ?? item.grayTag,
     userId: item.user_id ?? item.userId,
     username: item.username,
     nickname: item.nickname

@@ -31,7 +31,13 @@
           <el-descriptions-item label="总耗时">
             <strong style="color:#409EFF">{{ Math.round(trace?.durationMs || 0) }}ms</strong>
           </el-descriptions-item>
-          <el-descriptions-item label="TraceId" :span="3">
+          <el-descriptions-item label="灰度分组">
+            <el-tag v-if="trace?.grayTag && trace.grayTag !== 'BASELINE'" :type="trace.grayTag === 'TAG_A' ? '' : 'warning'" size="small">
+              {{ trace.grayTag }}
+            </el-tag>
+            <span v-else style="color:#999">BASELINE</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="TraceId" :span="2">
             <span style="font-family:monospace;font-size:12px">{{ trace?.traceId }}</span>
           </el-descriptions-item>
           <el-descriptions-item label="原始问题" :span="3">
@@ -179,6 +185,7 @@ function mapTraceRun(item: any) {
     status: item.status,
     durationMs: item.duration_ms ?? item.durationMs,
     createTime: formatDateTime(item.create_time ?? item.createTime),
+    grayTag: item.gray_tag ?? item.grayTag,
     userId: item.user_id ?? item.userId,
     username: item.username,
     nickname: item.nickname
@@ -228,7 +235,8 @@ function getStageDisplayName(nodeType: string): string {
   // 与个人看板/全局看板统一的阶段命名
   const names: Record<string, string> = {
     'REWRITE': '提示词改写',
-    'CLASSIFY': '预编写文档（意图识别）',
+    'HYDE': 'HyDE 假设生成',
+    'CLASSIFY': '意图识别',
     'RETRIEVE': '检索',
     'RERANK': 'Rerank 重排序',
     'PROMPT': 'Prompt 组装',
@@ -240,6 +248,7 @@ function getStageDisplayName(nodeType: string): string {
 function getNodeColor(nodeType: string): string {
   const colors: Record<string, string> = {
     'REWRITE': '#409EFF',
+    'HYDE': '#9C27B0',
     'CLASSIFY': '#E6A23C',
     'RETRIEVE': '#909399',
     'RERANK': '#67C23A',

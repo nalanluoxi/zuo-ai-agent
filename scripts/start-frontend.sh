@@ -6,7 +6,7 @@
 
 set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-LOG_DIR="$SCRIPT_DIR/logs"
+LOG_DIR="$SCRIPT_DIR/../logs"
 
 mkdir -p "$LOG_DIR"
 
@@ -53,13 +53,13 @@ start_frontend() {
 
     # web (主前端, 5173)
     info "启动 web (:5173)..."
-    cd "$SCRIPT_DIR/web"
+    cd "$SCRIPT_DIR/../web"
     nohup npm run dev > "$LOG_DIR/web-frontend.log" 2>&1 &
     info "web PID: $!"
 
     # monitor-web (监控前端, 5174)
     info "启动 monitor-web (:5174)..."
-    cd "$SCRIPT_DIR/monitor-web"
+    cd "$SCRIPT_DIR/../monitor-web"
     nohup npm run dev > "$LOG_DIR/monitor-web.log" 2>&1 &
     info "monitor-web PID: $!"
 

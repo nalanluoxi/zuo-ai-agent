@@ -25,6 +25,7 @@ public class PagePermissionInterceptor implements HandlerInterceptor {
      * 路径前缀 → 页面编码（按配置顺序匹配，更具体的前缀放前面）
      */
     private static final Map<String, String> PATH_PAGE_MAPPING = new LinkedHashMap<>() {{
+        put("/rag-lab", "rag:lab");
         put("/monitor/redis", "monitor:redis");
         put("/monitor/db", "monitor:db");
         put("/admin", "manage:dashboard");

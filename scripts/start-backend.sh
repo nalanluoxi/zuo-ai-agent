@@ -6,7 +6,7 @@
 
 set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-LOG_DIR="$SCRIPT_DIR/logs"
+LOG_DIR="$SCRIPT_DIR/../logs"
 
 mkdir -p "$LOG_DIR"
 
@@ -129,30 +129,30 @@ start_backend() {
 
     # 先编译主服务（后续子服务依赖）
     info "编译主项目..."
-    cd "$SCRIPT_DIR"
+    cd "$SCRIPT_DIR/.."
     mvn compile -q 2>/dev/null
 
     # auth-service (8100)
     info "启动 auth-service (:8100)..."
-    cd "$SCRIPT_DIR/auth-service"
+    cd "$SCRIPT_DIR/../auth-service"
     nohup mvn spring-boot:run -q > "$LOG_DIR/auth-service.log" 2>&1 &
     info "auth-service PID: $!"
 
     # zuo-ai-agent (8123)
     info "启动 zuo-ai-agent (:8123)..."
-    cd "$SCRIPT_DIR"
+    cd "$SCRIPT_DIR/.."
     nohup mvn spring-boot:run -q > "$LOG_DIR/zuo-ai-agent.log" 2>&1 &
     info "zuo-ai-agent PID: $!"
 
     # log-monitor-service (8200)
     info "启动 log-monitor-service (:8200)..."
-    cd "$SCRIPT_DIR/log-monitor-service"
+    cd "$SCRIPT_DIR/../log-monitor-service"
     nohup mvn spring-boot:run -q > "$LOG_DIR/log-monitor-service.log" 2>&1 &
     info "log-monitor-service PID: $!"
 
     # gateway-service (9000)
     info "启动 gateway-service (:9000)..."
-    cd "$SCRIPT_DIR/gateway-service"
+    cd "$SCRIPT_DIR/../gateway-service"
     nohup mvn spring-boot:run -q > "$LOG_DIR/gateway-service.log" 2>&1 &
     info "gateway-service PID: $!"
 
@@ -247,20 +247,20 @@ case "${1:-start}" in
 
         case "$service_name" in
             auth-service)
-                start_single_service "auth-service" 8100 "$SCRIPT_DIR/auth-service"
+                start_single_service "auth-service" 8100 "$SCRIPT_DIR/../auth-service"
                 ;;
             zuo-ai-agent)
                 # 先编译
                 info "编译主项目..."
-                cd "$SCRIPT_DIR"
+                cd "$SCRIPT_DIR/.."
                 mvn compile -q 2>/dev/null
-                start_single_service "zuo-ai-agent" 8123 "$SCRIPT_DIR"
+                start_single_service "zuo-ai-agent" 8123 "$SCRIPT_DIR/.."
                 ;;
             log-monitor-service)
-                start_single_service "log-monitor-service" 8200 "$SCRIPT_DIR/log-monitor-service"
+                start_single_service "log-monitor-service" 8200 "$SCRIPT_DIR/../log-monitor-service"
                 ;;
             gateway-service)
-                start_single_service "gateway-service" 9000 "$SCRIPT_DIR/gateway-service"
+                start_single_service "gateway-service" 9000 "$SCRIPT_DIR/../gateway-service"
                 ;;
             *)
                 error "未知的服务名称: $service_name"

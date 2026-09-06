@@ -1,0 +1,128 @@
+package com.example.zuoaiagent.raglab.service.impl;
+
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.example.zuoaiagent.raglab.entity.LlmModelConfigDO;
+import com.example.zuoaiagent.raglab.mapper.LlmModelConfigMapper;
+import com.example.zuoaiagent.raglab.service.LlmModelConfigService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.ai.openai.api.OpenAiApi;
+import org.springframework.ai.openai.OpenAiChatModel;
+import org.springframework.stereotype.Service;
+
+import java.util.Date;
+import java.util.List;
+
+/**
+ * LLM 模型配置服务实现
+ */
+@Service
+public class LlmModelConfigServiceImpl implements LlmModelConfigService {
+
+    private static final Logger log = LoggerFactory.getLogger(LlmModelConfigServiceImpl.class);
+
+    private final LlmModelConfigMapper configMapper;
+
+    public LlmModelConfigServiceImpl(LlmModelConfigMapper configMapper) {
+        this.configMapper = configMapper;
+    }
+
+    @Override
+    public LlmModelConfigDO create(LlmModelConfigDO config) {
+        config.setStatus("DRAFT");
+        config.setCreateTime(new Date());
+        config.setUpdateTime(new Date());
+        configMapper.insert(config);
+        return config;
+    }
+
+    @Override
+    public LlmModelConfigDO update(LlmModelConfigDO config) {
+        config.setUpdateTime(new Date());
+        configMapper.updateById(config);
+        return config;
+    }
+
+    @Override
+    public LlmModelConfigDO getById(Long id) {
+        return configMapper.selectById(id);
+    }
+
+    @Override
+    public List<LlmModelConfigDO> listAll() {
+        return configMapper.selectList(new LambdaQueryWrapper<LlmModelConfigDO>()
+                .orderByDesc(LlmModelConfigDO::getCreateTime));
+    }
+
+    @Override
+    public List<LlmModelConfigDO> listActive() {
+        return configMapper.selectList(new LambdaQueryWrapper<LlmModelConfigDO>()
+                .eq(LlmModelConfigDO::getIsActive, 1)
+                .orderByDesc(LlmModelConfigDO::getCreateTime));
+    }
+
+    @Override
+    public void toggleActive(Long id) {
+        LlmModelConfigDO config = configMapper.selectById(id);
+        if (config == null) {
+            throw new IllegalArgumentException("模型配置不存在: " + id);
+        }
+        config.setIsActive(config.getIsActive() == 1 ? 0 : 1);
+        config.setUpdateTime(new Date());
+        configMapper.updateById(config);
+    }
+
+    @Override
+    public boolean testConnectivity(Long id) {
+        LlmModelConfigDO config = configMapper.selectById(id);
+        if (config == null) {
+            throw new IllegalArgumentException("模型配置不存在: " + id);
+        }
+
+        try {
+            OpenAiApi openAiApi = OpenAiApi.builder()
+                    .baseUrl(config.getBaseUrl())
+                    .apiKey(getDecryptedApiKey(id))
+                    .build();
+
+            OpenAiChatModel chatModel = OpenAiChatModel.builder()
+                    .openAiApi(openAiApi)
+                    .defaultOptions(OpenAiChatOptions.builder()
+                            .model(config.getModelId())
+                            .maxTokens(config.getMaxTokens())
+                            .temperature(config.getTemperature())
+                            .build())
+                    .build();
+
+            ChatClient chatClient = ChatClient.builder(chatModel).build();
+            String response = chatClient.prompt()
+                    .user("Hello, this is a connectivity test. Reply with 'OK'.")
+                    .call()
+                    .content();
+
+            log.info("[模型连通性测试] 模型 {} 测试成功，响应: {}", config.getModelName(), response);
+            return response != null && !response.isBlank();
+        } catch (Exception e) {
+            log.error("[模型连通性测试] 模型 {} 测试失败: {}", config.getModelName(), e.getMessage());
+            return false;
+        }
+    }
+
+    @Override
+    public void delete(Long id) {
+        configMapper.deleteById(id);
+    }
+
+    @Override
+    public String getDecryptedApiKey(Long id) {
+        LlmModelConfigDO config = configMapper.selectById(id);
+        if (config == null) {
+            throw new IllegalArgumentException("模型配置不存在: " + id);
+        }
+        // TODO: 接入 Jasypt 解密
+        // 当前阶段直接返回明文，后续接入加密存储
+        return config.getApiKey();
+    }
+}

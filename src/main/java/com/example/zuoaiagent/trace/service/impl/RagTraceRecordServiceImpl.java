@@ -50,6 +50,19 @@ public class RagTraceRecordServiceImpl implements RagTraceRecordService {
 
     @Async("ingestionExecutor")
     @Override
+    public void setGrayTag(String traceId, String grayTag) {
+        try {
+            RagTraceRunDO update = new RagTraceRunDO();
+            update.setGrayTag(grayTag);
+            runMapper.update(update, new LambdaUpdateWrapper<RagTraceRunDO>()
+                    .eq(RagTraceRunDO::getTraceId, traceId));
+        } catch (Exception e) {
+            log.warn("[RagTrace] setGrayTag 写库失败 traceId={}: {}", traceId, e.getMessage());
+        }
+    }
+
+    @Async("ingestionExecutor")
+    @Override
     public void finishRun(String traceId, String status, String errorMessage, long durationMs) {
         try {
             RagTraceRunDO update = new RagTraceRunDO();

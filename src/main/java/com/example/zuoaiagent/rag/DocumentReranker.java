@@ -1,6 +1,7 @@
 package com.example.zuoaiagent.rag;
 
 import com.example.zuoaiagent.chat.RoutingChatService;
+import com.example.zuoaiagent.log.LogTransaction;
 import com.example.zuoaiagent.prompt.PromptTemplateLoader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,7 +26,7 @@ public class DocumentReranker {
     private final PromptTemplateLoader templateLoader;
 
     public DocumentReranker(RoutingChatService routingChatService,
-                            PromptTemplateLoader templateLoader) {
+                             PromptTemplateLoader templateLoader) {
         this.routingChatService = routingChatService;
         this.templateLoader = templateLoader;
     }
@@ -77,10 +78,38 @@ public class DocumentReranker {
                 .toList();
     }
 
+    @LogTransaction(name = "LLM重排序", eventType = "RERANK", logOutput = false, maxOutputLength = 200)
+    public List<Document> rerank(String query, List<Document> documents, int topK,
+                                  double confidenceThreshold, int docTruncate) {
+        if (documents == null || documents.isEmpty()) return List.of();
+        if (topK <= 0) topK = DEFAULT_TOP_K;
+        if (docTruncate <= 0) docTruncate = 800;
+
+        List<ScoredDocument> scored = new ArrayList<>(documents.size());
+        for (Document doc : documents) {
+            double score = scoreDocument(query, doc, docTruncate);
+            if (score >= confidenceThreshold) {
+                scored.add(new ScoredDocument(doc, score));
+            }
+        }
+        if (scored.isEmpty()) return List.of();
+
+        int finalTopK = Math.min(topK, scored.size());
+        return scored.stream()
+                .sorted(Comparator.comparingDouble(ScoredDocument::score).reversed())
+                .limit(finalTopK)
+                .map(ScoredDocument::document)
+                .toList();
+    }
+
     private double scoreDocument(String query, Document doc) {
+        return scoreDocument(query, doc, 800);
+    }
+
+    private double scoreDocument(String query, Document doc, int truncateLength) {
         String content = doc.getFormattedContent();
-        if (content.length() > 800) {
-            content = content.substring(0, 800) + "...";
+        if (content.length() > truncateLength) {
+            content = content.substring(0, truncateLength) + "...";
         }
         try {
             String promptText = templateLoader.render(TEMPLATE_PATH, Map.of("query", query, "content", content));

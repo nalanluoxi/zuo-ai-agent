@@ -51,6 +51,9 @@ public class RagPipelineContext {
     /** 链路追踪 ID（流水线开始时生成） */
     private String traceId;
 
+    /** 灰度标签：BASELINE / TAG_A / TAG_B */
+    private String grayTag = "BASELINE";
+
 public RagPipelineContext(String originalPrompt, String conversationId,
                                String name,
                                boolean enableRewrite, boolean enableRerank,
@@ -89,6 +92,9 @@ public RagPipelineContext(String originalPrompt, String conversationId,
 
     public String getTraceId() { return traceId; }
     public void setTraceId(String traceId) { this.traceId = traceId; }
+
+    public String getGrayTag() { return grayTag; }
+    public void setGrayTag(String grayTag) { this.grayTag = grayTag; }
 
     /** 获取实际用于检索的查询（改写后或原始） */
     public String getEffectiveQuery() {

@@ -30,7 +30,10 @@ public class MybatisPlusConfig {
         public boolean ignoreTable(String tableName) {
             return java.util.Set.of("t_tenant", "t_role", "t_permission", "t_audit_log", "t_intent_node",
                     "t_rag_trace_run", "t_rag_trace_node", "t_chat_memory", "t_chat_message_raw",
-                    "t_chat_message_compression", "vector_store").contains(tableName);
+                    "t_chat_message_compression", "vector_store",
+                    "t_rag_config", "t_rag_config_version", "t_rag_prompt_template",
+                    "t_rag_prompt_version", "t_rag_test_question", "t_rag_test_document",
+                    "t_rag_experiment").contains(tableName);
         }
 
         @Override

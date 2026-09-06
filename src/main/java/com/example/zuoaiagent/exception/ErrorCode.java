@@ -12,7 +12,11 @@ public enum ErrorCode {
     NOT_FOUND_ERROR(40400, "请求数据不存在"),
     FORBIDDEN_ERROR(40300, "禁止访问"),
     SYSTEM_ERROR(50000, "系统内部异常"),
-    OPERATION_ERROR(50001, "操作失败");
+    OPERATION_ERROR(50001, "操作失败"),
+    RAG_CONFIG_NOT_FOUND(50010, "RAG配置不存在"),
+    RAG_PROMPT_NOT_FOUND(50011, "RAG提示词模板不存在"),
+    RAG_CONFIG_NO_ACTIVE(50012, "无生效的RAG配置"),
+    RAG_VERSION_NOT_FOUND(50013, "RAG配置版本不存在");
 
     /**
      * 状态码

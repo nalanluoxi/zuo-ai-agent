@@ -340,7 +340,8 @@ import request from '../../api/request'
 // ── RAG 检索精细化耗时统计（每阶段一张独立看板） ──
 const RAG_STAGES = [
   { key: 'REWRITE', label: '提示词改写' },
-  { key: 'CLASSIFY', label: '预编写文档（意图识别）' },
+  { key: 'HYDE', label: 'HyDE 假设生成' },
+  { key: 'CLASSIFY', label: '意图识别' },
   { key: 'RETRIEVE', label: '检索' },
   { key: 'RERANK', label: 'Rerank 重排序' },
   { key: 'LLM', label: '增强生成' },

@@ -4,10 +4,14 @@ import com.example.zuoaiagent.chat.RoutingChatService;
 import com.example.zuoaiagent.dashboard.service.RetrievalLogService;
 import com.example.zuoaiagent.intent.model.IntentResult;
 import com.example.zuoaiagent.intent.service.IntentClassifier;
+import com.example.zuoaiagent.log.LogEventCollector;
 import com.example.zuoaiagent.memory.UserMemoryExtractionService;
 import com.example.zuoaiagent.prompt.PromptScene;
 import com.example.zuoaiagent.prompt.RAGPromptService;
 import com.example.zuoaiagent.rag.*;
+import com.example.zuoaiagent.raglab.entity.RagConfigDO;
+import com.example.zuoaiagent.raglab.interceptor.GrayContextHolder;
+import com.example.zuoaiagent.raglab.service.RagConfigLoader;
 import com.example.zuoaiagent.trace.service.RagTraceRecordService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -24,10 +28,6 @@ import java.util.stream.Collectors;
 public class SmartRagPipeline {
 
     private static final Logger log = LoggerFactory.getLogger(SmartRagPipeline.class);
-    private static final double CONFIDENCE_THRESHOLD = 0.5;
-    private static final double RERANK_CONFIDENCE_THRESHOLD = 0.5;
-    private static final int RERANK_TOP_K = 3;
-    private static final int TOKEN_BUDGET = 3000;
 
     private final QueryRewriter queryRewriter;
     private final HyDEQueryRewriter hydeQueryRewriter;
@@ -39,8 +39,10 @@ public class SmartRagPipeline {
     private final RoutingChatService routingChatService;
     private final RagTraceRecordService traceService;
     private final UserMemoryExtractionService memoryExtractionService;
+    private final RagConfigLoader configLoader;
     private final ObjectMapper objectMapper;
     private final RetrievalLogService retrievalLogService;
+    private final LogEventCollector logEventCollector;
 
     public SmartRagPipeline(QueryRewriter queryRewriter,
                             HyDEQueryRewriter hydeQueryRewriter,
@@ -52,8 +54,10 @@ public class SmartRagPipeline {
                             RoutingChatService routingChatService,
                             RagTraceRecordService traceService,
                             UserMemoryExtractionService memoryExtractionService,
+                            RagConfigLoader configLoader,
                             ObjectMapper objectMapper,
-                            RetrievalLogService retrievalLogService) {
+                            RetrievalLogService retrievalLogService,
+                            LogEventCollector logEventCollector) {
         this.queryRewriter = queryRewriter;
         this.hydeQueryRewriter = hydeQueryRewriter;
         this.intentClassifier = intentClassifier;
@@ -64,22 +68,49 @@ public class SmartRagPipeline {
         this.routingChatService = routingChatService;
         this.traceService = traceService;
         this.memoryExtractionService = memoryExtractionService;
+        this.configLoader = configLoader;
         this.objectMapper = objectMapper;
         this.retrievalLogService = retrievalLogService;
+        this.logEventCollector = logEventCollector;
     }
 
     public void execute(RagPipelineContext ctx, SseEmitter emitter) {
+        RagConfigDO config = configLoader.getActiveConfig();
+        double intentThreshold = getConfigValue(config, RagConfigDO::getIntentConfidenceThreshold, 0.5);
+        double highConfidence = getConfigValue(config, RagConfigDO::getIntentConfidenceThreshold, 0.85);
+        double rerankThreshold = getConfigValue(config, RagConfigDO::getRerankConfidenceThreshold, 0.5);
+        int rerankTopK = getConfigValue(config, RagConfigDO::getRerankTopK, 3);
+        int tokenBudget = getConfigValue(config, RagConfigDO::getTokenBudget, 3000);
+        double tokenCoeff = getConfigValue(config, RagConfigDO::getTokenEstimateCoefficient, 0.4);
+        int docTruncate = getConfigValue(config, RagConfigDO::getRerankDocTruncate, 800);
+        int hydeEquivCount = getConfigValue(config, RagConfigDO::getHydeEquivQueryCount, 3);
+
+        // 灰度标签
+        String grayTag = GrayContextHolder.get();
+        if (grayTag == null) grayTag = "BASELINE";
+        ctx.setGrayTag(grayTag);
+
         String traceId = UUID.randomUUID().toString().replace("-", "");
         String conId = ctx.getConversationId();
         long pipelineStart = System.currentTimeMillis();
 
         traceService.startRun(traceId, conId, ctx.getOriginalPrompt());
         ctx.setTraceId(traceId);
+        // 写入灰度标签到 trace
+        try {
+            traceService.setGrayTag(traceId, grayTag);
+        } catch (Exception e) {
+            log.warn("[SmartRagPipeline] 写入 grayTag 失败: {}", e.getMessage());
+        }
 
         try {
-            String rewrittenQuery = executeRewrite(ctx, traceId);
+            // 1. 查询改写
+            RewriteResult rewriteResult = executeRewrite(ctx, traceId, config, tokenCoeff);
 
-            IntentResult intentResult = executeClassify(rewrittenQuery, traceId);
+            // 2. HyDE 独立通道（生成假设文档 + 等价查询）
+            HydeResult hydeResult = executeHyde(rewriteResult.rewrittenQuery, traceId, config, hydeEquivCount);
+
+            IntentResult intentResult = executeClassify(rewriteResult.rewrittenQuery, traceId, config, tokenCoeff, highConfidence);
             ctx.setIntentResult(intentResult);
 
             String domain = resolveDomain(intentResult);
@@ -94,13 +125,17 @@ public class SmartRagPipeline {
                 return;
             }
 
-            List<Document> retrieved = executeRetrieve(rewrittenQuery, intentResult, traceId, ctx);
+            Long effectiveKbId = (intentResult.getConfidence() >= intentThreshold) ? intentResult.getKbId() : null;
+            // HyDE 独立通道检索：传入假设文档 + 等价查询
+            List<Document> retrieved = executeRetrieve(rewriteResult.rewrittenQuery, effectiveKbId, traceId, ctx,
+                    config, tokenCoeff, hydeResult.hydeDoc, hydeResult.equivQueries);
             ctx.setRetrievedDocs(retrieved);
 
-            List<Document> reranked = executeRerank(ctx, rewrittenQuery, retrieved, traceId);
+            List<Document> reranked = executeRerank(ctx, rewriteResult.rewrittenQuery, retrieved, traceId,
+                    config, rerankTopK, rerankThreshold, tokenCoeff, docTruncate);
             ctx.setRerankedDocs(reranked);
 
-            List<Document> trimmed = tokenBudgetTrimmer.trim(reranked, TOKEN_BUDGET);
+            List<Document> trimmed = tokenBudgetTrimmer.trim(reranked, tokenBudget, tokenCoeff);
 
             String memory = ctx.isEnableMemory() ? memoryExtractionService.getMemoryContext(ctx.getUserId()) : null;
             String finalSystemPrompt = executePromptBuild(ctx, domain, trimmed, memory, traceId);
@@ -116,7 +151,8 @@ public class SmartRagPipeline {
         }
     }
 
-    private String executeRewrite(RagPipelineContext ctx, String traceId) {
+    private RewriteResult executeRewrite(RagPipelineContext ctx, String traceId, RagConfigDO config,
+                                          double tokenCoeff) {
         long start = System.currentTimeMillis();
         traceService.startNode(traceId, "rewrite", "查询改写", "REWRITE",
                 toJson(Map.of("originalPrompt", ctx.getOriginalPrompt(), "enableRewrite", ctx.isEnableRewrite())));
@@ -126,36 +162,82 @@ public class SmartRagPipeline {
                     ? queryRewriter.rewrite(ctx.getOriginalPrompt())
                     : ctx.getOriginalPrompt();
 
-            boolean hydeUsed = false;
-            if (hydeQueryRewriter.shouldUseHyDE()) {
-                String hydeDoc = hydeQueryRewriter.generateHypothesisDocument(rewrittenQuery);
-                if (!hydeDoc.isBlank()) {
-                    rewrittenQuery = rewrittenQuery + " " + hydeDoc;
-                    hydeUsed = true;
-                }
-            }
-
             ctx.setRewrittenQuery(rewrittenQuery);
-            int promptTokens = estimateTokens(ctx.getOriginalPrompt());
-            int completionTokens = estimateTokens(rewrittenQuery);
+            int promptTokens = estimateTokens(ctx.getOriginalPrompt(), tokenCoeff);
+            int completionTokens = estimateTokens(rewrittenQuery, tokenCoeff);
+
             traceService.finishNode(traceId, "rewrite", "SUCCESS", null,
                     System.currentTimeMillis() - start,
-                    toJson(Map.of("rewrittenQuery", rewrittenQuery, "hydeUsed", hydeUsed)),
+                    toJson(Map.of("rewrittenQuery", rewrittenQuery)),
                     promptTokens, completionTokens);
-            return rewrittenQuery;
+            logEventCollector.logEvent("REWRITE_COMPLETED", Map.of(
+                    "originalPrompt", ctx.getOriginalPrompt(),
+                    "rewrittenQuery", rewrittenQuery,
+                    "durationMs", System.currentTimeMillis() - start));
+            return new RewriteResult(rewrittenQuery);
         } catch (Exception e) {
             traceService.finishNode(traceId, "rewrite", "ERROR", e.getMessage(),
                     System.currentTimeMillis() - start, null);
-            return ctx.getOriginalPrompt();
+            return new RewriteResult(ctx.getOriginalPrompt());
         }
     }
 
-    private IntentResult executeClassify(String query, String traceId) {
+    /**
+     * HyDE 独立通道：生成假设文档 + 等价查询，作为独立 trace 节点记录。
+     */
+    private HydeResult executeHyde(String rewrittenQuery, String traceId, RagConfigDO config, int hydeEquivCount) {
         long start = System.currentTimeMillis();
-        traceService.startNode(traceId, "classify", "意图分类", "CLASSIFY", toJson(Map.of("query", query)));
+        traceService.startNode(traceId, "hyde", "HyDE 假设生成", "HYDE",
+                toJson(Map.of("query", rewrittenQuery, "enabled", hydeQueryRewriter.shouldUseHyDE(config))));
 
         try {
-            IntentResult result = intentClassifier.classify(query);
+            if (!hydeQueryRewriter.shouldUseHyDE(config)) {
+                traceService.finishNode(traceId, "hyde", "SUCCESS", null,
+                        System.currentTimeMillis() - start,
+                        toJson(Map.of("hydeEnabled", false, "skipped", true)),
+                        estimateTokens(rewrittenQuery, 0.4), 0);
+                return new HydeResult(null, null);
+            }
+
+            String hydeDoc = hydeQueryRewriter.generateHypothesisDocument(rewrittenQuery);
+            if (hydeDoc != null && hydeDoc.isBlank()) hydeDoc = null;
+
+            List<String> equivQueries = null;
+            if (hydeEquivCount > 0) {
+                equivQueries = hydeQueryRewriter.generateEquivalentQueries(rewrittenQuery, hydeEquivCount);
+            }
+
+            Map<String, Object> output = new LinkedHashMap<>();
+            output.put("hydeEnabled", true);
+            output.put("hydeDoc", hydeDoc != null ? hydeDoc.substring(0, Math.min(hydeDoc.length(), 200)) + "..." : null);
+            output.put("equivQueryCount", equivQueries != null ? equivQueries.size() : 0);
+            output.put("equivQueries", equivQueries);
+
+            traceService.finishNode(traceId, "hyde", "SUCCESS", null,
+                    System.currentTimeMillis() - start, toJson(output),
+                    estimateTokens(rewrittenQuery, 0.4),
+                    estimateTokens(hydeDoc, 0.4) + estimateTokens(
+                            equivQueries != null ? String.join("", equivQueries) : "", 0.4));
+            logEventCollector.logEvent("HYDE_COMPLETED", Map.of(
+                    "hydeDocLength", hydeDoc != null ? hydeDoc.length() : 0,
+                    "equivQueryCount", equivQueries != null ? equivQueries.size() : 0,
+                    "durationMs", System.currentTimeMillis() - start));
+            return new HydeResult(hydeDoc, equivQueries);
+        } catch (Exception e) {
+            log.warn("[HyDE] 假设生成失败，降级跳过: {}", e.getMessage());
+            traceService.finishNode(traceId, "hyde", "ERROR", e.getMessage(),
+                    System.currentTimeMillis() - start,
+                    toJson(Map.of("hydeEnabled", false, "error", e.getMessage())));
+            return new HydeResult(null, null);
+        }
+    }
+
+    private IntentResult executeClassify(String query, String traceId, RagConfigDO config, double tokenCoeff, double highConfidence) {
+        long start = System.currentTimeMillis();
+        traceService.startNode(traceId, "classify", "意图识别", "CLASSIFY", toJson(Map.of("query", query)));
+
+        try {
+            IntentResult result = intentClassifier.classify(query, highConfidence);
             Map<String, Object> output = new HashMap<>();
             output.put("intentNodeId", result.getIntentNodeId());
             output.put("label", result.getLabel());
@@ -164,7 +246,13 @@ public class SmartRagPipeline {
             output.put("kbId", result.getKbId());
             traceService.finishNode(traceId, "classify", "SUCCESS", null,
                     System.currentTimeMillis() - start, toJson(output),
-                    estimateTokens(query), estimateTokens(String.valueOf(result.getIntentNodeId())));
+                    estimateTokens(query, tokenCoeff), estimateTokens(String.valueOf(result.getIntentNodeId()), tokenCoeff));
+            logEventCollector.logEvent("INTENT_CLASSIFIED", Map.of(
+                    "label", result.getLabel(),
+                    "confidence", result.getConfidence(),
+                    "kbId", result.getKbId() != null ? result.getKbId() : -1,
+                    "isSystem", result.isSystem(),
+                    "durationMs", System.currentTimeMillis() - start));
             return result;
         } catch (Exception e) {
             traceService.finishNode(traceId, "classify", "ERROR", e.getMessage(),
@@ -173,19 +261,21 @@ public class SmartRagPipeline {
         }
     }
 
-    private List<Document> executeRetrieve(String query, IntentResult intentResult, String traceId,
-                                           RagPipelineContext ctx) {
+    private List<Document> executeRetrieve(String query, Long kbId, String traceId,
+                                            RagPipelineContext ctx, RagConfigDO config, double tokenCoeff,
+                                            String hydeDoc, List<String> equivQueries) {
         long start = System.currentTimeMillis();
-        Long kbId = (intentResult.getConfidence() >= CONFIDENCE_THRESHOLD) ? intentResult.getKbId() : null;
 
         Map<String, Object> retrieveInput = new HashMap<>();
         retrieveInput.put("query", query);
-        retrieveInput.put("kbId", kbId);  // HashMap 允许 null
+        retrieveInput.put("kbId", kbId);
+        retrieveInput.put("hydeEnabled", hydeDoc != null);
+        retrieveInput.put("equivQueryCount", equivQueries != null ? equivQueries.size() : 0);
         traceService.startNode(traceId, "retrieve", "多通道检索", "RETRIEVE",
                 toJson(retrieveInput));
 
         try {
-            List<Document> docs = multiChannelRetriever.retrieve(query, kbId);
+            List<Document> docs = multiChannelRetriever.retrieve(query, kbId, config, hydeDoc, equivQueries);
             int latencyMs = (int) (System.currentTimeMillis() - start);
 
             // 记录检索日志
@@ -216,6 +306,11 @@ public class SmartRagPipeline {
 
             traceService.finishNode(traceId, "retrieve", "SUCCESS", null,
                     latencyMs, toJson(Map.of("count", docs.size())));
+            logEventCollector.logEvent("RETRIEVE_COMPLETED", Map.of(
+                    "docCount", docs.size(),
+                    "kbId", kbId != null ? kbId : -1,
+                    "hydeEnabled", hydeDoc != null,
+                    "durationMs", latencyMs));
             return docs;
         } catch (Exception e) {
             traceService.finishNode(traceId, "retrieve", "ERROR", e.getMessage(),
@@ -225,24 +320,30 @@ public class SmartRagPipeline {
     }
 
     private List<Document> executeRerank(RagPipelineContext ctx, String query,
-                                         List<Document> retrieved, String traceId) {
+                                          List<Document> retrieved, String traceId,
+                                          RagConfigDO config, int rerankTopK, double rerankThreshold, double tokenCoeff, int docTruncate) {
         long start = System.currentTimeMillis();
         traceService.startNode(traceId, "rerank", "重排序", "RERANK",
                 toJson(Map.of("inputCount", retrieved.size(), "enableRerank", ctx.isEnableRerank())));
 
         try {
             List<Document> finalDocs = ctx.isEnableRerank()
-                    ? documentReranker.rerank(query, retrieved, RERANK_TOP_K, RERANK_CONFIDENCE_THRESHOLD)
-                    : (retrieved.size() > RERANK_TOP_K ? retrieved.subList(0, RERANK_TOP_K) : retrieved);
+                    ? documentReranker.rerank(query, retrieved, rerankTopK, rerankThreshold, docTruncate)
+                    : (retrieved.size() > rerankTopK ? retrieved.subList(0, rerankTopK) : retrieved);
 
             traceService.finishNode(traceId, "rerank", "SUCCESS", null,
                     System.currentTimeMillis() - start, toJson(Map.of("count", finalDocs.size())),
-                    estimateTokens(query) * retrieved.size(), estimateTokens("score") * retrieved.size());
+                    estimateTokens(query, tokenCoeff) * retrieved.size(), estimateTokens("score", tokenCoeff) * retrieved.size());
+            logEventCollector.logEvent("RERANK_COMPLETED", Map.of(
+                    "inputCount", retrieved.size(),
+                    "outputCount", finalDocs.size(),
+                    "enableRerank", ctx.isEnableRerank(),
+                    "durationMs", System.currentTimeMillis() - start));
             return finalDocs;
         } catch (Exception e) {
             traceService.finishNode(traceId, "rerank", "ERROR", e.getMessage(),
                     System.currentTimeMillis() - start, null);
-            return retrieved.size() > RERANK_TOP_K ? retrieved.subList(0, RERANK_TOP_K) : retrieved;
+            return retrieved.size() > rerankTopK ? retrieved.subList(0, rerankTopK) : retrieved;
         }
     }
 
@@ -260,6 +361,12 @@ public class SmartRagPipeline {
 
         traceService.finishNode(traceId, "prompt", "SUCCESS", null,
                 System.currentTimeMillis() - start, toJson(Map.of("scene", scene.name(), "promptLength", prompt.length())));
+        logEventCollector.logEvent("PROMPT_BUILT", Map.of(
+                "scene", scene.name(),
+                "docCount", finalDocs.size(),
+                "promptLength", prompt.length(),
+                "domain", domain,
+                "durationMs", System.currentTimeMillis() - start));
         return prompt;
     }
 
@@ -274,8 +381,33 @@ public class SmartRagPipeline {
         catch (JsonProcessingException e) { return "{}"; }
     }
 
-    private int estimateTokens(String text) {
+    private int estimateTokens(String text, double coefficient) {
         if (text == null || text.isBlank()) return 0;
-        return (int) Math.ceil(text.length() * 0.4);
+        return (int) Math.ceil(text.length() * coefficient);
     }
+
+    /**
+     * 从配置中安全读取数值，配置为空时使用默认值。
+     */
+    private double getConfigValue(RagConfigDO config, java.util.function.Function<RagConfigDO, Double> getter, double defaultValue) {
+        if (config == null) return defaultValue;
+        Double value = getter.apply(config);
+        return value != null ? value : defaultValue;
+    }
+
+    private int getConfigValue(RagConfigDO config, java.util.function.Function<RagConfigDO, Integer> getter, int defaultValue) {
+        if (config == null) return defaultValue;
+        Integer value = getter.apply(config);
+        return value != null ? value : defaultValue;
+    }
+
+    /**
+     * 改写结果（仅含改写后的查询）。
+     */
+    private record RewriteResult(String rewrittenQuery) {}
+
+    /**
+     * HyDE 结果（假设文档 + 等价查询）。
+     */
+    private record HydeResult(String hydeDoc, List<String> equivQueries) {}
 }

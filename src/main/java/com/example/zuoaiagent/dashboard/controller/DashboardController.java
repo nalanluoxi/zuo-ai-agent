@@ -125,7 +125,7 @@ public class DashboardController {
     }
 
     private static final java.util.Set<String> RAG_STAGES =
-            java.util.Set.of("REWRITE", "CLASSIFY", "RETRIEVE", "RERANK", "LLM");
+            java.util.Set.of("REWRITE", "HYDE", "CLASSIFY", "RETRIEVE", "RERANK", "LLM");
 
     @GetMapping("/rag-stage-trend")
     public BaseResponse<Map<String, Object>> getRagStageTrend(
@@ -136,7 +136,7 @@ public class DashboardController {
 
         if (stage == null || !RAG_STAGES.contains(stage.toUpperCase())) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR,
-                "stage 只能选择 REWRITE/CLASSIFY/RETRIEVE/RERANK/LLM");
+                "stage 只能选择 REWRITE/HYDE/CLASSIFY/RETRIEVE/RERANK/LLM");
         }
 
         DateRange range = parseRange(period, startDate, endDate);

@@ -565,10 +565,11 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
             boolean isToday = start.equals(end) && start.equals(LocalDate.now());
 
             // 阶段命名与个人看板统一
-            String[] allStages = {"REWRITE", "CLASSIFY", "RETRIEVE", "RERANK", "PROMPT", "LLM"};
+            String[] allStages = {"REWRITE", "HYDE", "CLASSIFY", "RETRIEVE", "RERANK", "PROMPT", "LLM"};
             Map<String, String> stageNames = Map.of(
                 "REWRITE", "提示词改写",
-                "CLASSIFY", "预编写文档（意图识别）",
+                "HYDE", "HyDE 假设生成",
+                "CLASSIFY", "意图识别",
                 "RETRIEVE", "检索",
                 "RERANK", "Rerank 重排序",
                 "PROMPT", "Prompt 组装",
@@ -802,7 +803,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
     }
 
     @Override
-    public Map<String, Object> getTraceDetails(String keyword, LocalDate start, LocalDate end, int page, int pageSize, Long userId) {        try {
+    public Map<String, Object> getTraceDetails(String keyword, LocalDate start, LocalDate end, int page, int pageSize, Long userId, String grayTag) {        try {
             // 构建查询条件
             StringBuilder whereClause = new StringBuilder();
             List<Object> params = new ArrayList<>();
@@ -817,6 +818,12 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
             if (userId != null) {
                 whereClause.append("AND c.user_id = ? ");
                 params.add(userId);
+            }
+
+            // 灰度标签过滤
+            if (grayTag != null && !grayTag.trim().isEmpty()) {
+                whereClause.append("AND r.gray_tag = ? ");
+                params.add(grayTag);
             }
 
             if (keyword != null && !keyword.trim().isEmpty()) {
@@ -835,7 +842,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
             
             // 查询分页数据
             String sql = "SELECT r.id, r.trace_id, r.conversation_id, r.original_prompt, " +
-                        "r.status, r.duration_ms, r.create_time, " +
+                        "r.status, r.duration_ms, r.create_time, r.gray_tag, " +
                         "c.user_id, u.username, u.nickname " +
                         "FROM t_rag_trace_run r " +
                         "LEFT JOIN t_conversation c ON r.conversation_id = c.id " +
@@ -868,7 +875,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
         try {
             // 查询 run 信息
             String runSql = "SELECT r.id, r.trace_id, r.conversation_id, r.original_prompt, " +
-                           "r.status, r.duration_ms, r.create_time, " +
+                           "r.status, r.duration_ms, r.create_time, r.gray_tag, " +
                            "c.user_id, u.username, u.nickname " +
                            "FROM t_rag_trace_run r " +
                            "LEFT JOIN t_conversation c ON r.conversation_id = c.id " +

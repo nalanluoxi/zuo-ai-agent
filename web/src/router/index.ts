@@ -19,6 +19,7 @@ import AdminDashboardPage from '../views/manage/AdminDashboardPage.vue'
 import TenantPage from '../views/manage/TenantPage.vue'
 import ApprovalsPage from '../views/manage/ApprovalsPage.vue'
 import TraceDetailPage from '../views/manage/TraceDetailPage.vue'
+import RagLabPage from '../views/manage/RagLabPage.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -149,6 +150,15 @@ const router = createRouter({
             requiresLogin: true,
             title: '审批中心',
             page: 'manage:approvals'
+          }
+        },
+        {
+          path: 'manage/rag-lab',
+          component: RagLabPage,
+          meta: { 
+            requiresLogin: true,
+            title: 'RAG 实验室',
+            page: 'rag:lab'
           }
         }
       ]
