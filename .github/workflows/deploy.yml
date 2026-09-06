@@ -1,20 +1,23 @@
-name: Deploy Pipeline
+# ============================================
+#  CI/CD: 构建 → 推送 ACR → SSH 部署到服务器
+#  触发: push 到 main 分支
+# ============================================
+
+name: Build & Deploy
 
 on:
   push:
-    branches: [master, main]
-  workflow_dispatch:
+    branches: [ main ]
 
 env:
-  JAVA_VERSION: '17'
-  NODE_VERSION: '18'
-  ACR_REGISTRY: ${{ secrets.ACR_REGISTRY || 'registry.cn-hangzhou.aliyuncs.com' }}
+  ACR_REGISTRY: ${{ secrets.ACR_REGISTRY }}
   ACR_NAMESPACE: ${{ secrets.ACR_NAMESPACE }}
-  IMAGE_TAG: ${{ github.sha }}
+  APP_PREFIX: zuo
+  TAG: latest
 
 jobs:
   # ============================================
-  # 构建 Docker 镜像并推送到 ACR
+  #  Stage 1: 构建并推送所有镜像到 ACR
   # ============================================
   build-and-push:
     name: Build & Push Images
@@ -22,30 +25,27 @@ jobs:
     strategy:
       matrix:
         service:
-          - name: auth-service
-            context: auth-service
-            port: 8100
           - name: zuo-ai-agent
             context: .
-            port: 8123
+            dockerfile: Dockerfile
+          - name: auth-service
+            context: ./auth-service
+            dockerfile: ./auth-service/Dockerfile
           - name: gateway-service
-            context: gateway-service
-            port: 9000
+            context: ./gateway-service
+            dockerfile: ./gateway-service/Dockerfile
           - name: log-monitor-service
-            context: log-monitor-service
-            port: 8200
+            context: ./log-monitor-service
+            dockerfile: ./log-monitor-service/Dockerfile
           - name: web
-            context: web
-            port: 5173
+            context: ./web
+            dockerfile: ./web/Dockerfile
           - name: monitor-web
-            context: monitor-web
-            port: 5174
+            context: ./monitor-web
+            dockerfile: ./monitor-web/Dockerfile
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Set up QEMU (多平台支持)
-        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -61,70 +61,49 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: ${{ matrix.service.context }}
+          file: ${{ matrix.service.dockerfile }}
           push: true
           tags: |
-            ${{ env.ACR_REGISTRY }}/${{ env.ACR_NAMESPACE }}/${{ matrix.service.name }}:${{ env.IMAGE_TAG }}
-            ${{ env.ACR_REGISTRY }}/${{ env.ACR_NAMESPACE }}/${{ matrix.service.name }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+            ${{ env.ACR_REGISTRY }}/${{ env.ACR_NAMESPACE }}/${{ env.APP_PREFIX }}-${{ matrix.service.name }}:${{ env.TAG }}
+            ${{ env.ACR_REGISTRY }}/${{ env.ACR_NAMESPACE }}/${{ env.APP_PREFIX }}-${{ matrix.service.name }}:${{ github.sha }}
 
   # ============================================
-  # 部署到服务器
+  #  Stage 2: SSH 登录服务器，拉取新镜像并部署
   # ============================================
   deploy:
     name: Deploy to Server
-    runs-on: ubuntu-latest
     needs: build-and-push
-    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
-    environment: production
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Copy docker-compose and env to server
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: ${{ secrets.SERVER_PORT || 22 }}
-          source: |
-            docker-compose.prod.yml
-            .env.example
-          target: /opt/zuo-ai-agent/
-          overwrite: true
-          strip_components: 0
-
       - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: ${{ secrets.SERVER_PORT || 22 }}
-          envs: ACR_REGISTRY,ACR_NAMESPACE,IMAGE_TAG
           script: |
-            cd /opt/zuo-ai-agent
+            set -e
 
-            # 拉取最新镜像
-            export ACR_REGISTRY=${{ env.ACR_REGISTRY }}
-            export ACR_NAMESPACE=${{ env.ACR_NAMESPACE }}
-            export TAG=${{ env.IMAGE_TAG }}
+            APP_HOME="/opt/zuo-ai-agent"
+            COMPOSE_FILE="$APP_HOME/docker-compose.prod.yml"
+            ENV_FILE="$APP_HOME/.env"
 
-            # 拉取所有镜像
-            docker pull ${ACR_REGISTRY}/${ACR_NAMESPACE}/auth-service:${IMAGE_TAG}
-            docker pull ${ACR_REGISTRY}/${ACR_NAMESPACE}/zuo-ai-agent:${IMAGE_TAG}
-            docker pull ${ACR_REGISTRY}/${ACR_NAMESPACE}/gateway-service:${IMAGE_TAG}
-            docker pull ${ACR_REGISTRY}/${ACR_NAMESPACE}/log-monitor-service:${IMAGE_TAG}
-            docker pull ${ACR_REGISTRY}/${ACR_NAMESPACE}/web:${IMAGE_TAG}
-            docker pull ${ACR_REGISTRY}/${ACR_NAMESPACE}/monitor-web:${IMAGE_TAG}
+            echo "=== 1. 登录 ACR ==="
+            docker login ${{ secrets.ACR_REGISTRY }} \
+              -u ${{ secrets.ACR_USERNAME }} \
+              -p ${{ secrets.ACR_PASSWORD }}
 
-            # 重新创建容器（零停机）
-            docker-compose -f docker-compose.prod.yml up -d --remove-orphans
+            echo "=== 2. 拉取最新镜像 ==="
+            cd $APP_HOME
+            docker compose -f $COMPOSE_FILE --env-file $ENV_FILE pull
 
-            # 清理旧镜像（保留最新 + 2个历史版本）
-            docker image prune -f --filter "label=maintainer=zuo-ai-agent"
+            echo "=== 3. 重新部署 ==="
+            docker compose -f $COMPOSE_FILE --env-file $ENV_FILE up -d --remove-orphans
 
-            # 显示状态
+            echo "=== 4. 清理旧镜像 ==="
+            docker image prune -f
+
+            echo "=== 5. 服务状态 ==="
+            docker compose -f $COMPOSE_FILE --env-file $ENV_FILE ps
+
             echo "=== 部署完成 ==="
-            docker-compose -f docker-compose.prod.yml ps
