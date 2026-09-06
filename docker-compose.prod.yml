@@ -1,0 +1,240 @@
+version: '3.8'
+
+# ============================================
+#  zuo-ai-agent 生产环境完整部署
+#  使用: docker-compose -f docker-compose.prod.yml up -d
+# ============================================
+
+# 环境变量从 .env 文件加载
+services:
+  # ============================================
+  # 中间件（可选：如果已购买阿里云 RDS/Redis/RocketMQ，可注释掉）
+  # ============================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: zuo-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: zuo_ai_agent
+      POSTGRES_USER: ${DB_USERNAME:-zuo_ai}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-zuo_ai} -d zuo_ai_agent"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - zuo-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: zuo-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - zuo-network
+
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: zuo-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:-admin}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+      RABBITMQ_DEFAULT_VHOST: /
+    ports:
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    networks:
+      - zuo-network
+
+  # ============================================
+  # 后端服务
+  # ============================================
+  auth-service:
+    image: ${ACR_REGISTRY:-registry.cn-hangzhou.aliyuncs.com}/${ACR_NAMESPACE:-zuo}/${APP_PREFIX:-zuo}-auth-service:${TAG:-latest}
+    container_name: zuo-auth-service
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_URL: ${DB_URL:-jdbc:postgresql://postgres:5432/zuo_ai_agent}
+      DB_USERNAME: ${DB_USERNAME:-zuo_ai}
+      DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-admin}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY}
+      SILICONFLOW_API_KEY: ${SILICONFLOW_API_KEY}
+    ports:
+      - "127.0.0.1:8100:8100"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8100/api/auth/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - zuo-network
+
+  zuo-ai-agent:
+    image: ${ACR_REGISTRY:-registry.cn-hangzhou.aliyuncs.com}/${ACR_NAMESPACE:-zuo}/${APP_PREFIX:-zuo}-zuo-ai-agent:${TAG:-latest}
+    container_name: zuo-ai-agent
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_URL: ${DB_URL:-jdbc:postgresql://postgres:5432/zuo_ai_agent}
+      DB_USERNAME: ${DB_USERNAME:-zuo_ai}
+      DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-admin}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY}
+      SILICONFLOW_API_KEY: ${SILICONFLOW_API_KEY}
+    ports:
+      - "127.0.0.1:8123:8123"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8123/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - zuo-network
+
+  log-monitor-service:
+    image: ${ACR_REGISTRY:-registry.cn-hangzhou.aliyuncs.com}/${ACR_NAMESPACE:-zuo}/${APP_PREFIX:-zuo}-log-monitor-service:${TAG:-latest}
+    container_name: zuo-log-monitor-service
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_URL: ${DB_URL:-jdbc:postgresql://postgres:5432/zuo_ai_agent}
+      DB_USERNAME: ${DB_USERNAME:-zuo_ai}
+      DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-admin}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+    ports:
+      - "127.0.0.1:8200:8200"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8200/api/log/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - zuo-network
+
+  gateway-service:
+    image: ${ACR_REGISTRY:-registry.cn-hangzhou.aliyuncs.com}/${ACR_NAMESPACE:-zuo}/${APP_PREFIX:-zuo}-gateway-service:${TAG:-latest}
+    container_name: zuo-gateway-service
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    ports:
+      - "127.0.0.1:9000:9000"
+    depends_on:
+      redis:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+      zuo-ai-agent:
+        condition: service_healthy
+      log-monitor-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - zuo-network
+
+  # ============================================
+  # 前端（静态资源由 Nginx 托管）
+  # ============================================
+  web:
+    image: ${ACR_REGISTRY:-registry.cn-hangzhou.aliyuncs.com}/${ACR_NAMESPACE:-zuo}/${APP_PREFIX:-zuo}-web:${TAG:-latest}
+    container_name: zuo-web
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    depends_on:
+      - gateway-service
+    networks:
+      - zuo-network
+
+  monitor-web:
+    image: ${ACR_REGISTRY:-registry.cn-hangzhou.aliyuncs.com}/${ACR_NAMESPACE:-zuo}/${APP_PREFIX:-zuo}-monitor-web:${TAG:-latest}
+    container_name: zuo-monitor-web
+    restart: unless-stopped
+    ports:
+      - "5174:5174"
+    depends_on:
+      - gateway-service
+    networks:
+      - zuo-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  rabbitmq_data:
+
+networks:
+  zuo-network:
+    driver: bridge

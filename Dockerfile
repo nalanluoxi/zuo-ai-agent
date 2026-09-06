@@ -1,0 +1,29 @@
+FROM eclipse-temurin:17-jdk-alpine AS builder
+
+WORKDIR /app
+COPY pom.xml .
+COPY src ./src
+
+RUN --mount=type=cache,target=/root/.m2 \
+    mvn clean package -DskipTests -q
+
+# ===== 运行镜像 =====
+FROM eclipse-temurin:17-jre-alpine
+
+RUN apk add --no-cache tzdata curl && \
+    cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
+    echo "Asia/Shanghai" > /etc/timezone
+
+WORKDIR /app
+
+COPY --from=builder /app/target/*.jar app.jar
+
+ENV JAVA_OPTS="-Xms512m -Xmx1024m -XX:+UseG1GC"
+ENV SPRING_PROFILES_ACTIVE=prod
+
+EXPOSE 8123
+
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
+  CMD curl -sf http://localhost:8123/api/health || exit 1
+
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]

@@ -1,0 +1,78 @@
+# 生产环境配置
+# 所有敏感信息通过环境变量注入，禁止硬编码
+
+spring:
+  profiles:
+    active: prod
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/zuo_ai_agent}
+    username: ${DB_USERNAME:zuo_ai}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+  ai:
+    dashscope:
+      api-key: ${DASHSCOPE_API_KEY}
+      chat:
+        options:
+          model: qwen-plus
+    openai:
+      api-key: ${SILICONFLOW_API_KEY}
+      base-url: https://api.siliconflow.cn
+      chat:
+        options:
+          model: deepseek-ai/DeepSeek-V3
+      embedding:
+        options:
+          model: netease-youdao/bce-embedding-base_v1
+    ollama:
+      enabled: false  # 生产环境不启用本地 Ollama
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:admin}
+    password: ${RABBITMQ_PASSWORD:admin123}
+    listener:
+      simple:
+        acknowledge-mode: manual
+        retry:
+          enabled: true
+          max-attempts: 3
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD}
+      lettuce:
+        pool:
+          max-active: 32
+          max-idle: 16
+          min-idle: 8
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl  # 生产环境不用 stdout
+
+logging:
+  level:
+    root: WARN
+    com.example.zuoaiagent: INFO
+    org.springframework.web: WARN
+
+# Tesseract OCR（生产环境路径）
+ocr:
+  tesseract:
+    data-path: /usr/share/tessdata
+
+# 生产环境禁用 Swagger
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
