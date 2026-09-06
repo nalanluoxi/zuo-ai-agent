@@ -11,7 +11,7 @@ on:
 
 env:
   ACR_REGISTRY: ${{ secrets.ACR_REGISTRY }}
-  ACR_NAMESPACE: ${{ secrets.ACR_NAMESPACE }}
+  ACR_NAMESPACE: zwd_nalan
   APP_PREFIX: zuo
   TAG: latest
 
