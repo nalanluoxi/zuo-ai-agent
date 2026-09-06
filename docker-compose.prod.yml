@@ -22,7 +22,7 @@ services:
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - /opt/zuo-ai-agent/data/postgres:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-zuo_ai} -d zuo_ai_agent"]
       interval: 10s
@@ -231,7 +231,6 @@ services:
       - zuo-network
 
 volumes:
-  postgres_data:
   redis_data:
   rabbitmq_data:
 
