@@ -1,0 +1,142 @@
+name: Build and Check Ollama Models
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-and-check:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: maven
+    
+    - name: Build with Maven
+      run: mvn clean compile -DskipTests
+    
+    - name: Verify Ollama configuration
+      run: |
+        echo "检查 Ollama 配置..."
+        
+        # 检查 application.yaml 中的 Ollama 配置
+        if grep -q "ollama:" src/main/resources/application.yaml; then
+          echo "✅ Ollama 配置存在"
+        else
+          echo "❌ 未找到 Ollama 配置"
+          exit 1
+        fi
+        
+        # 提取模型名称
+        CHAT_MODEL=$(grep -A 5 "ollama:" src/main/resources/application.yaml | grep "model:" | head -1 | awk '{print $2}')
+        EMBEDDING_MODEL=$(grep -A 10 "ollama:" src/main/resources/application.yaml | grep "model:" | tail -1 | awk '{print $2}')
+        
+        echo "Chat 模型: $CHAT_MODEL"
+        echo "Embedding 模型: $EMBEDDING_MODEL"
+        
+        # 检查生产配置
+        if [ -f "src/main/resources/application-prod.yaml" ]; then
+          echo "✅ 生产配置文件存在"
+          if grep -q "ollama:" src/main/resources/application-prod.yaml; then
+            echo "✅ 生产环境 Ollama 配置存在"
+          fi
+        fi
+    
+    - name: Start Ollama service
+      run: |
+        echo "启动 Ollama 服务..."
+        
+        # 使用 Docker 启动 Ollama
+        docker run -d --name ollama -p 11434:11434 ollama/ollama:latest
+        
+        # 等待 Ollama 启动
+        echo "等待 Ollama 服务就绪..."
+        for i in {1..30}; do
+          if curl -sf http://localhost:11434/api/tags >/dev/null 2>&1; then
+            echo "✅ Ollama 服务已就绪"
+            break
+          fi
+          echo "等待中... ($i/30)"
+          sleep 2
+        done
+        
+        # 检查是否启动成功
+        if ! curl -sf http://localhost:11434/api/tags >/dev/null 2>&1; then
+          echo "❌ Ollama 服务启动失败"
+          docker logs ollama
+          exit 1
+        fi
+    
+    - name: Check and pull Ollama models
+      run: |
+        echo "检查并拉取 Ollama 模型..."
+        
+        # 从配置文件提取模型名称
+        CHAT_MODEL=$(grep -A 5 "ollama:" src/main/resources/application.yaml | grep "model:" | head -1 | awk '{print $2}')
+        EMBEDDING_MODEL=$(grep -A 10 "ollama:" src/main/resources/application.yaml | grep "model:" | tail -1 | awk '{print $2}')
+        
+        echo "需要检查的模型:"
+        echo "  - $CHAT_MODEL"
+        echo "  - $EMBEDDING_MODEL"
+        
+        # 检查模型是否已存在
+        MODELS_TO_PULL=()
+        
+        if docker exec ollama ollama list 2>/dev/null | grep -qF "$CHAT_MODEL"; then
+          echo "✅ Chat 模型 $CHAT_MODEL 已存在"
+        else
+          echo "📦 Chat 模型 $CHAT_MODEL 需要拉取"
+          MODELS_TO_PULL+=("$CHAT_MODEL")
+        fi
+        
+        if docker exec ollama ollama list 2>/dev/null | grep -qF "$EMBEDDING_MODEL"; then
+          echo "✅ Embedding 模型 $EMBEDDING_MODEL 已存在"
+        else
+          echo "📦 Embedding 模型 $EMBEDDING_MODEL 需要拉取"
+          MODELS_TO_PULL+=("$EMBEDDING_MODEL")
+        fi
+        
+        # 拉取缺失的模型
+        if [ ${#MODELS_TO_PULL[@]} -gt 0 ]; then
+          echo "开始拉取 ${#MODELS_TO_PULL[@]} 个模型..."
+          
+          PULL_FAILED=false
+          for model in "${MODELS_TO_PULL[@]}"; do
+            echo "正在拉取模型: $model"
+            if docker exec ollama ollama pull "$model"; then
+              echo "✅ 模型 $model 拉取成功"
+            else
+              echo "⚠️ 模型 $model 拉取失败（CI 资源限制，将在生产环境部署时拉取）"
+              PULL_FAILED=true
+            fi
+          done
+          
+          if [ "$PULL_FAILED" = true ]; then
+            echo "⚠️ 部分模型拉取失败，这不影响构建。生产环境部署时会自动重试。"
+          fi
+        else
+          echo "✅ 所有模型已存在"
+        fi
+        
+        # 显示最终模型列表
+        echo ""
+        echo "当前 Ollama 模型列表："
+        docker exec ollama ollama list || echo "（无法获取模型列表）"
+      continue-on-error: true
+    
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      if: success()
+      with:
+        name: build-artifacts
+        path: target/*.jar
+        retention-days: 7
