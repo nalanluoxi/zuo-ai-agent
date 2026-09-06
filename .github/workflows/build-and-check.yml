@@ -135,24 +135,82 @@ jobs:
       run: |
         echo "构建 Docker 镜像..."
         
-        # 构建 zuo-ai-agent 镜像
+        ACR_REGISTRY="crpi-rm9ng8lz6w8psofg.cn-beijing.personal.cr.aliyuncs.com"
+        ACR_NAMESPACE="zuo"
+        IMAGE_TAG="${GITHUB_SHA::8}"  # 使用 commit hash 前 8 位作为标签
+        
+        # 构建并标记 zuo-ai-agent 镜像
         echo "构建 zuo-ai-agent 镜像..."
-        docker build -t zuo-ai-agent:test .
+        docker build -t ${ACR_REGISTRY}/${ACR_NAMESPACE}/zuo-ai-agent:${IMAGE_TAG} .
+        docker tag ${ACR_REGISTRY}/${ACR_NAMESPACE}/zuo-ai-agent:${IMAGE_TAG} ${ACR_REGISTRY}/${ACR_NAMESPACE}/zuo-ai-agent:latest
         
-        # 构建 auth-service 镜像
+        # 构建并标记 auth-service 镜像
         echo "构建 auth-service 镜像..."
-        docker build -t zuo-auth-service:test ./auth-service
+        docker build -t ${ACR_REGISTRY}/${ACR_NAMESPACE}/zuo-auth-service:${IMAGE_TAG} ./auth-service
+        docker tag ${ACR_REGISTRY}/${ACR_NAMESPACE}/zuo-auth-service:${IMAGE_TAG} ${ACR_REGISTRY}/${ACR_NAMESPACE}/zuo-auth-service:latest
         
-        # 构建 log-monitor-service 镜像
+        # 构建并标记 log-monitor-service 镜像
         echo "构建 log-monitor-service 镜像..."
-        docker build -t zuo-log-monitor-service:test ./log-monitor-service
+        docker build -t ${ACR_REGISTRY}/${ACR_NAMESPACE}/zuo-log-monitor-service:${IMAGE_TAG} ./log-monitor-service
+        docker tag ${ACR_REGISTRY}/${ACR_NAMESPACE}/zuo-log-monitor-service:${IMAGE_TAG} ${ACR_REGISTRY}/${ACR_NAMESPACE}/zuo-log-monitor-service:latest
         
-        # 构建 gateway-service 镜像
+        # 构建并标记 gateway-service 镜像
         echo "构建 gateway-service 镜像..."
-        docker build -t zuo-gateway-service:test ./gateway-service
+        docker build -t ${ACR_REGISTRY}/${ACR_NAMESPACE}/zuo-gateway-service:${IMAGE_TAG} ./gateway-service
+        docker tag ${ACR_REGISTRY}/${ACR_NAMESPACE}/zuo-gateway-service:${IMAGE_TAG} ${ACR_REGISTRY}/${ACR_NAMESPACE}/zuo-gateway-service:latest
+        
+        # 构建并标记 web 前端镜像
+        echo "构建 web 前端镜像..."
+        docker build -t ${ACR_REGISTRY}/${ACR_NAMESPACE}/zuo-web:${IMAGE_TAG} ./web
+        docker tag ${ACR_REGISTRY}/${ACR_NAMESPACE}/zuo-web:${IMAGE_TAG} ${ACR_REGISTRY}/${ACR_NAMESPACE}/zuo-web:latest
+        
+        # 构建并标记 monitor-web 前端镜像
+        echo "构建 monitor-web 前端镜像..."
+        docker build -t ${ACR_REGISTRY}/${ACR_NAMESPACE}/zuo-monitor-web:${IMAGE_TAG} ./monitor-web
+        docker tag ${ACR_REGISTRY}/${ACR_NAMESPACE}/zuo-monitor-web:${IMAGE_TAG} ${ACR_REGISTRY}/${ACR_NAMESPACE}/zuo-monitor-web:latest
         
         echo "✅ 所有 Docker 镜像构建成功"
-        docker images | grep zuo-
+        docker images | grep ${ACR_REGISTRY}
+    
+    - name: Login to Alibaba Cloud ACR
+      run: |
+        echo "登录阿里云 ACR..."
+        echo "${{ secrets.ACR_PASSWORD }}" | docker login --username="${{ secrets.ACR_USERNAME }}" --password-stdin ${{ secrets.ACR_REGISTRY }}
+        echo "✅ 登录成功"
+    
+    - name: Push Docker images to ACR
+      run: |
+        echo "推送镜像到阿里云 ACR..."
+        
+        ACR_REGISTRY="crpi-rm9ng8lz6w8psofg.cn-beijing.personal.cr.aliyuncs.com"
+        ACR_NAMESPACE="zuo"
+        IMAGE_TAG="${GITHUB_SHA::8}"
+        
+        # 推送 zuo-ai-agent
+        docker push ${ACR_REGISTRY}/${ACR_NAMESPACE}/zuo-ai-agent:${IMAGE_TAG}
+        docker push ${ACR_REGISTRY}/${ACR_NAMESPACE}/zuo-ai-agent:latest
+        
+        # 推送 auth-service
+        docker push ${ACR_REGISTRY}/${ACR_NAMESPACE}/zuo-auth-service:${IMAGE_TAG}
+        docker push ${ACR_REGISTRY}/${ACR_NAMESPACE}/zuo-auth-service:latest
+        
+        # 推送 log-monitor-service
+        docker push ${ACR_REGISTRY}/${ACR_NAMESPACE}/zuo-log-monitor-service:${IMAGE_TAG}
+        docker push ${ACR_REGISTRY}/${ACR_NAMESPACE}/zuo-log-monitor-service:latest
+        
+        # 推送 gateway-service
+        docker push ${ACR_REGISTRY}/${ACR_NAMESPACE}/zuo-gateway-service:${IMAGE_TAG}
+        docker push ${ACR_REGISTRY}/${ACR_NAMESPACE}/zuo-gateway-service:latest
+        
+        # 推送 web 前端
+        docker push ${ACR_REGISTRY}/${ACR_NAMESPACE}/zuo-web:${IMAGE_TAG}
+        docker push ${ACR_REGISTRY}/${ACR_NAMESPACE}/zuo-web:latest
+        
+        # 推送 monitor-web 前端
+        docker push ${ACR_REGISTRY}/${ACR_NAMESPACE}/zuo-monitor-web:${IMAGE_TAG}
+        docker push ${ACR_REGISTRY}/${ACR_NAMESPACE}/zuo-monitor-web:latest
+        
+        echo "✅ 所有镜像推送成功"
     
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4

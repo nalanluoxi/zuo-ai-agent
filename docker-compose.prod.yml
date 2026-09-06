@@ -92,7 +92,7 @@ services:
   # 后端服务
   # ============================================
   auth-service:
-    image: ${ACR_REGISTRY:-registry.cn-hangzhou.aliyuncs.com}/${ACR_NAMESPACE:-zuo}/${APP_PREFIX:-zuo}-auth-service:${TAG:-latest}
+    image: ${ACR_REGISTRY:-crpi-rm9ng8lz6w8psofg.cn-beijing.personal.cr.aliyuncs.com}/${ACR_NAMESPACE:-zuo}/${APP_PREFIX:-zuo}-auth-service:${TAG:-latest}
     container_name: zuo-auth-service
     restart: unless-stopped
     environment:
@@ -127,7 +127,7 @@ services:
       - zuo-network
 
   zuo-ai-agent:
-    image: ${ACR_REGISTRY:-registry.cn-hangzhou.aliyuncs.com}/${ACR_NAMESPACE:-zuo}/${APP_PREFIX:-zuo}-zuo-ai-agent:${TAG:-latest}
+    image: ${ACR_REGISTRY:-crpi-rm9ng8lz6w8psofg.cn-beijing.personal.cr.aliyuncs.com}/${ACR_NAMESPACE:-zuo}/${APP_PREFIX:-zuo}-zuo-ai-agent:${TAG:-latest}
     container_name: zuo-ai-agent
     restart: unless-stopped
     environment:
@@ -167,7 +167,7 @@ services:
       - zuo-network
 
   log-monitor-service:
-    image: ${ACR_REGISTRY:-registry.cn-hangzhou.aliyuncs.com}/${ACR_NAMESPACE:-zuo}/${APP_PREFIX:-zuo}-log-monitor-service:${TAG:-latest}
+    image: ${ACR_REGISTRY:-crpi-rm9ng8lz6w8psofg.cn-beijing.personal.cr.aliyuncs.com}/${ACR_NAMESPACE:-zuo}/${APP_PREFIX:-zuo}-log-monitor-service:${TAG:-latest}
     container_name: zuo-log-monitor-service
     restart: unless-stopped
     environment:
@@ -200,7 +200,7 @@ services:
       - zuo-network
 
   gateway-service:
-    image: ${ACR_REGISTRY:-registry.cn-hangzhou.aliyuncs.com}/${ACR_NAMESPACE:-zuo}/${APP_PREFIX:-zuo}-gateway-service:${TAG:-latest}
+    image: ${ACR_REGISTRY:-crpi-rm9ng8lz6w8psofg.cn-beijing.personal.cr.aliyuncs.com}/${ACR_NAMESPACE:-zuo}/${APP_PREFIX:-zuo}-gateway-service:${TAG:-latest}
     container_name: zuo-gateway-service
     restart: unless-stopped
     environment:
@@ -231,7 +231,7 @@ services:
   # 前端（静态资源由 Nginx 托管）
   # ============================================
   web:
-    image: ${ACR_REGISTRY:-registry.cn-hangzhou.aliyuncs.com}/${ACR_NAMESPACE:-zuo}/${APP_PREFIX:-zuo}-web:${TAG:-latest}
+    image: ${ACR_REGISTRY:-crpi-rm9ng8lz6w8psofg.cn-beijing.personal.cr.aliyuncs.com}/${ACR_NAMESPACE:-zuo}/${APP_PREFIX:-zuo}-web:${TAG:-latest}
     container_name: zuo-web
     restart: unless-stopped
     ports:
@@ -242,7 +242,7 @@ services:
       - zuo-network
 
   monitor-web:
-    image: ${ACR_REGISTRY:-registry.cn-hangzhou.aliyuncs.com}/${ACR_NAMESPACE:-zuo}/${APP_PREFIX:-zuo}-monitor-web:${TAG:-latest}
+    image: ${ACR_REGISTRY:-crpi-rm9ng8lz6w8psofg.cn-beijing.personal.cr.aliyuncs.com}/${ACR_NAMESPACE:-zuo}/${APP_PREFIX:-zuo}-monitor-web:${TAG:-latest}
     container_name: zuo-monitor-web
     restart: unless-stopped
     ports:
