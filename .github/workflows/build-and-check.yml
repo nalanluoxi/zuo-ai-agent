@@ -2,7 +2,7 @@ name: Build, Check and Deploy
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ master ]
 
 jobs:
   build-and-check:
@@ -130,6 +130,29 @@ jobs:
         echo "当前 Ollama 模型列表："
         docker exec ollama ollama list || echo "（无法获取模型列表）"
       continue-on-error: true
+    
+    - name: Build Docker images
+      run: |
+        echo "构建 Docker 镜像..."
+        
+        # 构建 zuo-ai-agent 镜像
+        echo "构建 zuo-ai-agent 镜像..."
+        docker build -t zuo-ai-agent:test .
+        
+        # 构建 auth-service 镜像
+        echo "构建 auth-service 镜像..."
+        docker build -t zuo-auth-service:test ./auth-service
+        
+        # 构建 log-monitor-service 镜像
+        echo "构建 log-monitor-service 镜像..."
+        docker build -t zuo-log-monitor-service:test ./log-monitor-service
+        
+        # 构建 gateway-service 镜像
+        echo "构建 gateway-service 镜像..."
+        docker build -t zuo-gateway-service:test ./gateway-service
+        
+        echo "✅ 所有 Docker 镜像构建成功"
+        docker images | grep zuo-
     
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
