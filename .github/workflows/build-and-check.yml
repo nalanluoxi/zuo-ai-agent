@@ -243,5 +243,6 @@ jobs:
         command_timeout: 20m
         script: |
           cd /opt/zuo-ai-agent
-          git pull origin master
+          git fetch origin master
+          git reset --hard origin/master
           bash scripts/deploy.sh update
