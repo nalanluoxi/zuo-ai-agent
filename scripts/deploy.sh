@@ -48,7 +48,7 @@ check_prerequisites() {
 
     # 检查并创建数据目录
     section "检查数据目录"
-    local data_dirs=("$APP_HOME/data/postgres" "$APP_HOME/data/ollama")
+    local data_dirs=("$APP_HOME/data/postgres" "$APP_HOME/data/ollama" "$APP_HOME/data/redis" "$APP_HOME/data/rabbitmq")
     for dir in "${data_dirs[@]}"; do
         if [ ! -d "$dir" ]; then
             warn "目录不存在，正在创建: $dir"

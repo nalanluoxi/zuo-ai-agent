@@ -41,7 +41,7 @@ services:
     ports:
       - "127.0.0.1:6379:6379"
     volumes:
-      - redis_data:/data
+      - /opt/zuo-ai-agent/data/redis:/data
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 10s
@@ -62,7 +62,7 @@ services:
       - "127.0.0.1:5672:5672"
       - "127.0.0.1:15672:15672"
     volumes:
-      - rabbitmq_data:/var/lib/rabbitmq
+      - /opt/zuo-ai-agent/data/rabbitmq:/var/lib/rabbitmq
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 15s
@@ -255,8 +255,8 @@ services:
       - zuo-network
 
 volumes:
-  redis_data:
-  rabbitmq_data:
+  # 所有数据统一挂载到宿主目录 /opt/zuo-ai-agent/data/
+  # postgres, redis, rabbitmq, ollama 均使用本地目录
 
 networks:
   zuo-network:
