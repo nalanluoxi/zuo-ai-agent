@@ -11,7 +11,7 @@ services:
   # 中间件（可选：如果已购买阿里云 RDS/Redis/RocketMQ，可注释掉）
   # ============================================
   postgres:
-    image: postgres:15-alpine
+    image: pgvector/pgvector:pg15
     container_name: zuo-postgres
     restart: unless-stopped
     environment:
