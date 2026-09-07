@@ -372,7 +372,14 @@
               </template>
             </el-table-column>
             <el-table-column label="发布对象" width="160" show-overflow-tooltip>
-              <template #default="{ row }">{{ row.componentName || '-' }}</template>
+              <template #default="{ row }">
+                <template v-if="row.componentType === 'MODEL'">
+                  {{ row.modelNames || '多个模型' }}
+                </template>
+                <template v-else>
+                  {{ row.componentName || '-' }}
+                </template>
+              </template>
             </el-table-column>
             <el-table-column label="版本" width="120">
               <template #default="{ row }">{{ row.versionLabel || '-' }}</template>
@@ -416,39 +423,48 @@
 
           <el-form :model="releaseForm" label-width="130px">
             <el-form-item label="计划名称" required>
-              <el-input v-model="releaseForm.planName" placeholder="如：RAG配置灰度-V3" />
+              <el-input v-model="releaseForm.planName" placeholder="如：RAG 配置灰度-V3" />
             </el-form-item>
 
-            <el-form-item label="组件类型" required>
-              <el-select v-model="releaseForm.componentType" style="width:100%" @change="onComponentTypeChange">
-                <el-option label="流水线配置" value="CONFIG" />
-                <el-option label="提示词模板" value="PROMPT" />
-                <el-option label="模型配置" value="MODEL" />
-              </el-select>
-            </el-form-item>
+            <!-- 模型类型不需要选择发布对象 -->
+            <template v-if="releaseForm.componentType !== 'MODEL'">
+              <el-form-item label="组件类型" required>
+                <el-select v-model="releaseForm.componentType" style="width:100%" @change="onComponentTypeChange">
+                  <el-option label="流水线配置" value="CONFIG" />
+                  <el-option label="提示词模板" value="PROMPT" />
+                  <el-option label="模型配置" value="MODEL" />
+                </el-select>
+              </el-form-item>
 
-            <el-form-item label="发布对象" required>
-              <el-select v-model="releaseForm.componentId" style="width:100%" placeholder="选择要发布的组件" @change="onComponentChange">
-                <el-option
-                  v-for="item in releaseComponentOptions"
-                  :key="item.value"
-                  :label="item.label"
-                  :value="item.value"
-                />
-              </el-select>
-              <div class="param-desc">{{ componentTypeHint(releaseForm.componentType) }}</div>
-            </el-form-item>
+              <el-form-item label="发布对象" required>
+                <el-select v-model="releaseForm.componentId" style="width:100%" placeholder="选择要发布的组件" @change="onComponentChange">
+                  <el-option
+                    v-for="item in releaseComponentOptions"
+                    :key="item.value"
+                    :label="item.label"
+                    :value="item.value"
+                  />
+                </el-select>
+                <div class="param-desc">{{ componentTypeHint(releaseForm.componentType) }}</div>
+              </el-form-item>
 
-            <el-form-item label="目标版本" v-if="releaseForm.componentId && releaseVersionOptions.length">
-              <el-select v-model="releaseForm.toVersionId" style="width:100%" placeholder="选择目标版本">
-                <el-option
-                  v-for="v in releaseVersionOptions"
-                  :key="v.value"
-                  :label="v.label"
-                  :value="v.value"
-                />
-              </el-select>
-              <div class="param-desc">将发布此版本到灰度流量</div>
+              <el-form-item label="目标版本" v-if="releaseForm.componentId && releaseVersionOptions.length">
+                <el-select v-model="releaseForm.toVersionId" style="width:100%" placeholder="选择目标版本">
+                  <el-option
+                    v-for="v in releaseVersionOptions"
+                    :key="v.value"
+                    :label="v.label"
+                    :value="v.value"
+                  />
+                </el-select>
+                <div class="param-desc">将发布此版本到灰度流量</div>
+              </el-form-item>
+            </template>
+
+            <!-- 模型类型显示提示信息 -->
+            <el-form-item v-else label="组件类型">
+              <el-tag type="info">模型配置</el-tag>
+              <div class="param-desc">模型配置从模型配置 Tab 发起发布</div>
             </el-form-item>
 
             <el-divider content-position="left">灰度策略</el-divider>
@@ -505,8 +521,9 @@
                 <el-switch :model-value="row.isActive === 1" @change="toggleModelActive(row.id)" />
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="180" fixed="right">
+            <el-table-column label="操作" width="240" fixed="right">
               <template #default="{ row }">
+                <el-button size="small" type="primary" @click="openEditModelDialog(row)">编辑</el-button>
                 <el-button size="small" type="success" @click="testModel(row.id)" :loading="row._testing">测试</el-button>
                 <el-button size="small" type="danger" @click="deleteModel(row.id)">删除</el-button>
               </template>
@@ -545,6 +562,82 @@
           <template #footer>
             <el-button @click="createModelDialogVisible = false">取消</el-button>
             <el-button type="primary" @click="submitCreateModel" :loading="modelCreating">创建</el-button>
+          </template>
+        </el-dialog>
+
+        <!-- 编辑模型配置对话框 -->
+        <el-dialog v-model="editModelDialogVisible" title="编辑 LLM 模型配置" width="580px" destroy-on-close>
+          <el-form :model="editModelForm" label-width="120px">
+            <el-form-item label="模型名称" required>
+              <el-input v-model="editModelForm.modelName" placeholder="如：百炼 qwen-plus" />
+            </el-form-item>
+            <el-form-item label="提供商" required>
+              <el-select v-model="editModelForm.provider" placeholder="选择提供商" style="width:100%">
+                <el-option v-for="p in modelProviders" :key="p.value" :label="p.label" :value="p.value" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="Base URL" required>
+              <el-input v-model="editModelForm.baseUrl" placeholder="OpenAI 兼容 API 地址" />
+              <div class="param-desc">所有提供商统一使用 OpenAI 兼容协议</div>
+            </el-form-item>
+            <el-form-item label="API Key" required>
+              <el-input v-model="editModelForm.apiKey" placeholder="sk-..." show-password />
+            </el-form-item>
+            <el-form-item label="模型 ID" required>
+              <el-input v-model="editModelForm.modelId" placeholder="如 qwen-plus / deepseek-chat" />
+            </el-form-item>
+            <el-form-item label="Max Tokens">
+              <el-input-number v-model="editModelForm.maxTokens" :min="256" :max="32768" :step="256" style="width:100%" />
+            </el-form-item>
+            <el-form-item label="Temperature">
+              <el-slider v-model="editModelForm.temperature" :min="0" :max="2" :step="0.1" show-input />
+            </el-form-item>
+          </el-form>
+          <template #footer>
+            <el-button @click="editModelDialogVisible = false">取消</el-button>
+            <el-button type="primary" @click="submitEditModel" :loading="modelEditing">保存</el-button>
+          </template>
+        </el-dialog>
+
+        <!-- 模型发布选择对话框（简化版：一步完成） -->
+        <el-dialog v-model="modelReleaseSelectVisible" title="创建模型灰度发布计划" width="600px" destroy-on-close>
+          <el-form label-width="130px">
+            <el-form-item label="计划名称" required>
+              <el-input v-model="modelReleasePlanName" placeholder="如：模型灰度-V1" />
+            </el-form-item>
+
+            <el-form-item label="选择模型" required>
+              <el-checkbox-group v-model="selectedModelIds">
+                <el-checkbox v-for="opt in modelReleaseOptions" :key="opt.value" :label="opt.value" style="display:block;margin:8px 0">
+                  {{ opt.label }}
+                </el-checkbox>
+              </el-checkbox-group>
+              <div class="param-desc">勾选要发布的模型配置</div>
+            </el-form-item>
+
+            <el-divider content-position="left">灰度策略</el-divider>
+
+            <el-form-item label="灰度模式" required>
+              <el-radio-group v-model="modelReleaseGrayMode">
+                <el-radio value="PERCENT">百分比</el-radio>
+                <el-radio value="LIST">名单</el-radio>
+              </el-radio-group>
+            </el-form-item>
+
+            <el-form-item label="灰度比例" v-if="modelReleaseGrayMode !== 'LIST'">
+              <el-slider v-model="modelReleaseGrayRatio" :min="0" :max="1" :step="0.01" show-input />
+              <div class="param-desc">灰度流量占总流量比例（0%~100%）</div>
+            </el-form-item>
+
+            <el-form-item label="用户 ID 列表" v-if="modelReleaseGrayMode === 'LIST'">
+              <el-input v-model="modelReleaseUserIdsText" type="textarea" :rows="3" placeholder="每行一个用户 ID，或逗号分隔" />
+              <div class="param-desc">名单中的用户将固定走灰度流量</div>
+            </el-form-item>
+          </el-form>
+
+          <template #footer>
+            <el-button @click="modelReleaseSelectVisible = false">取消</el-button>
+            <el-button type="primary" @click="submitModelReleasePlan" :loading="releaseCreating">创建发布计划</el-button>
           </template>
         </el-dialog>
       </el-tab-pane>
@@ -1193,8 +1286,9 @@ function getStatusType(status: string): string {
  * @param componentType 预填的组件类型（从配置页面跳转时使用）
  * @param componentId 预填的组件 ID
  * @param componentInfo 提示文字（可选）
+ * @param modelConfigIds 模型配置 ID 列表（MODEL 类型时使用）
  */
-async function openCreateReleaseDialog(componentType?: string, componentId?: number, componentInfo?: string) {
+async function openCreateReleaseDialog(componentType?: string, componentId?: number, componentInfo?: string, modelConfigIds?: number[]) {
   releaseForm.value = {
     planName: '',
     componentType: componentType || 'CONFIG',
@@ -1203,7 +1297,8 @@ async function openCreateReleaseDialog(componentType?: string, componentId?: num
     grayMode: 'PERCENT',
     grayRatio: 0.1,
     grayUserIdsText: '',
-    _componentInfo: componentInfo || ''
+    _componentInfo: componentInfo || '',
+    _modelConfigIds: modelConfigIds || []
   }
   releaseComponentOptions.value = []
   releaseVersionOptions.value = []
@@ -1286,6 +1381,10 @@ async function onComponentChange(componentId: any) {
 
 async function submitCreateReleasePlan() {
   if (!releaseForm.value.planName.trim()) { ElMessage.warning('请填写计划名称'); return }
+  if (releaseForm.value.componentType === 'MODEL') {
+    ElMessage.warning('模型配置请从模型配置 Tab 发起发布')
+    return
+  }
   if (!releaseForm.value.componentId) { ElMessage.warning('请选择发布对象'); return }
   releaseCreating.value = true
   try {
@@ -1370,7 +1469,9 @@ async function rollbackPlan(id: number) {
 const modelConfigs = ref<any[]>([])
 const modelLoading = ref(false)
 const createModelDialogVisible = ref(false)
+const editModelDialogVisible = ref(false)
 const modelCreating = ref(false)
+const modelEditing = ref(false)
 const modelForm = ref<any>({
   modelName: '',
   provider: 'bailian',
@@ -1380,6 +1481,25 @@ const modelForm = ref<any>({
   maxTokens: 4096,
   temperature: 0.7
 })
+const editModelForm = ref<any>({
+  id: null,
+  modelName: '',
+  provider: 'bailian',
+  baseUrl: '',
+  apiKey: '',
+  modelId: '',
+  maxTokens: 4096,
+  temperature: 0.7
+})
+
+// 模型发布选择相关
+const modelReleaseSelectVisible = ref(false)
+const modelReleaseOptions = ref<any[]>([])
+const selectedModelIds = ref<number[]>([])
+const modelReleasePlanName = ref('')
+const modelReleaseGrayMode = ref('PERCENT')
+const modelReleaseGrayRatio = ref(0.5)
+const modelReleaseUserIdsText = ref('')
 
 const modelProviders = [
   { value: 'bailian', label: '百炼 (阿里云 DashScope)' },
@@ -1391,11 +1511,11 @@ const modelProviders = [
 ]
 
 const PROVIDER_BASE_URLS: Record<string, string> = {
-  bailian: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-  deepseek: 'https://api.deepseek.com/v1',
-  siliconflow: 'https://api.siliconflow.cn/v1',
-  openai: 'https://api.openai.com/v1',
-  agnes: 'https://api.agnes-ai.cn/v1',
+  bailian: 'https://dashscope.aliyuncs.com/compatible-mode',
+  deepseek: 'https://api.deepseek.com',
+  siliconflow: 'https://api.siliconflow.cn',
+  openai: 'https://api.openai.com',
+  agnes: 'https://api.agnes-ai.cn',
   custom: ''
 }
 
@@ -1453,8 +1573,60 @@ async function submitCreateModel() {
 
 /** 从模型配置页发起发布 */
 function createReleaseFromModel() {
-  activeTab.value = 'release'
-  openCreateReleaseDialog('MODEL')
+  // 收集所有激活的模型 ID
+  const activeModels = modelConfigs.value.filter((m: any) => m.isActive === 1)
+  if (activeModels.length === 0) {
+    ElMessage.warning('没有已激活的模型，请先激活至少一个模型')
+    return
+  }
+  // 初始化表单
+  modelReleasePlanName.value = ''
+  modelReleaseGrayMode.value = 'PERCENT'
+  modelReleaseGrayRatio.value = 0.5
+  modelReleaseUserIdsText.value = ''
+  selectedModelIds.value = []
+  modelReleaseOptions.value = activeModels.map((m: any) => ({
+    value: m.id,
+    label: `${m.modelName} (${m.modelId})`
+  }))
+  // 打开模型选择对话框
+  modelReleaseSelectVisible.value = true
+}
+
+/** 提交模型发布计划（简化版：一步完成） */
+async function submitModelReleasePlan() {
+  if (!modelReleasePlanName.value.trim()) {
+    ElMessage.warning('请填写计划名称')
+    return
+  }
+  if (selectedModelIds.value.length === 0) {
+    ElMessage.warning('请至少选择一个模型')
+    return
+  }
+  releaseCreating.value = true
+  try {
+    const userIds = modelReleaseUserIdsText.value
+      .split(/[\n,，]/).map((s: string) => s.trim()).filter((s: string) => s && !isNaN(Number(s))).map(Number)
+    const payload = {
+      plan: {
+        planName: modelReleasePlanName.value,
+        componentType: 'MODEL',
+        componentId: null,
+        grayMode: modelReleaseGrayMode.value,
+        grayRatio: modelReleaseGrayMode.value !== 'LIST' ? modelReleaseGrayRatio.value : null,
+        grayUserIds: modelReleaseGrayMode.value !== 'PERCENT' ? JSON.stringify(userIds) : null
+      },
+      modelConfigIds: selectedModelIds.value
+    }
+    await request.post('/rag-lab/gray-release/model', payload)
+    ElMessage.success('模型发布计划已创建')
+    modelReleaseSelectVisible.value = false
+    await loadReleasePlans()
+  } catch (e: any) {
+    ElMessage.error(e.response?.data?.message || '创建失败')
+  } finally {
+    releaseCreating.value = false
+  }
 }
 
 async function toggleModelActive(id: number) {
@@ -1472,7 +1644,7 @@ async function testModel(id: number) {
   if (model) model._testing = true
   try {
     const res = await request.post(`/rag-lab/model-config/${id}/test`)
-    if (res.data) {
+    if (res) {
       ElMessage.success('连通性测试通过')
     } else {
       ElMessage.error('连通性测试失败')
@@ -1492,6 +1664,48 @@ async function deleteModel(id: number) {
     await loadModelConfigs()
   } catch (e: any) {
     if (e !== 'cancel') ElMessage.error('操作失败')
+  }
+}
+
+function openEditModelDialog(row: any) {
+  editModelForm.value = {
+    id: row.id,
+    modelName: row.modelName,
+    provider: row.provider,
+    baseUrl: row.baseUrl,
+    apiKey: row.apiKey || '',
+    modelId: row.modelId,
+    maxTokens: row.maxTokens || 4096,
+    temperature: row.temperature || 0.7
+  }
+  editModelDialogVisible.value = true
+}
+
+async function submitEditModel() {
+  const f = editModelForm.value
+  if (!f.modelName.trim()) { ElMessage.warning('请填写模型名称'); return }
+  if (!f.baseUrl.trim()) { ElMessage.warning('请填写 Base URL'); return }
+  if (!f.apiKey.trim()) { ElMessage.warning('请填写 API Key'); return }
+  if (!f.modelId.trim()) { ElMessage.warning('请填写模型 ID'); return }
+  modelEditing.value = true
+  try {
+    await request.put('/rag-lab/model-config', {
+      id: f.id,
+      modelName: f.modelName,
+      provider: f.provider,
+      baseUrl: f.baseUrl,
+      apiKey: f.apiKey,
+      modelId: f.modelId,
+      maxTokens: f.maxTokens,
+      temperature: f.temperature
+    })
+    ElMessage.success('模型配置已更新')
+    editModelDialogVisible.value = false
+    await loadModelConfigs()
+  } catch (e: any) {
+    ElMessage.error(e.response?.data?.message || '更新失败')
+  } finally {
+    modelEditing.value = false
   }
 }
 

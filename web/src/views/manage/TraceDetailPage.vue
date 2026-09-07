@@ -115,12 +115,185 @@
             <div class="io-grid">
               <div class="io-block">
                 <div class="io-label">输入数据</div>
-                <pre v-if="node.inputData" class="io-content">{{ formatJson(node.inputData) }}</pre>
+                <!-- REWRITE: 原始输入 + 改写开关 -->
+                <div v-if="node.nodeType === 'REWRITE'" class="io-structured">
+                  <div class="field-row"><span class="field-label">原始输入</span><div class="field-value query-content">{{ parseInput(node.inputData)?.originalPrompt || '-' }}</div></div>
+                  <div class="field-row"><span class="field-label">启用改写</span><span class="field-value">{{ parseInput(node.inputData)?.enableRewrite ? '是' : '否' }}</span></div>
+                </div>
+                <!-- HYDE: 查询词 + 是否启用 -->
+                <div v-else-if="node.nodeType === 'HYDE'" class="io-structured">
+                  <div class="field-row"><span class="field-label">查询词</span><div class="field-value query-content">{{ parseInput(node.inputData)?.query || '-' }}</div></div>
+                  <div class="field-row"><span class="field-label">启用 HyDE</span><span class="field-value">{{ parseInput(node.inputData)?.enabled ? '是' : '否' }}</span></div>
+                </div>
+                <!-- CLASSIFY: 输入查询 -->
+                <div v-else-if="node.nodeType === 'CLASSIFY'" class="io-structured">
+                  <div class="field-row"><span class="field-label">输入查询</span><div class="field-value query-content">{{ parseInput(node.inputData)?.query || '-' }}</div></div>
+                </div>
+                <!-- RETRIEVE: 显示查询词 + 知识库 + HyDE 信息 -->
+                <div v-else-if="node.nodeType === 'RETRIEVE'" class="io-structured">
+                  <div class="field-row"><span class="field-label">查询词</span><div class="field-value query-content">{{ parseInput(node.inputData)?.query || '-' }}</div></div>
+                  <div class="field-row"><span class="field-label">知识库</span><span class="field-value">{{ parseInput(node.inputData)?.kbId ? ('ID=' + parseInput(node.inputData).kbId) : '全局' }}</span></div>
+                  <div class="field-row"><span class="field-label">HyDE</span><span class="field-value">{{ parseInput(node.inputData)?.hydeEnabled ? '已启用' : '未启用' }}</span></div>
+                  <div class="field-row" v-if="parseInput(node.inputData)?.equivQueryCount"><span class="field-label">等价查询数</span><span class="field-value">{{ parseInput(node.inputData).equivQueryCount }}</span></div>
+                </div>
+                <!-- RERANK: 显示待排序文档列表 -->
+                <div v-else-if="node.nodeType === 'RERANK'" class="io-structured">
+                  <div class="field-row"><span class="field-label">启用 Rerank</span><span class="field-value">{{ parseInput(node.inputData)?.enableRerank ? '是' : '否' }}</span></div>
+                  <div class="field-row"><span class="field-label">待排序文档数</span><span class="field-value">{{ parseInput(node.inputData)?.inputCount || 0 }}</span></div>
+                  <div v-if="parseInput(node.inputData)?.docs?.length" class="doc-list-scroll">
+                    <div style="font-size:11px;color:#909399;margin-bottom:4px">点击文档展开/收起完整内容</div>
+                    <template v-for="(doc, idx) in parseInput(node.inputData).docs" :key="idx">
+                      <div class="doc-card-llm" @click="toggleDoc(idx)">
+                        <div class="doc-header">
+                          <span class="doc-index">文档 #{{ idx + 1 }}</span>
+                        </div>
+                        <pre class="doc-content-llm">{{ doc.content }}</pre>
+                      </div>
+                      <div v-show="expandedDocs[idx]" class="doc-expanded">
+                        <span class="doc-expanded-label">文档 #{{ idx + 1 }} 完整内容</span>
+                        <pre class="doc-expanded-content">{{ doc.content }}</pre>
+                      </div>
+                    </template>
+                  </div>
+                </div>
+                <!-- PROMPT: 领域 + 模板 + 记忆 + 完整文档 -->
+                <div v-else-if="node.nodeType === 'PROMPT'" class="io-structured">
+                  <div class="field-row"><span class="field-label">领域</span><span class="field-value">{{ parseInput(node.inputData)?.domain || '-' }}</span></div>
+                  <div class="field-row"><span class="field-label">文档数</span><span class="field-value">{{ parseInput(node.inputData)?.docCount || 0 }}</span></div>
+                  <div v-if="parseInput(node.inputData)?.rawTemplate" class="field-row">
+                    <span class="field-label">原始模板</span>
+                    <pre class="prompt-input-content scrollable">{{ parseInput(node.inputData).rawTemplate }}</pre>
+                  </div>
+                  <div v-if="parseInput(node.inputData)?.memoryContext" class="field-row">
+                    <span class="field-label">对话记忆</span>
+                    <pre class="memory-content scrollable">{{ parseInput(node.inputData).memoryContext }}</pre>
+                  </div>
+                  <div v-if="parseInput(node.inputData)?.docs?.length" class="doc-list-scroll">
+                    <div style="font-size:11px;color:#909399;margin-bottom:4px">参考文档：</div>
+                    <div v-for="(doc, idx) in parseInput(node.inputData).docs" :key="idx" class="doc-card-llm">
+                      <div class="doc-header">
+                        <span class="doc-index">#{{ idx + 1 }}</span>
+                        <span v-if="doc.score" class="doc-score">{{ typeof doc.score === 'number' ? doc.score.toFixed(2) : doc.score }}</span>
+                      </div>
+                      <pre class="doc-content-llm">{{ doc.content }}</pre>
+                    </div>
+                  </div>
+                </div>
+                <!-- LLM: 模型 + 系统提示词 + 用户输入 -->
+                <div v-else-if="node.nodeType === 'LLM'" class="io-structured">
+                  <div class="field-row"><span class="field-label">模型</span><span class="field-value"><el-tag size="small">{{ parseInput(node.inputData)?.modelId || '-' }}</el-tag></span></div>
+                  <div v-if="parseInput(node.inputData)?.systemPrompt" class="field-row">
+                    <span class="field-label">系统提示词</span>
+                    <pre class="prompt-input-content">{{ parseInput(node.inputData).systemPrompt }}</pre>
+                  </div>
+                  <div v-if="parseInput(node.inputData)?.userPrompt" class="field-row">
+                    <span class="field-label">用户输入</span>
+                    <div class="field-value query-content">{{ parseInput(node.inputData).userPrompt }}</div>
+                  </div>
+                </div>
+                <!-- 其他阶段 fallback -->
+                <pre v-else-if="node.inputData" class="io-content">{{ formatJson(node.inputData) }}</pre>
                 <span v-else style="color:#999">-</span>
               </div>
               <div class="io-block">
                 <div class="io-label">输出数据</div>
-                <pre v-if="node.outputData" class="io-content">{{ formatJson(node.outputData) }}</pre>
+                <!-- REWRITE: 改写结果 -->
+                <div v-if="node.nodeType === 'REWRITE'" class="io-structured">
+                  <div class="field-row">
+                    <span class="field-label">改写结果</span>
+                    <div class="field-value query-content">{{ parseOutput(node.outputData)?.rewrittenQuery || '-' }}</div>
+                  </div>
+                </div>
+                <!-- HYDE: 假设文档 + 等价查询 -->
+                <div v-else-if="node.nodeType === 'HYDE'" class="io-structured">
+                  <div class="field-row"><span class="field-label">HyDE 启用</span><span class="field-value">{{ parseOutput(node.outputData)?.hydeEnabled ? '是' : '否' }}</span></div>
+                  <div class="field-row" v-if="parseOutput(node.outputData)?.skipped"><span class="field-label">状态</span><span class="field-value"><el-tag size="small">跳过</el-tag></span></div>
+                  <div v-if="parseOutput(node.outputData)?.hydeDoc" class="field-row">
+                    <span class="field-label">假设文档</span>
+                    <pre class="hyde-doc-full">{{ parseOutput(node.outputData).hydeDoc }}</pre>
+                  </div>
+                  <div v-if="parseOutput(node.outputData)?.equivQueries?.length" class="field-row">
+                    <span class="field-label">等价查询</span>
+                    <div class="field-value">
+                      <div v-for="(q, idx) in parseOutput(node.outputData).equivQueries" :key="idx" class="equiv-query">{{ idx + 1 }}. {{ q }}</div>
+                    </div>
+                  </div>
+                </div>
+                <!-- CLASSIFY: 意图标签 + 置信度 -->
+                <div v-else-if="node.nodeType === 'CLASSIFY'" class="io-structured">
+                  <div class="field-row"><span class="field-label">意图标签</span><span class="field-value"><el-tag size="small" :type="parseOutput(node.outputData)?.isSystem ? 'warning' : ''">{{ parseOutput(node.outputData)?.label || '-' }}</el-tag></span></div>
+                  <div class="field-row"><span class="field-label">置信度</span><span class="field-value"><strong>{{ typeof parseOutput(node.outputData)?.confidence === 'number' ? (parseOutput(node.outputData).confidence * 100).toFixed(1) : parseOutput(node.outputData)?.confidence }}%</strong></span></div>
+                  <div class="field-row"><span class="field-label">系统意图</span><span class="field-value">{{ parseOutput(node.outputData)?.isSystem ? '是' : '否' }}</span></div>
+                  <div class="field-row" v-if="parseOutput(node.outputData)?.kbId"><span class="field-label">知识库 ID</span><span class="field-value">{{ parseOutput(node.outputData).kbId }}</span></div>
+                </div>
+                <!-- RETRIEVE: 显示每篇检索到的文档 -->
+                <div v-else-if="node.nodeType === 'RETRIEVE'" class="io-structured">
+                  <div class="field-row"><span class="field-label">检索到</span><span class="field-value"><strong>{{ parseOutput(node.outputData)?.count || 0 }}</strong> 篇文档</span></div>
+                  <div v-if="parseOutput(node.outputData)?.docs?.length" class="doc-list-scroll">
+                    <div v-for="(doc, idx) in parseOutput(node.outputData).docs" :key="idx" class="doc-card-llm">
+                      <div class="doc-header">
+                        <span class="doc-index">文档 {{ idx + 1 }}</span>
+                        <span v-if="doc.score" class="doc-score">分数: {{ typeof doc.score === 'number' ? doc.score.toFixed(3) : doc.score }}</span>
+                      </div>
+                      <pre class="doc-content-llm">{{ doc.content }}</pre>
+                      <div class="doc-meta">来源: {{ doc.source || '向量检索' }}<span v-if="doc.kbId"> · 知识库 ID: {{ doc.kbId }}</span></div>
+                    </div>
+                  </div>
+                </div>
+                <!-- RERANK: 显示每篇重排序后的文档及分数 -->
+                <div v-else-if="node.nodeType === 'RERANK'" class="io-structured">
+                  <div class="field-row"><span class="field-label">结果</span><span class="field-value">从 <strong>{{ parseOutput(node.outputData)?.inputCount || 0 }}</strong> 篇中保留 <strong>{{ parseOutput(node.outputData)?.count || 0 }}</strong> 篇</span></div>
+                  <div v-if="parseOutput(node.outputData)?.docs?.length" class="doc-list-scroll">
+                    <div style="font-size:11px;color:#909399;margin-bottom:4px">点击文档展开/收起完整内容</div>
+                    <template v-for="(doc, idx) in parseOutput(node.outputData).docs" :key="idx">
+                      <div class="doc-card-llm ranked" @click="toggleRankedDoc(idx)">
+                        <div class="doc-header">
+                          <span class="doc-index">第 {{ idx + 1 }} 名</span>
+                          <span v-if="doc.score" class="doc-score">Rerank 分数: {{ typeof doc.score === 'number' ? doc.score.toFixed(1) : doc.score }}</span>
+                        </div>
+                        <pre class="doc-content-llm">{{ doc.content }}</pre>
+                      </div>
+                      <div v-show="expandedRankedDocs[idx]" class="doc-expanded">
+                        <span class="doc-expanded-label">第 {{ idx + 1 }} 名 完整内容</span>
+                        <pre class="doc-expanded-content">{{ doc.content }}</pre>
+                      </div>
+                    </template>
+                  </div>
+                </div>
+                <!-- PROMPT: 显示完整的提示词 -->
+                <div v-else-if="node.nodeType === 'PROMPT'" class="io-structured prompt-display">
+                  <div class="field-row"><span class="field-label">场景</span><span class="field-value"><el-tag size="small" type="warning">{{ parseOutput(node.outputData)?.scene || '-' }}</el-tag></span></div>
+                  <div class="field-row"><span class="field-label">提示词长度</span><span class="field-value">{{ parseOutput(node.outputData)?.promptLength || 0 }} 字符</span></div>
+                  <div v-if="parseOutput(node.outputData)?.fullPrompt" class="field-row">
+                    <span class="field-label">完整提示词</span>
+                    <div class="field-value">
+                      <pre class="prompt-content scrollable">{{ parseOutput(node.outputData).fullPrompt }}</pre>
+                    </div>
+                  </div>
+                  <!-- 调试：显示原始 output_data -->
+                  <div v-if="!parseOutput(node.outputData)?.fullPrompt" class="field-row" style="background:#fff2e8;padding:8px;border-radius:4px">
+                    <span class="field-label">⚠️ 调试</span>
+                    <div class="field-value" style="font-size:11px">
+                      <div><strong>outputData 类型:</strong> {{ typeof node.outputData }}</div>
+                      <div><strong>outputData 值:</strong> {{ String(node.outputData).slice(0, 500) }}</div>
+                      <div><strong>解析后:</strong> {{ JSON.stringify(parseOutput(node.outputData))?.slice(0, 200) }}</div>
+                    </div>
+                  </div>
+                </div>
+                <!-- LLM: 模型回复 + token -->
+                <div v-else-if="node.nodeType === 'LLM'" class="io-structured">
+                  <div class="field-row"><span class="field-label">模型</span><span class="field-value"><el-tag size="small">{{ parseOutput(node.outputData)?.modelId || '-' }}</el-tag></span></div>
+                  <div class="field-row">
+                    <span class="field-label">Token</span>
+                    <span class="field-value">输入 <strong>{{ parseOutput(node.outputData)?.inputTokens || 0 }}</strong> / 输出 <strong>{{ parseOutput(node.outputData)?.outputTokens || 0 }}</strong></span>
+                  </div>
+                  <div v-if="parseOutput(node.outputData)?.response" class="field-row">
+                    <span class="field-label">模型回复</span>
+                    <pre class="llm-response">{{ parseOutput(node.outputData).response }}</pre>
+                  </div>
+                </div>
+                <!-- 其他阶段 fallback -->
+                <pre v-else-if="node.outputData" class="io-content">{{ formatJson(node.outputData) }}</pre>
                 <span v-else style="color:#999">-</span>
               </div>
             </div>
@@ -142,6 +315,18 @@ const router = useRouter()
 const loading = ref(false)
 const trace = ref<any>(null)
 const nodes = ref<any[]>([])
+
+// 文档展开状态管理
+const expandedDocs = ref<Record<number, boolean>>({})
+const expandedRankedDocs = ref<Record<number, boolean>>({})
+
+function toggleDoc(idx: number) {
+  expandedDocs.value[idx] = !expandedDocs.value[idx]
+}
+
+function toggleRankedDoc(idx: number) {
+  expandedRankedDocs.value[idx] = !expandedRankedDocs.value[idx]
+}
 
 onMounted(() => {
   loadTraceDetail()
@@ -231,6 +416,20 @@ function formatJson(data: any): string {
   }
 }
 
+// 解析输入数据（兼容 string / object）
+function parseInput(data: any): any {
+  if (!data) return {}
+  if (typeof data === 'object') return data
+  try { return JSON.parse(data) } catch { return {} }
+}
+
+// 解析输出数据（兼容 string / object）
+function parseOutput(data: any): any {
+  if (!data) return {}
+  if (typeof data === 'object') return data
+  try { return JSON.parse(data) } catch { return {} }
+}
+
 function getStageDisplayName(nodeType: string): string {
   // 与个人看板/全局看板统一的阶段命名
   const names: Record<string, string> = {
@@ -298,8 +497,11 @@ function getTimelineBarStyle(node: any, index: number): any {
 
 .prompt-full {
   white-space: pre-wrap;
-  word-break: break-all;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  overflow-x: auto;
   color: #606266;
+  max-width: 100%;
 }
 
 .timeline-box {
@@ -323,8 +525,14 @@ function getTimelineBarStyle(node: any, index: number): any {
 
 .io-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 4fr 5fr;
   gap: 12px;
+  min-width: 0;
+}
+
+.io-block {
+  min-width: 0;
+  overflow: hidden;
 }
 
 .io-label {
@@ -341,8 +549,340 @@ function getTimelineBarStyle(node: any, index: number): any {
   border-radius: 4px;
   font-size: 12px;
   white-space: pre-wrap;
-  word-break: break-all;
+  word-break: break-word;
+  overflow-wrap: break-word;
   margin: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* 结构化展示 */
+.io-structured {
+  font-size: 13px;
+  line-height: 1.6;
+  max-width: 100%;
+  overflow: hidden;
+}
+.field-row {
+  display: flex;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid #f0f0f0;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.field-row:last-child {
+  border-bottom: none;
+}
+.field-label {
+  font-size: 12px;
+  color: #909399;
+  min-width: 80px;
+  flex-shrink: 0;
+}
+.field-value {
+  color: #303133;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  min-width: 0;
+  flex: 1;
+  max-width: 100%;
+}
+
+/* 文档列表 - 固定高度滚动 */
+.doc-list-scroll {
+  margin-top: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  border: 1px solid #e4e7ed;
+  border-radius: 4px;
+  padding: 8px;
+  background: #fafafa;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* LLM 风格文档卡片 */
+.doc-card-llm {
+  background: #fff;
+  border-radius: 6px;
+  padding: 10px 12px;
+  border-left: 3px solid #909399;
+  margin-bottom: 8px;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.doc-card-llm.ranked {
+  border-left-color: #67C23A;
+}
+.doc-card-llm:last-child {
+  margin-bottom: 0;
+}
+
+/* LLM 风格文档内容 */
+.doc-content-llm {
+  background: #f5f7fa;
+  padding: 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #303133;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  margin: 6px 0;
+  max-height: 150px;
+  max-width: 100%;
+  overflow-y: auto;
+  overflow-x: auto;
+  box-sizing: border-box;
+}
+
+.doc-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+  font-size: 12px;
+  min-width: 0;
+}
+.doc-index {
+  font-weight: 500;
+  color: #303133;
+}
+.doc-score {
+  font-size: 12px;
+  color: #E6A23C;
+  font-weight: 500;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+.doc-meta {
+  font-size: 11px;
+  color: #909399;
+  margin-top: 4px;
+}
+
+/* 展开的完整文档 */
+.doc-expanded {
+  margin-top: 6px;
+  padding: 10px;
+  background: #fff;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.doc-expanded-label {
+  font-size: 11px;
+  color: #909399;
+  font-weight: 500;
+}
+.doc-expanded-content {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #303133;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  overflow-x: auto;
+  max-height: 400px;
+  overflow-y: auto;
+  background: #f5f7fa;
+  padding: 8px;
+  border-radius: 4px;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* 可点击折叠的迷你文档 */
+.mini-doc.collapsible {
+  cursor: pointer;
+  transition: background 0.2s;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.mini-doc.collapsible:hover {
+  background: #eef0f3;
+}
+
+/* 滚动容器 */
+.scrollable {
+  max-height: 200px;
+  overflow-y: auto;
+  overflow-x: auto;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* 待排序文档小列表 */
+.mini-doc {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+  padding: 4px 8px;
+  background: #fafafa;
+  border-radius: 3px;
+  align-items: flex-start;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.mini-doc-idx {
+  color: #909399;
+  flex-shrink: 0;
+}
+.mini-doc-content {
+  color: #606266;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+/* 提示词展示 */
+.prompt-section {
+  margin-top: 8px;
+}
+.prompt-display {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.prompt-content {
+  background: #f5f7fa;
+  padding: 12px;
+  border-radius: 4px;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  overflow-x: auto;
+  max-height: 400px;
+  overflow-y: auto;
+  margin: 0;
+  color: #303133;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* HyDE 等价查询 */
+.equiv-query {
+  padding: 2px 0;
+  font-size: 12px;
+  color: #606266;
+}
+.hyde-doc {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  overflow-x: auto;
+  background: #f5f7fa;
+  padding: 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  margin-top: 4px;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.hyde-doc-full {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  overflow-x: auto;
+  background: #f5f7fa;
+  padding: 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  margin: 4px 0 0;
+  max-height: 200px;
+  overflow: auto;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* 查询内容展示 */
+.query-content {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  background: #f0f7ff;
+  padding: 8px 10px;
+  border-radius: 4px;
+  font-size: 13px;
+  margin: 4px 0 0;
+  line-height: 1.5;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* 对话记忆展示 */
+.memory-content {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  overflow-x: auto;
+  background: #fff8e6;
+  padding: 8px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  margin: 4px 0 0;
+  max-height: 150px;
+  overflow: auto;
+  line-height: 1.5;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* LLM 阶段输入提示词 */
+.prompt-input-content {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  overflow-x: auto;
+  background: #f5f7fa;
+  padding: 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  margin: 4px 0 0;
+  max-height: 200px;
+  overflow: auto;
+  line-height: 1.5;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* LLM 回复展示 */
+.llm-response {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  overflow-x: auto;
+  background: #f0f9eb;
+  padding: 12px;
+  border-radius: 4px;
+  font-size: 13px;
+  margin: 4px 0 0;
+  max-height: 300px;
+  overflow: auto;
+  line-height: 1.6;
+  border-left: 3px solid #67c23a;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* 小文档分数 */
+.mini-doc-score {
+  color: #909399;
+  font-size: 11px;
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 @media (max-width: 768px) {

@@ -63,6 +63,8 @@ public class GrayReleasePlanDO {
     private Date updateTime;
     private Date finishTime;
 
+    private Long tenantId;
+
     // ===== Getters & Setters =====
 
     public Long getId() { return id; }
@@ -121,4 +123,7 @@ public class GrayReleasePlanDO {
 
     public Date getFinishTime() { return finishTime; }
     public void setFinishTime(Date finishTime) { this.finishTime = finishTime; }
+
+    public Long getTenantId() { return tenantId; }
+    public void setTenantId(Long tenantId) { this.tenantId = tenantId; }
 }

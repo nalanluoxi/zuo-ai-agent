@@ -55,13 +55,15 @@ public class ModelRouterServiceImpl implements ModelRouterService {
             throw new IllegalArgumentException("模型配置不存在: " + modelConfigId);
         }
 
-        log.info("[ModelRouter] 创建 ChatModel: provider={}, model={}, baseUrl={}",
-                config.getProvider(), config.getModelId(), config.getBaseUrl());
+        // 自动规范化 baseUrl，兼容用户填写的 /v1 后缀
+        String normalizedBaseUrl = normalizeBaseUrl(config.getBaseUrl());
+        log.info("[ModelRouter] 创建 ChatModel: provider={}, model={}, baseUrl={} (原始: {})",
+                config.getProvider(), config.getModelId(), normalizedBaseUrl, config.getBaseUrl());
 
         String apiKey = configService.getDecryptedApiKey(modelConfigId);
 
         OpenAiApi openAiApi = OpenAiApi.builder()
-                .baseUrl(config.getBaseUrl())
+                .baseUrl(normalizedBaseUrl)
                 .apiKey(apiKey)
                 .build();
 
@@ -73,6 +75,28 @@ public class ModelRouterServiceImpl implements ModelRouterService {
                         .temperature(config.getTemperature())
                         .build())
                 .build();
+    }
+
+    /**
+     * 规范化 baseUrl，自动去掉末尾的 /v1
+     * 
+     * <p>Spring AI 的 OpenAiApi 内部会自动拼接 /v1/chat/completions，
+     * 如果用户填写的 baseUrl 已经包含 /v1，会导致路径重复（如 /v1/v1/chat/completions）。
+     * 
+     * @param baseUrl 原始 baseUrl
+     * @return 规范化后的 baseUrl（去掉末尾的 /v1）
+     */
+    private static String normalizeBaseUrl(String baseUrl) {
+        if (baseUrl == null || baseUrl.isBlank()) {
+            return baseUrl;
+        }
+        String trimmed = baseUrl.trim();
+        if (trimmed.endsWith("/v1")) {
+            String normalized = trimmed.substring(0, trimmed.length() - 3);
+            log.info("[BaseUrl 规范化] {} → {}", trimmed, normalized);
+            return normalized;
+        }
+        return trimmed;
     }
 
     /**

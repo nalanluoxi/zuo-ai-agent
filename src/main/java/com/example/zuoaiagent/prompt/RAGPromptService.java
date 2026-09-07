@@ -19,8 +19,8 @@ public class RAGPromptService {
 
     private static final Logger log = LoggerFactory.getLogger(RAGPromptService.class);
 
-    static final String RAG_KB_PROMPT_PATH     = "prompts/rag-kb.st";
-    static final String SYSTEM_CHAT_PROMPT_PATH = "prompts/system-chat.st";
+    public static final String RAG_KB_PROMPT_PATH     = "prompts/rag-kb.st";
+    public static final String SYSTEM_CHAT_PROMPT_PATH = "prompts/system-chat.st";
 
     private final PromptTemplateLoader templateLoader;
     private final ContextFormatter contextFormatter;

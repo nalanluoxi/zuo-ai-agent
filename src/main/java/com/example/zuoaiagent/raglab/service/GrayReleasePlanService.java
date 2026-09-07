@@ -1,6 +1,7 @@
 package com.example.zuoaiagent.raglab.service;
 
 import com.example.zuoaiagent.raglab.entity.GrayReleasePlanDO;
+import com.example.zuoaiagent.raglab.entity.LlmModelConfigDO;
 
 import java.util.List;
 
@@ -10,9 +11,14 @@ import java.util.List;
 public interface GrayReleasePlanService {
 
     /**
-     * 创建发布计划
+     * 创建发布计划（配置/提示词）
      */
     GrayReleasePlanDO createPlan(GrayReleasePlanDO plan);
+
+    /**
+     * 创建模型灰度发布计划（批量模型）
+     */
+    GrayReleasePlanDO createModelPlan(GrayReleasePlanDO plan, List<Long> modelConfigIds);
 
     /**
      * 根据 ID 查询发布计划
@@ -74,4 +80,9 @@ public interface GrayReleasePlanService {
      * 记录灰度指标快照
      */
     void updateMetricsSnapshot(Long planId, String metricsJson);
+
+    /**
+     * 获取用户可见的模型配置列表（根据灰度规则过滤）
+     */
+    List<LlmModelConfigDO> resolveVisibleModels(Long userId, List<LlmModelConfigDO> allActiveModels);
 }

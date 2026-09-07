@@ -3,39 +3,17 @@ package com.example.zuoaiagent.chat;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
-import java.util.List;
-
 /**
  * Chat 模型相关配置属性，绑定 {@code application.yaml} 中的 {@code chat} 前缀。
  *
- * <p>示例配置：
- * <pre>{@code
- * chat:
- *   selection:
- *     failure-threshold: 2
- *     open-duration-ms: 30000
- *   candidates:
- *     - id: dashscope-qwen
- *       provider: dashscope
- *       model: qwen-plus
- *       priority: 1
- *       enabled: true
- *     - id: siliconflow-deepseek
- *       provider: openai
- *       model: deepseek-ai/DeepSeek-V3
- *       priority: 2
- *       enabled: true
- * }</pre>
+ * <p>模型候选列表已从数据库 t_llm_model_config 表动态加载，
+ * 此类仅保留熔断配置。
  */
 @Component
 @ConfigurationProperties(prefix = "chat")
 public class ChatModelProperties {
 
-    private List<ChatModelCandidate> candidates;
     private Selection selection = new Selection();
-
-    public List<ChatModelCandidate> getCandidates() { return candidates; }
-    public void setCandidates(List<ChatModelCandidate> candidates) { this.candidates = candidates; }
 
     public Selection getSelection() { return selection; }
     public void setSelection(Selection selection) { this.selection = selection; }

@@ -38,7 +38,7 @@ public class ChatClientConfig {
     }
 
     @Bean
-    public ChatClient chatClient(@Qualifier("dashscopeChatModel") ChatModel chatModel,
+    public ChatClient chatClient(ChatModel chatModel,
                                   ChatMemory chatMemory,
                                   PromptTemplateLoader templateLoader) {
         String systemPrompt = templateLoader.load("prompts/system-chat.st");

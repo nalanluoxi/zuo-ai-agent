@@ -1,12 +1,17 @@
 package com.example.zuoaiagent.raglab.controller;
 
 import com.example.zuoaiagent.raglab.entity.GrayReleasePlanDO;
+import com.example.zuoaiagent.raglab.entity.GrayReleasePlanVO;
+import com.example.zuoaiagent.raglab.entity.LlmModelConfigDO;
+import com.example.zuoaiagent.raglab.mapper.GrayReleasePlanModelMapper;
+import com.example.zuoaiagent.raglab.mapper.LlmModelConfigMapper;
 import com.example.zuoaiagent.raglab.service.GrayReleasePlanService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * 灰度发布计划控制器
@@ -17,15 +22,37 @@ import java.util.List;
 public class GrayReleasePlanController {
 
     private final GrayReleasePlanService grayReleasePlanService;
+    private final GrayReleasePlanModelMapper planModelMapper;
+    private final LlmModelConfigMapper llmModelConfigMapper;
 
-    public GrayReleasePlanController(GrayReleasePlanService grayReleasePlanService) {
+    public GrayReleasePlanController(GrayReleasePlanService grayReleasePlanService,
+                                      GrayReleasePlanModelMapper planModelMapper,
+                                      LlmModelConfigMapper llmModelConfigMapper) {
         this.grayReleasePlanService = grayReleasePlanService;
+        this.planModelMapper = planModelMapper;
+        this.llmModelConfigMapper = llmModelConfigMapper;
     }
 
     @PostMapping
     @Operation(summary = "创建发布计划")
     public GrayReleasePlanDO createPlan(@RequestBody GrayReleasePlanDO plan) {
         return grayReleasePlanService.createPlan(plan);
+    }
+
+    @PostMapping("/model")
+    @Operation(summary = "创建模型灰度发布计划（批量）")
+    public GrayReleasePlanDO createModelPlan(@RequestBody CreateModelPlanRequest request) {
+        return grayReleasePlanService.createModelPlan(request.getPlan(), request.getModelConfigIds());
+    }
+
+    public static class CreateModelPlanRequest {
+        private GrayReleasePlanDO plan;
+        private List<Long> modelConfigIds;
+
+        public GrayReleasePlanDO getPlan() { return plan; }
+        public void setPlan(GrayReleasePlanDO plan) { this.plan = plan; }
+        public List<Long> getModelConfigIds() { return modelConfigIds; }
+        public void setModelConfigIds(List<Long> modelConfigIds) { this.modelConfigIds = modelConfigIds; }
     }
 
     @GetMapping("/{id}")
@@ -36,8 +63,44 @@ public class GrayReleasePlanController {
 
     @GetMapping("/list")
     @Operation(summary = "查询所有发布计划")
-    public List<GrayReleasePlanDO> listPlans() {
-        return grayReleasePlanService.listPlans();
+    public List<GrayReleasePlanVO> listPlans() {
+        List<GrayReleasePlanDO> plans = grayReleasePlanService.listPlans();
+        return plans.stream().map(plan -> {
+            GrayReleasePlanVO vo = new GrayReleasePlanVO();
+            // 复制属性
+            vo.setId(plan.getId());
+            vo.setPlanName(plan.getPlanName());
+            vo.setComponentType(plan.getComponentType());
+            vo.setComponentId(plan.getComponentId());
+            vo.setFromVersionId(plan.getFromVersionId());
+            vo.setToVersionId(plan.getToVersionId());
+            vo.setGrayRatio(plan.getGrayRatio());
+            vo.setGrayMode(plan.getGrayMode());
+            vo.setGrayUserIds(plan.getGrayUserIds());
+            vo.setGrayDurationHours(plan.getGrayDurationHours());
+            vo.setStatus(plan.getStatus());
+            vo.setApprovedBy(plan.getApprovedBy());
+            vo.setApprovedTime(plan.getApprovedTime());
+            vo.setGrayMetricsSnapshot(plan.getGrayMetricsSnapshot());
+            vo.setChangeLog(plan.getChangeLog());
+            vo.setCreateUserId(plan.getCreateUserId());
+            vo.setCreateTime(plan.getCreateTime());
+            vo.setUpdateTime(plan.getUpdateTime());
+            vo.setFinishTime(plan.getFinishTime());
+
+            // 填充模型名称
+            if ("MODEL".equals(plan.getComponentType())) {
+                List<Long> modelIds = planModelMapper.selectModelConfigIdsByPlanId(plan.getId());
+                if (!modelIds.isEmpty()) {
+                    List<LlmModelConfigDO> models = llmModelConfigMapper.selectBatchIds(modelIds);
+                    String names = models.stream()
+                            .map(LlmModelConfigDO::getModelName)
+                            .collect(Collectors.joining(", "));
+                    vo.setModelNames(names);
+                }
+            }
+            return vo;
+        }).collect(Collectors.toList());
     }
 
     @GetMapping("/list/{componentType}")

@@ -33,7 +33,7 @@ public class MybatisPlusConfig {
                     "t_chat_message_compression", "vector_store",
                     "t_rag_config", "t_rag_config_version", "t_rag_prompt_template",
                     "t_rag_prompt_version", "t_rag_test_question", "t_rag_test_document",
-                    "t_rag_experiment").contains(tableName);
+                    "t_rag_experiment", "t_gray_release_plan", "t_gray_release_plan_model").contains(tableName);
         }
 
         @Override

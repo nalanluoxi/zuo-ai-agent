@@ -7,6 +7,7 @@ import com.example.zuoaiagent.intent.service.IntentClassifier;
 import com.example.zuoaiagent.log.LogEventCollector;
 import com.example.zuoaiagent.memory.UserMemoryExtractionService;
 import com.example.zuoaiagent.prompt.PromptScene;
+import com.example.zuoaiagent.prompt.PromptTemplateLoader;
 import com.example.zuoaiagent.prompt.RAGPromptService;
 import com.example.zuoaiagent.rag.*;
 import com.example.zuoaiagent.raglab.entity.RagConfigDO;
@@ -36,6 +37,7 @@ public class SmartRagPipeline {
     private final DocumentReranker documentReranker;
     private final TokenBudgetTrimmer tokenBudgetTrimmer;
     private final RAGPromptService ragPromptService;
+    private final PromptTemplateLoader templateLoader;
     private final RoutingChatService routingChatService;
     private final RagTraceRecordService traceService;
     private final UserMemoryExtractionService memoryExtractionService;
@@ -51,6 +53,7 @@ public class SmartRagPipeline {
                             DocumentReranker documentReranker,
                             TokenBudgetTrimmer tokenBudgetTrimmer,
                             RAGPromptService ragPromptService,
+                            PromptTemplateLoader templateLoader,
                             RoutingChatService routingChatService,
                             RagTraceRecordService traceService,
                             UserMemoryExtractionService memoryExtractionService,
@@ -65,6 +68,7 @@ public class SmartRagPipeline {
         this.documentReranker = documentReranker;
         this.tokenBudgetTrimmer = tokenBudgetTrimmer;
         this.ragPromptService = ragPromptService;
+        this.templateLoader = templateLoader;
         this.routingChatService = routingChatService;
         this.traceService = traceService;
         this.memoryExtractionService = memoryExtractionService;
@@ -305,7 +309,7 @@ public class SmartRagPipeline {
             }
 
             traceService.finishNode(traceId, "retrieve", "SUCCESS", null,
-                    latencyMs, toJson(Map.of("count", docs.size())));
+                    latencyMs, toJson(buildRetrieveOutput(docs)));
             logEventCollector.logEvent("RETRIEVE_COMPLETED", Map.of(
                     "docCount", docs.size(),
                     "kbId", kbId != null ? kbId : -1,
@@ -324,7 +328,7 @@ public class SmartRagPipeline {
                                           RagConfigDO config, int rerankTopK, double rerankThreshold, double tokenCoeff, int docTruncate) {
         long start = System.currentTimeMillis();
         traceService.startNode(traceId, "rerank", "重排序", "RERANK",
-                toJson(Map.of("inputCount", retrieved.size(), "enableRerank", ctx.isEnableRerank())));
+                toJson(buildRerankInput(retrieved, ctx.isEnableRerank())));
 
         try {
             List<Document> finalDocs = ctx.isEnableRerank()
@@ -332,7 +336,8 @@ public class SmartRagPipeline {
                     : (retrieved.size() > rerankTopK ? retrieved.subList(0, rerankTopK) : retrieved);
 
             traceService.finishNode(traceId, "rerank", "SUCCESS", null,
-                    System.currentTimeMillis() - start, toJson(Map.of("count", finalDocs.size())),
+                    System.currentTimeMillis() - start,
+                    toJson(buildRerankOutput(retrieved, finalDocs)),
                     estimateTokens(query, tokenCoeff) * retrieved.size(), estimateTokens("score", tokenCoeff) * retrieved.size());
             logEventCollector.logEvent("RERANK_COMPLETED", Map.of(
                     "inputCount", retrieved.size(),
@@ -350,17 +355,23 @@ public class SmartRagPipeline {
     private String executePromptBuild(RagPipelineContext ctx, String domain,
                                       List<Document> finalDocs, String memory, String traceId) {
         long start = System.currentTimeMillis();
-        traceService.startNode(traceId, "prompt", "Prompt组装", "PROMPT",
-                toJson(Map.of("docCount", finalDocs.size(), "domain", domain)));
-
         PromptScene scene = finalDocs.isEmpty() ? PromptScene.EMPTY_RETRIEVAL : PromptScene.KB_ONLY;
+        String templatePath = scene == PromptScene.KB_ONLY
+                ? RAGPromptService.RAG_KB_PROMPT_PATH
+                : RAGPromptService.SYSTEM_CHAT_PROMPT_PATH;
+        String rawTemplate = templateLoader.load(templatePath);
+
+        traceService.startNode(traceId, "prompt", "Prompt组装", "PROMPT",
+                toJson(buildPromptInput(domain, finalDocs, memory, rawTemplate)));
+
         String prompt = ragPromptService.build(scene, ctx.getName(), domain, finalDocs);
         if (memory != null && !memory.isBlank()) {
             prompt = memory + "\n" + prompt;
         }
 
         traceService.finishNode(traceId, "prompt", "SUCCESS", null,
-                System.currentTimeMillis() - start, toJson(Map.of("scene", scene.name(), "promptLength", prompt.length())));
+                System.currentTimeMillis() - start,
+                toJson(Map.of("scene", scene.name(), "promptLength", prompt.length(), "fullPrompt", prompt)));
         logEventCollector.logEvent("PROMPT_BUILT", Map.of(
                 "scene", scene.name(),
                 "docCount", finalDocs.size(),
@@ -374,6 +385,110 @@ public class SmartRagPipeline {
         if (intentResult == null) return "各领域";
         if (intentResult.isSystem() || intentResult.getConfidence() == 0.0) return "各领域";
         return intentResult.getLabel();
+    }
+
+    /**
+     * 构建检索阶段输出数据（含每篇文档摘要）。
+     */
+    private Map<String, Object> buildRetrieveOutput(List<Document> docs) {
+        Map<String, Object> result = new HashMap<>();
+        result.put("count", docs.size());
+        List<Map<String, Object>> docList = docs.stream()
+                .limit(10)
+                .map(doc -> {
+                    Map<String, Object> docInfo = new HashMap<>();
+                    docInfo.put("content", truncate(doc.getFormattedContent(), 500));
+                    Object score = doc.getMetadata().get("score");
+                    docInfo.put("score", score != null ? score : null);
+                    Object kbId = doc.getMetadata().get("kb_id");
+                    docInfo.put("kbId", kbId != null ? kbId : null);
+                    Object source = doc.getMetadata().get("source");
+                    docInfo.put("source", source != null ? source : "vector");
+                    return docInfo;
+                })
+                .collect(Collectors.toList());
+        result.put("docs", docList);
+        return result;
+    }
+
+    /**
+     * 构建重排序阶段输入数据（含每篇待排序文档）。
+     */
+    private Map<String, Object> buildRerankInput(List<Document> docs, boolean enableRerank) {
+        Map<String, Object> result = new HashMap<>();
+        result.put("inputCount", docs.size());
+        result.put("enableRerank", enableRerank);
+        List<Map<String, Object>> docList = docs.stream()
+                .limit(20)
+                .map(doc -> {
+                    Map<String, Object> docInfo = new HashMap<>();
+                    docInfo.put("content", truncate(doc.getFormattedContent(), 300));
+                    Object kbId = doc.getMetadata().get("kb_id");
+                    docInfo.put("kbId", kbId != null ? kbId : null);
+                    return docInfo;
+                })
+                .collect(Collectors.toList());
+        result.put("docs", docList);
+        return result;
+    }
+
+    /**
+     * 构建重排序阶段输出数据（含每篇排序后文档及分数）。
+     */
+    private Map<String, Object> buildRerankOutput(List<Document> original, List<Document> finalDocs) {
+        Map<String, Object> result = new HashMap<>();
+        result.put("inputCount", original.size());
+        result.put("count", finalDocs.size());
+        List<Map<String, Object>> docList = finalDocs.stream()
+                .limit(10)
+                .map(doc -> {
+                    Map<String, Object> docInfo = new HashMap<>();
+                    docInfo.put("content", truncate(doc.getFormattedContent(), 300));
+                    Object rerankScore = doc.getMetadata().get("rerank_score");
+                    docInfo.put("score", rerankScore != null ? rerankScore : null);
+                    Object kbId = doc.getMetadata().get("kb_id");
+                    docInfo.put("kbId", kbId != null ? kbId : null);
+                    return docInfo;
+                })
+                .collect(Collectors.toList());
+        result.put("docs", docList);
+        return result;
+    }
+
+    /**
+     * 构建 Prompt 组装阶段输入数据（领域、模板内容、记忆上下文、文档内容）。
+     */
+    private Map<String, Object> buildPromptInput(String domain, List<Document> docs, String memory, String rawTemplate) {
+        Map<String, Object> input = new LinkedHashMap<>();
+        input.put("domain", domain);
+        input.put("docCount", docs.size());
+        input.put("rawTemplate", rawTemplate != null ? rawTemplate : null);
+        input.put("memoryContext", memory != null && !memory.isBlank() ? memory : null);
+        // 完整文档内容
+        List<Map<String, Object>> docList = docs.stream()
+                .limit(20)
+                .map(doc -> {
+                    Map<String, Object> docInfo = new LinkedHashMap<>();
+                    docInfo.put("content", doc.getFormattedContent());
+                    Object score = doc.getMetadata().get("rerank_score");
+                    if (score == null) score = doc.getMetadata().get("score");
+                    docInfo.put("score", score != null ? score : null);
+                    Object kbId = doc.getMetadata().get("kb_id");
+                    docInfo.put("kbId", kbId != null ? kbId : null);
+                    return docInfo;
+                })
+                .collect(Collectors.toList());
+        input.put("docs", docList);
+        return input;
+    }
+
+    /**
+     * 截断字符串到指定长度。
+     */
+    private String truncate(String text, int maxLen) {
+        if (text == null) return null;
+        if (text.length() <= maxLen) return text;
+        return text.substring(0, maxLen) + "...";
     }
 
     private String toJson(Object obj) {

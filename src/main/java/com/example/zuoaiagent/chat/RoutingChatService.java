@@ -18,13 +18,16 @@ import reactor.core.publisher.Flux;
 import com.example.zuoaiagent.dashboard.service.TokenUsageService;
 import com.example.zuoaiagent.prompt.PromptTemplateLoader;
 import com.example.zuoaiagent.trace.service.RagTraceRecordService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.chat.model.ChatResponse;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -46,6 +49,7 @@ public class RoutingChatService {
     private final PromptTemplateLoader templateLoader;
     private final TokenUsageService tokenUsageService;
     private final RagTraceRecordService traceService;
+    private final ObjectMapper objectMapper;
     private volatile String cachedSystemPrompt;
 
     public RoutingChatService(ChatModelFactory factory,
@@ -53,13 +57,15 @@ public class RoutingChatService {
                               ChatMemory chatMemory,
                               PromptTemplateLoader templateLoader,
                               TokenUsageService tokenUsageService,
-                              RagTraceRecordService traceService) {
+                              RagTraceRecordService traceService,
+                              ObjectMapper objectMapper) {
         this.factory = factory;
         this.circuitBreaker = circuitBreaker;
         this.chatMemory = chatMemory;
         this.templateLoader = templateLoader;
         this.tokenUsageService = tokenUsageService;
         this.traceService = traceService;
+        this.objectMapper = objectMapper;
     }
 
     private String getDefaultSystemPrompt() {
@@ -157,7 +163,8 @@ public class RoutingChatService {
         int[] tokenUsage = new int[]{0, 0};
 
         if (traceId != null) {
-            traceService.startNode(traceId, "llm", "增强生成", "LLM", null);
+            String inputData = buildLlmInputData(systemPrompt, prompt, entry.id());
+            traceService.startNode(traceId, "llm", "增强生成", "LLM", inputData);
         }
 
         Flux<ChatResponse> responseFlux = buildSpec(entry, prompt, conversationId, systemPrompt, vectorStore, internal)
@@ -257,8 +264,9 @@ public class RoutingChatService {
                         }
                     }
                     if (traceId != null) {
+                        String outputData = buildLlmOutputData(fullResponse, entry.id(), inputTokens, outputTokens);
                         traceService.finishNode(traceId, "llm", "SUCCESS", null,
-                                System.currentTimeMillis() - startTime, null, inputTokens, outputTokens);
+                                System.currentTimeMillis() - startTime, outputData, inputTokens, outputTokens);
                     }
                     if (probeCompleted.get() && !sendFailed.get()) {
                         try {
@@ -335,5 +343,44 @@ public class RoutingChatService {
             return 0;
         }
         return (int) (text.length() / 4.0);
+    }
+
+    /**
+     * 构建 LLM 节点输入数据（JSON）。
+     */
+    private String buildLlmInputData(String systemPrompt, String userPrompt, String modelId) {
+        try {
+            Map<String, Object> input = new LinkedHashMap<>();
+            input.put("modelId", modelId);
+            input.put("systemPrompt", truncate(systemPrompt, 2000));
+            input.put("userPrompt", truncate(userPrompt, 500));
+            return objectMapper.writeValueAsString(input);
+        } catch (Exception e) {
+            log.warn("构建 LLM 输入数据失败: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 构建 LLM 节点输出数据（JSON）。
+     */
+    private String buildLlmOutputData(String response, String modelId, int inputTokens, int outputTokens) {
+        try {
+            Map<String, Object> output = new LinkedHashMap<>();
+            output.put("modelId", modelId);
+            output.put("response", truncate(response, 3000));
+            output.put("inputTokens", inputTokens);
+            output.put("outputTokens", outputTokens);
+            return objectMapper.writeValueAsString(output);
+        } catch (Exception e) {
+            log.warn("构建 LLM 输出数据失败: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private String truncate(String text, int maxLen) {
+        if (text == null) return null;
+        if (text.length() <= maxLen) return text;
+        return text.substring(0, maxLen) + "...(截断)";
     }
 }
