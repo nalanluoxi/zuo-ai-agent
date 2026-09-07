@@ -48,10 +48,10 @@ check_prerequisites() {
 }
 
 # ============================================
-# 初始化 Ollama 模型
+# 初始化 Ollama 模型（后台异步执行）
 # ============================================
 init_ollama_models() {
-    section "初始化 Ollama 模型"
+    section "初始化 Ollama 模型（后台执行）"
     
     local ollama_container="zuo-ollama"
     local models=("qwen2.5:7b" "dengcao/Qwen3-Embedding-8B:F16")
@@ -62,41 +62,40 @@ init_ollama_models() {
         return 0
     fi
     
-    # 等待 Ollama 服务就绪
-    info "等待 Ollama 服务就绪..."
-    local retries=0
-    while [ $retries -lt 30 ]; do
-        if docker exec "$ollama_container" ollama list &>/dev/null; then
-            info "Ollama 服务就绪 ✅"
-            break
+    # 检查是否有需要拉取的模型
+    local needs_pull=()
+    for model in "${models[@]}"; do
+        if ! docker exec "$ollama_container" ollama list 2>/dev/null | grep -qF "$model"; then
+            needs_pull+=("$model")
         fi
-        sleep 2
-        ((retries++))
     done
     
-    if [ $retries -eq 30 ]; then
-        warn "Ollama 服务启动超时，跳过模型初始化"
+    if [ ${#needs_pull[@]} -eq 0 ]; then
+        info "所有 Ollama 模型已存在 ✅"
+        docker exec "$ollama_container" ollama list
         return 0
     fi
     
-    # 检查并拉取模型
-    for model in "${models[@]}"; do
-        if docker exec "$ollama_container" ollama list 2>/dev/null | grep -qF "$model"; then
-            info "模型 $model 已存在 ✅"
-        else
-            info "正在拉取模型 $model ..."
-            if docker exec "$ollama_container" ollama pull "$model"; then
-                info "模型 $model 拉取成功 ✅"
-            else
-                warn "模型 $model 拉取失败 ❌（可稍后手动执行: docker exec $ollama_container ollama pull $model）"
-            fi
-        fi
-    done
+    # 后台拉取模型（不阻塞部署）
+    info "以下模型需要拉取，将在后台执行: ${needs_pull[*]}"
     
-    # 显示当前模型列表
-    echo ""
-    info "当前 Ollama 模型列表："
-    docker exec "$ollama_container" ollama list
+    local pull_log="/opt/zuo-ai-agent/logs/ollama-pull-$(date +%Y%m%d-%H%M%S).log"
+    mkdir -p /opt/zuo-ai-agent/logs
+    
+    nohup bash -c "
+        for model in \"${needs_pull[@]}\"; do
+            echo \"$(date '+%Y-%m-%d %H:%M:%S') - 正在拉取模型: \$model\"
+            docker exec $ollama_container ollama pull \"\$model\" 2>&1
+            echo \"$(date '+%Y-%m-%d %H:%M:%S') - 模型 \$model 拉取完成\"
+        done
+        echo \"\"
+        echo \"$(date '+%Y-%m-%d %H:%M:%S') - 所有模型拉取完成\"
+        docker exec $ollama_container ollama list
+    " > "$pull_log" 2>&1 &
+    
+    info "模型拉取已在后台启动，日志: $pull_log"
+    info "可通过以下命令查看进度:"
+    info "  tail -f $pull_log"
 }
 
 # ============================================
