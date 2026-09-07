@@ -135,9 +135,11 @@ jobs:
       run: |
         echo "构建 Docker 镜像..."
         
-        ACR_REGISTRY="crpi-rm9ng8lz6w8psofg.cn-beijing.personal.cr.aliyuncs.com"
-        ACR_NAMESPACE="zuo"
+        ACR_REGISTRY="${{ secrets.ACR_REGISTRY }}"
+        ACR_NAMESPACE="${{ secrets.ACR_NAMESPACE }}"
         IMAGE_TAG="${GITHUB_SHA::8}"  # 使用 commit hash 前 8 位作为标签
+        
+        echo "ACR 配置: ${ACR_REGISTRY}/${ACR_NAMESPACE}"
         
         # 构建并标记 zuo-ai-agent 镜像
         echo "构建 zuo-ai-agent 镜像..."
@@ -182,9 +184,11 @@ jobs:
       run: |
         echo "推送镜像到阿里云 ACR..."
         
-        ACR_REGISTRY="crpi-rm9ng8lz6w8psofg.cn-beijing.personal.cr.aliyuncs.com"
-        ACR_NAMESPACE="zuo"
+        ACR_REGISTRY="${{ secrets.ACR_REGISTRY }}"
+        ACR_NAMESPACE="${{ secrets.ACR_NAMESPACE }}"
         IMAGE_TAG="${GITHUB_SHA::8}"
+        
+        echo "推送命名空间: ${ACR_REGISTRY}/${ACR_NAMESPACE}"
         
         # 推送 zuo-ai-agent
         docker push ${ACR_REGISTRY}/${ACR_NAMESPACE}/zuo-ai-agent:${IMAGE_TAG}
