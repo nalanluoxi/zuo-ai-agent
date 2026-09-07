@@ -12,9 +12,9 @@ spring:
       - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeChatAutoConfiguration
       - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeEmbeddingAutoConfiguration
       - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeAgentAutoConfiguration
-      - org.springframework.ai.autoconfigure.openai.OpenAiAutoConfiguration
-      - org.springframework.ai.autoconfigure.openai.OpenAiEmbeddingAutoConfiguration
-      - org.springframework.ai.autoconfigure.ollama.OllamaAutoConfiguration
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiAutoConfiguration
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiEmbeddingAutoConfiguration
+      - org.springframework.ai.model.ollama.autoconfigure.OllamaAutoConfiguration
   ai:
     # Chat 模型：本地 Ollama 模型写死（始终可用），远程模型从数据库 t_llm_model_config 动态加载
     # Embedding 模型：本地 Ollama bge-m3 写死
