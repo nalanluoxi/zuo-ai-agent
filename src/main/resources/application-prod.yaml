@@ -2,8 +2,6 @@
 # 所有敏感信息通过环境变量注入，禁止硬编码
 
 spring:
-  profiles:
-    active: prod
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/zuo_ai_agent}
     username: ${DB_USERNAME:zuo_ai}
