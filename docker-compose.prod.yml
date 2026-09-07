@@ -79,12 +79,14 @@ services:
       - "127.0.0.1:11434:11434"
     volumes:
       - /opt/zuo-ai-agent/data/ollama:/root/.ollama
+    security_opt:
+      - seccomp=unconfined
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:11434/api/tags || exit 1"]
       interval: 30s
       timeout: 10s
-      retries: 5
-      start_period: 30s
+      retries: 10
+      start_period: 300s
     networks:
       - zuo-network
 
