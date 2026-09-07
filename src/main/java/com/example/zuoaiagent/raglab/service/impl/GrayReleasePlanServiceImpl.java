@@ -1,6 +1,7 @@
 package com.example.zuoaiagent.raglab.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.example.zuoaiagent.chat.ChatModelFactory;
 import com.example.zuoaiagent.raglab.entity.GrayReleasePlanDO;
 import com.example.zuoaiagent.raglab.entity.GrayReleasePlanModelDO;
 import com.example.zuoaiagent.raglab.entity.LlmModelConfigDO;
@@ -32,17 +33,23 @@ public class GrayReleasePlanServiceImpl implements GrayReleasePlanService {
     private final RagConfigService ragConfigService;
     private final RagPromptService ragPromptService;
     private final LlmModelConfigMapper llmModelConfigMapper;
+    private final ChatModelFactory chatModelFactory;
+    private final ModelRouterServiceImpl modelRouterService;
 
     public GrayReleasePlanServiceImpl(GrayReleasePlanMapper planMapper,
                                         GrayReleasePlanModelMapper planModelMapper,
                                         RagConfigService ragConfigService,
                                         RagPromptService ragPromptService,
-                                        LlmModelConfigMapper llmModelConfigMapper) {
+                                        LlmModelConfigMapper llmModelConfigMapper,
+                                        ChatModelFactory chatModelFactory,
+                                        ModelRouterServiceImpl modelRouterService) {
         this.planMapper = planMapper;
         this.planModelMapper = planModelMapper;
         this.ragConfigService = ragConfigService;
         this.ragPromptService = ragPromptService;
         this.llmModelConfigMapper = llmModelConfigMapper;
+        this.chatModelFactory = chatModelFactory;
+        this.modelRouterService = modelRouterService;
     }
 
     @Override
@@ -199,6 +206,9 @@ public class GrayReleasePlanServiceImpl implements GrayReleasePlanService {
         plan.setFinishTime(new Date());
         plan.setUpdateTime(new Date());
         planMapper.updateById(plan);
+        // 重新加载模型列表（全量发布后立即生效）
+        modelRouterService.evictAllCache();
+        chatModelFactory.reload();
         log.info("[灰度发布] 计划 {} 全量发布完成", planId);
         return plan;
     }

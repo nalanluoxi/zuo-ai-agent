@@ -37,23 +37,19 @@ public class ChatModelFactory {
         }
     }
 
-    private final List<ChatModelEntry> candidates;
+    private volatile List<ChatModelEntry> candidates;
+    private final OllamaChatModel ollamaChatModel;
+    private final LlmModelConfigService configService;
+    private final ModelRouterService modelRouterService;
 
-    public ChatModelFactory(List<ChatModelEntry> entries) {
-        this.candidates = Collections.unmodifiableList(new ArrayList<>(entries));
-    }
-
-    /**
-     * 构造 ChatModelFactory：本地模型优先 + 数据库远程模型追加
-     *
-     * @param configService      模型配置服务（读取数据库）
-     * @param modelRouterService 模型路由器（创建 ChatModel 实例）
-     * @param ollamaChatModel    本地 Ollama 模型（写死，始终可用）
-     */
     @org.springframework.beans.factory.annotation.Autowired
     public ChatModelFactory(LlmModelConfigService configService,
                             ModelRouterService modelRouterService,
                             @org.springframework.beans.factory.annotation.Qualifier("ollamaChatModel") OllamaChatModel ollamaChatModel) {
+        this.configService = configService;
+        this.modelRouterService = modelRouterService;
+        this.ollamaChatModel = ollamaChatModel;
+
         List<ChatModelEntry> list = new ArrayList<>();
 
         // 1. 本地 Ollama 模型（写死，始终排在第一位，优先级最高）
@@ -105,6 +101,54 @@ public class ChatModelFactory {
 
     public int size() {
         return candidates.size();
+    }
+
+    /**
+     * 重新加载模型列表：先加载本地 Ollama 模型，再加载数据库中激活的远程模型配置。
+     * 使用 synchronized 保证并发安全，volatile 字段保证可见性。
+     */
+    public synchronized void reload() {
+        log.info("[ChatModelFactory] 开始重新加载模型列表...");
+        List<ChatModelEntry> newList = new ArrayList<>();
+
+        // 1. 本地 Ollama 模型（写死，始终排在第一位）
+        newList.add(new ChatModelEntry(
+                "local-ollama",
+                "qwen2.5:7b",
+                "ollama",
+                ollamaChatModel
+        ));
+
+        // 2. 从数据库重新加载激活的远程模型配置
+        try {
+            List<LlmModelConfigDO> activeConfigs = configService.listActive();
+            if (activeConfigs != null && !activeConfigs.isEmpty()) {
+                activeConfigs.stream()
+                        .sorted(Comparator.comparing(LlmModelConfigDO::getId))
+                        .forEach(config -> {
+                            try {
+                                ChatModel delegate = modelRouterService.resolveChatModel(config.getId());
+                                newList.add(new ChatModelEntry(
+                                        config.getId().toString(),
+                                        config.getModelId(),
+                                        config.getProvider(),
+                                        delegate
+                                ));
+                                log.info("[ChatModelFactory] 重新加载远程模型: id={}, model={}",
+                                        config.getId(), config.getModelId());
+                            } catch (Exception e) {
+                                log.error("[ChatModelFactory] 重新加载远程模型失败: id={}: {}",
+                                        config.getId(), e.getMessage());
+                            }
+                        });
+            }
+        } catch (Exception e) {
+            log.error("[ChatModelFactory] 重新加载远程模型配置失败: {}", e.getMessage(), e);
+        }
+
+        // 3. 原子性替换（volatile 保证可见性）
+        this.candidates = Collections.unmodifiableList(newList);
+        log.info("[ChatModelFactory] 模型列表重新加载完成，共 {} 个模型", newList.size());
     }
 
     /**

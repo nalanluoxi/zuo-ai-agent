@@ -1,5 +1,6 @@
 package com.example.zuoaiagent.raglab.controller;
 
+import com.example.zuoaiagent.chat.ChatModelFactory;
 import com.example.zuoaiagent.common.BaseResponse;
 import com.example.zuoaiagent.common.ResultUtils;
 import com.example.zuoaiagent.config.TenantContextHolder;
@@ -24,19 +25,25 @@ public class LlmModelConfigController {
     private final LlmModelConfigService configService;
     private final ModelRouterServiceImpl modelRouterService;
     private final GrayReleasePlanService grayReleasePlanService;
+    private final ChatModelFactory chatModelFactory;
 
     public LlmModelConfigController(LlmModelConfigService configService,
                                     ModelRouterServiceImpl modelRouterService,
-                                    GrayReleasePlanService grayReleasePlanService) {
+                                    GrayReleasePlanService grayReleasePlanService,
+                                    ChatModelFactory chatModelFactory) {
         this.configService = configService;
         this.modelRouterService = modelRouterService;
         this.grayReleasePlanService = grayReleasePlanService;
+        this.chatModelFactory = chatModelFactory;
     }
 
     @PostMapping
     @Operation(summary = "创建模型配置")
     public LlmModelConfigDO create(@RequestBody LlmModelConfigDO config) {
-        return configService.create(config);
+        LlmModelConfigDO created = configService.create(config);
+        // 重新加载模型列表
+        chatModelFactory.reload();
+        return created;
     }
 
     @PutMapping
@@ -45,6 +52,8 @@ public class LlmModelConfigController {
         LlmModelConfigDO updated = configService.update(config);
         // 清除缓存，使新配置生效
         modelRouterService.evictCache(config.getId());
+        // 重新加载模型列表
+        chatModelFactory.reload();
         return updated;
     }
 
@@ -79,6 +88,8 @@ public class LlmModelConfigController {
     @Operation(summary = "切换激活状态")
     public void toggleActive(@PathVariable Long id) {
         configService.toggleActive(id);
+        // 重新加载模型列表
+        chatModelFactory.reload();
     }
 
     @PostMapping("/{id}/test")
@@ -91,5 +102,17 @@ public class LlmModelConfigController {
     @Operation(summary = "删除模型配置")
     public void delete(@PathVariable Long id) {
         configService.delete(id);
+        // 重新加载模型列表
+        chatModelFactory.reload();
+    }
+
+    @PostMapping("/reload")
+    @Operation(summary = "手动触发模型重载")
+    public BaseResponse<String> reload() {
+        // 先清除缓存
+        modelRouterService.evictAllCache();
+        // 再重新加载模型列表
+        chatModelFactory.reload();
+        return ResultUtils.success("模型列表已重新加载");
     }
 }
