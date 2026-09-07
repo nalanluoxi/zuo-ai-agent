@@ -49,7 +49,7 @@ public class ChatClientConfig {
 
     /**
      * 本地 Ollama Chat 模型 Bean
-     * <p>使用 YAML 中配置的 qwen2.5:7b 模型，始终可用，不参与灰度发布
+     * <p>使用 YAML 中配置的 qwen2.5:3b 模型，始终可用，不参与灰度发布
      */
     @Bean
     @Qualifier("ollamaChatModel")
@@ -57,7 +57,7 @@ public class ChatClientConfig {
         return OllamaChatModel.builder()
                 .ollamaApi(ollamaApi)
                 .defaultOptions(OllamaOptions.builder()
-                        .model("qwen2.5:7b")
+                        .model("qwen2.5:3b")
                         .build())
                 .build();
     }

@@ -389,11 +389,11 @@ public class GrayReleasePlanServiceImpl implements GrayReleasePlanService {
         if (modelPlans.isEmpty()) {
             // 没有灰度计划，返回所有激活的模型 + 本地模型
             List<LlmModelConfigDO> result = new java.util.ArrayList<>(allActiveModels);
-            // 本地 Ollama 模型（qwen2.5:7b）写死，始终显示在第一位
+            // 本地 Ollama 模型（qwen2.5:3b）写死，始终显示在第一位
             LlmModelConfigDO localModel = new LlmModelConfigDO();
             localModel.setProvider("ollama");
             localModel.setModelName("本地 Qwen2.5-7B");
-            localModel.setModelId("qwen2.5:7b");
+            localModel.setModelId("qwen2.5:3b");
             localModel.setBaseUrl("http://localhost:11434");
             localModel.setIsActive(1);
             localModel.setStatus("ACTIVE");
@@ -464,11 +464,11 @@ public class GrayReleasePlanServiceImpl implements GrayReleasePlanService {
             }
         }
 
-        // 本地 Ollama 模型（qwen2.5:7b）写死，始终显示在第一位，不参与灰度发布
+        // 本地 Ollama 模型（qwen2.5:3b）写死，始终显示在第一位，不参与灰度发布
         LlmModelConfigDO localModel = new LlmModelConfigDO();
         localModel.setProvider("ollama");
         localModel.setModelName("本地 Qwen2.5-7B");
-        localModel.setModelId("qwen2.5:7b");
+        localModel.setModelId("qwen2.5:3b");
         localModel.setBaseUrl("http://localhost:11434");
         localModel.setIsActive(1);
         localModel.setStatus("ACTIVE");

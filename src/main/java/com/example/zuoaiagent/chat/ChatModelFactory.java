@@ -21,7 +21,7 @@ import java.util.List;
 /**
  * Chat 模型工厂
  *
- * <p>混合模式：本地 Ollama 模型（qwen2.5:7b）写死在 YAML，始终可用且优先级最高；
+ * <p>混合模式：本地 Ollama 模型（qwen2.5:3b）写死在 YAML，始终可用且优先级最高；
  * 远程模型从数据库 t_llm_model_config 表动态加载，受灰度规则过滤。
  * 不再依赖 YAML 配置和环境变量加载远程模型。
  */
@@ -55,11 +55,11 @@ public class ChatModelFactory {
         // 1. 本地 Ollama 模型（写死，始终排在第一位，优先级最高）
         list.add(new ChatModelEntry(
                 "local-ollama",
-                "qwen2.5:7b",
+                "qwen2.5:3b",
                 "ollama",
                 ollamaChatModel
         ));
-        log.info("[ChatModelFactory] 注册本地模型: qwen2.5:7b (ollama) — 优先级最高");
+        log.info("[ChatModelFactory] 注册本地模型: qwen2.5:3b (ollama) — 优先级最高");
 
         // 2. 从数据库加载激活的远程模型配置
         try {
@@ -114,7 +114,7 @@ public class ChatModelFactory {
         // 1. 本地 Ollama 模型（写死，始终排在第一位）
         newList.add(new ChatModelEntry(
                 "local-ollama",
-                "qwen2.5:7b",
+                "qwen2.5:3b",
                 "ollama",
                 ollamaChatModel
         ));
