@@ -237,7 +237,7 @@ services:
     container_name: zuo-web
     restart: unless-stopped
     ports:
-      - "127.0.0.1:5173:5173"
+      - "5173:5173"
     depends_on:
       - gateway-service
     networks:
@@ -248,7 +248,7 @@ services:
     container_name: zuo-monitor-web
     restart: unless-stopped
     ports:
-      - "127.0.0.1:5174:5174"
+      - "5174:5174"
     depends_on:
       - gateway-service
     networks:
