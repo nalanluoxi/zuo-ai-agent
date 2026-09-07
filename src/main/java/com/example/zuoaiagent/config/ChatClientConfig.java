@@ -7,6 +7,7 @@ import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.ollama.OllamaChatModel;
+import org.springframework.ai.ollama.OllamaEmbeddingModel;
 import org.springframework.ai.ollama.api.OllamaApi;
 import org.springframework.ai.ollama.api.OllamaOptions;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -57,6 +58,21 @@ public class ChatClientConfig {
                 .ollamaApi(ollamaApi)
                 .defaultOptions(OllamaOptions.builder()
                         .model("qwen2.5:7b")
+                        .build())
+                .build();
+    }
+
+    /**
+     * 本地 Ollama Embedding 模型 Bean
+     * <p>使用写死的 bge-m3 模型，1024 维，始终可用
+     */
+    @Bean
+    @Qualifier("ollamaEmbeddingModel")
+    public OllamaEmbeddingModel ollamaEmbeddingModel(OllamaApi ollamaApi) {
+        return OllamaEmbeddingModel.builder()
+                .ollamaApi(ollamaApi)
+                .defaultOptions(OllamaOptions.builder()
+                        .model("bge-m3")
                         .build())
                 .build();
     }
