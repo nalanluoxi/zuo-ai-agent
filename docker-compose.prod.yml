@@ -254,10 +254,6 @@ services:
     networks:
       - zuo-network
 
-volumes:
-  # 所有数据统一挂载到宿主目录 /opt/zuo-ai-agent/data/
-  # postgres, redis, rabbitmq, ollama 均使用本地目录
-
 networks:
   zuo-network:
     driver: bridge
