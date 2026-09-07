@@ -33,8 +33,8 @@ check_prerequisites() {
     fi
     info "Docker ✅ $(docker --version)"
 
-    if ! command -v docker-compose &>/dev/null && ! docker compose version &>/dev/null; then
-        error "Docker Compose 未安装"
+    if ! docker compose version &>/dev/null; then
+        error "Docker Compose 未安装（需要 Docker 20.10+）"
         exit 1
     fi
     info "Docker Compose ✅"
@@ -120,8 +120,8 @@ start() {
     check_prerequisites
 
     cd "$APP_HOME"
-    docker-compose -f "$COMPOSE_FILE" pull
-    docker-compose -f "$COMPOSE_FILE" up -d --remove-orphans
+    docker compose -f "$COMPOSE_FILE" pull
+    docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
 
     info "等待服务启动..."
     sleep 5
@@ -140,7 +140,7 @@ stop() {
 
     if [ -f "$COMPOSE_FILE" ]; then
         cd "$APP_HOME"
-        docker-compose -f "$COMPOSE_FILE" down
+        docker compose -f "$COMPOSE_FILE" down
         info "所有服务已停止"
     else
         warn "docker-compose.prod.yml 不存在"
@@ -165,8 +165,8 @@ update() {
     check_prerequisites
 
     cd "$APP_HOME"
-    docker-compose -f "$COMPOSE_FILE" pull
-    docker-compose -f "$COMPOSE_FILE" up -d --remove-orphans
+    docker compose -f "$COMPOSE_FILE" pull
+    docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
 
     # 清理悬空镜像
     docker image prune -f
@@ -186,7 +186,7 @@ status() {
 
     if [ -f "$COMPOSE_FILE" ] && [ -f "$ENV_FILE" ]; then
         cd "$APP_HOME"
-        docker-compose -f "$COMPOSE_FILE" ps
+        docker compose -f "$COMPOSE_FILE" ps
     else
         warn "配置文件不存在，无法查看状态"
     fi
@@ -205,7 +205,7 @@ status() {
 logs() {
     local service="${1:--f}"
     cd "$APP_HOME"
-    docker-compose -f "$COMPOSE_FILE" logs "$service"
+    docker compose -f "$COMPOSE_FILE" logs "$service"
 }
 
 # ============================================
@@ -218,7 +218,7 @@ shell() {
         exit 1
     fi
     cd "$APP_HOME"
-    docker-compose -f "$COMPOSE_FILE" exec "$service" sh
+    docker compose -f "$COMPOSE_FILE" exec "$service" sh
 }
 
 # ============================================
