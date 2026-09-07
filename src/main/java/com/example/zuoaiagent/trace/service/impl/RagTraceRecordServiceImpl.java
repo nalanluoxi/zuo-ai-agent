@@ -8,7 +8,6 @@ import com.example.zuoaiagent.trace.mapper.RagTraceRunMapper;
 import com.example.zuoaiagent.trace.service.RagTraceRecordService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.util.Date;
@@ -16,7 +15,7 @@ import java.util.Date;
 /**
  * RAG 链路追踪记录服务实现
  *
- * <p>所有写库操作均加 {@code @Async}，异步执行，不阻塞流水线主线程。
+ * <p>所有写库操作均同步执行，保证数据一致性。
  * 写库失败只打 warn 日志，不影响主业务。
  */
 @Service
@@ -32,7 +31,6 @@ public class RagTraceRecordServiceImpl implements RagTraceRecordService {
         this.nodeMapper = nodeMapper;
     }
 
-    @Async("ingestionExecutor")
     @Override
     public void startRun(String traceId, String conversationId, String originalPrompt) {
         try {
@@ -48,7 +46,6 @@ public class RagTraceRecordServiceImpl implements RagTraceRecordService {
         }
     }
 
-    @Async("ingestionExecutor")
     @Override
     public void setGrayTag(String traceId, String grayTag) {
         try {
@@ -61,7 +58,6 @@ public class RagTraceRecordServiceImpl implements RagTraceRecordService {
         }
     }
 
-    @Async("ingestionExecutor")
     @Override
     public void finishRun(String traceId, String status, String errorMessage, long durationMs) {
         try {
@@ -77,7 +73,6 @@ public class RagTraceRecordServiceImpl implements RagTraceRecordService {
         }
     }
 
-    @Async("ingestionExecutor")
     @Override
     public void startNode(String traceId, String nodeId, String nodeName, String nodeType, String inputData) {
         try {
@@ -95,14 +90,12 @@ public class RagTraceRecordServiceImpl implements RagTraceRecordService {
         }
     }
 
-    @Async("ingestionExecutor")
     @Override
     public void finishNode(String traceId, String nodeId, String status, String errorMessage,
                            long durationMs, String outputData) {
         finishNode(traceId, nodeId, status, errorMessage, durationMs, outputData, 0, 0);
     }
 
-    @Async("ingestionExecutor")
     @Override
     public void finishNode(String traceId, String nodeId, String status, String errorMessage,
                            long durationMs, String outputData, int promptTokens, int completionTokens) {

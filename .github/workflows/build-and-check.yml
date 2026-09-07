@@ -78,13 +78,13 @@ jobs:
       run: |
         echo "检查并拉取 Ollama 模型..."
         
-        # 从配置文件提取模型名称
-        CHAT_MODEL=$(grep -A 5 "ollama:" src/main/resources/application.yaml | grep "model:" | head -1 | awk '{print $2}')
-        EMBEDDING_MODEL=$(grep -A 10 "ollama:" src/main/resources/application.yaml | grep "model:" | tail -1 | awk '{print $2}')
+        # 写死的模型名称（与 application.yaml 配置一致）
+        CHAT_MODEL="qwen2.5:7b"
+        EMBEDDING_MODEL="bge-m3"
         
         echo "需要检查的模型:"
-        echo "  - $CHAT_MODEL"
-        echo "  - $EMBEDDING_MODEL"
+        echo "  - Chat 模型: $CHAT_MODEL"
+        echo "  - Embedding 模型: $EMBEDDING_MODEL"
         
         # 检查模型是否已存在
         MODELS_TO_PULL=()

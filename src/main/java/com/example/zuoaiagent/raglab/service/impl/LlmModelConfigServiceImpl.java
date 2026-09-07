@@ -34,6 +34,8 @@ public class LlmModelConfigServiceImpl implements LlmModelConfigService {
         config.setStatus("DRAFT");
         config.setCreateTime(new Date());
         config.setUpdateTime(new Date());
+        // 自动规范化 baseUrl，去掉末尾的 /v1
+        config.setBaseUrl(normalizeBaseUrl(config.getBaseUrl()));
         configMapper.insert(config);
         return config;
     }
@@ -41,6 +43,8 @@ public class LlmModelConfigServiceImpl implements LlmModelConfigService {
     @Override
     public LlmModelConfigDO update(LlmModelConfigDO config) {
         config.setUpdateTime(new Date());
+        // 自动规范化 baseUrl，去掉末尾的 /v1
+        config.setBaseUrl(normalizeBaseUrl(config.getBaseUrl()));
         configMapper.updateById(config);
         return config;
     }
@@ -82,8 +86,13 @@ public class LlmModelConfigServiceImpl implements LlmModelConfigService {
         }
 
         try {
+            // 自动规范化 baseUrl，兼容用户填写的 /v1 后缀
+            String normalizedUrl = normalizeBaseUrl(config.getBaseUrl());
+            log.info("[模型连通性测试] 模型 {} 使用 baseUrl: {} (原始: {})", 
+                    config.getModelName(), normalizedUrl, config.getBaseUrl());
+
             OpenAiApi openAiApi = OpenAiApi.builder()
-                    .baseUrl(config.getBaseUrl())
+                    .baseUrl(normalizedUrl)
                     .apiKey(getDecryptedApiKey(id))
                     .build();
 
@@ -105,9 +114,31 @@ public class LlmModelConfigServiceImpl implements LlmModelConfigService {
             log.info("[模型连通性测试] 模型 {} 测试成功，响应: {}", config.getModelName(), response);
             return response != null && !response.isBlank();
         } catch (Exception e) {
-            log.error("[模型连通性测试] 模型 {} 测试失败: {}", config.getModelName(), e.getMessage());
+            log.error("[模型连通性测试] 模型 {} 测试失败: {}", config.getModelName(), e.getMessage(), e);
             return false;
         }
+    }
+
+    /**
+     * 规范化 baseUrl，自动去掉末尾的 /v1
+     * 
+     * <p>Spring AI 的 OpenAiApi 内部会自动拼接 /v1/chat/completions，
+     * 如果用户填写的 baseUrl 已经包含 /v1，会导致路径重复（如 /v1/v1/chat/completions）。
+     * 
+     * @param baseUrl 原始 baseUrl
+     * @return 规范化后的 baseUrl（去掉末尾的 /v1）
+     */
+    private static String normalizeBaseUrl(String baseUrl) {
+        if (baseUrl == null || baseUrl.isBlank()) {
+            return baseUrl;
+        }
+        String trimmed = baseUrl.trim();
+        if (trimmed.endsWith("/v1")) {
+            String normalized = trimmed.substring(0, trimmed.length() - 3);
+            log.info("[BaseUrl 规范化] {} → {}", trimmed, normalized);
+            return normalized;
+        }
+        return trimmed;
     }
 
     @Override

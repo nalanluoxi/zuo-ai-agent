@@ -142,21 +142,32 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
         try {
             Map<String, Object> feedback = new LinkedHashMap<>();
             
-            // 总反馈数
-            String totalSql = "SELECT COUNT(*) as total FROM t_feedback";
+            // 总反馈数（点赞+点踩）
+            String totalSql = "SELECT COUNT(*) as total FROM t_message_feedback";
             Integer totalCount = jdbcTemplate.queryForObject(totalSql, Integer.class);
             feedback.put("totalFeedback", totalCount != null ? totalCount : 0);
             
-            // 满意度分布
-            String ratingSql = "SELECT rating, COUNT(*) as count FROM t_feedback WHERE rating IS NOT NULL GROUP BY rating";
+            // 满意度分布（按 feedback_type 分组：1=点赞, 0=点踩）
+            String ratingSql = "SELECT " +
+                "CASE WHEN feedback_type = 1 THEN '点赞' ELSE '点踩' END as rating, " +
+                "COUNT(*) as count " +
+                "FROM t_message_feedback " +
+                "GROUP BY feedback_type";
             List<Map<String, Object>> ratings = jdbcTemplate.queryForList(ratingSql);
             feedback.put("ratingDistribution", ratings);
             
-            // 常见问题（反馈最多的类别）
-            String categorySql = "SELECT category, COUNT(*) as count FROM t_feedback " +
-                               "WHERE category IS NOT NULL GROUP BY category ORDER BY count DESC LIMIT 5";
-            List<Map<String, Object>> topCategories = jdbcTemplate.queryForList(categorySql);
-            feedback.put("topCategories", topCategories);
+            // 最近反馈（按用户分组）
+            String userFeedbackSql = "SELECT " +
+                "u.id as user_id, u.username, u.nickname, " +
+                "COUNT(*) as feedback_count, " +
+                "SUM(CASE WHEN f.feedback_type = 1 THEN 1 ELSE 0 END) as like_count, " +
+                "SUM(CASE WHEN f.feedback_type = 0 THEN 1 ELSE 0 END) as dislike_count " +
+                "FROM t_message_feedback f " +
+                "JOIN t_user u ON f.user_id = u.id " +
+                "GROUP BY u.id, u.username, u.nickname " +
+                "ORDER BY feedback_count DESC LIMIT 5";
+            List<Map<String, Object>> topUsers = jdbcTemplate.queryForList(userFeedbackSql);
+            feedback.put("topCategories", topUsers);
             
             return feedback;
         } catch (Exception e) {

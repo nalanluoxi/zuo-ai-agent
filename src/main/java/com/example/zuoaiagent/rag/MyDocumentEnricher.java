@@ -16,7 +16,7 @@ public class MyDocumentEnricher {
      */
     private final ChatModel chatModel;
 
-    public MyDocumentEnricher(@Qualifier("dashscopeChatModel") ChatModel chatModel) {
+    public MyDocumentEnricher(ChatModel chatModel) {
         this.chatModel = chatModel;
     }
 

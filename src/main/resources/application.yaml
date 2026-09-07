@@ -5,32 +5,30 @@ spring:
     active: local
   autoconfigure:
     # 纯 Java 项目，排除 springdoc Kotlin 自动配置，避免 ClassNotFoundException: kotlin.reflect.full.KClasses
-    exclude: org.springdoc.core.configuration.SpringDocKotlinConfiguration
+    # 排除 DashScope/OpenAI/Ollama 自动配置，模型配置从数据库动态加载
+    exclude:
+      - org.springdoc.core.configuration.SpringDocKotlinConfiguration
+      - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeChatAutoConfiguration
+      - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeEmbeddingAutoConfiguration
+      - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeAgentAutoConfiguration
+      - org.springframework.ai.autoconfigure.openai.OpenAiAutoConfiguration
+      - org.springframework.ai.autoconfigure.openai.OpenAiEmbeddingAutoConfiguration
+      - org.springframework.ai.autoconfigure.ollama.OllamaAutoConfiguration
   ai:
+    # Chat 模型：本地 Ollama 模型写死（始终可用），远程模型从数据库 t_llm_model_config 动态加载
+    # Embedding 模型：本地 Ollama bge-m3 写死
     dashscope:
-      api-key: ${DASHSCOPE_API_KEY}
-      chat:
-        options:
-          model: qwen-plus
+      api-key: ${DASHSCOPE_API_KEY:placeholder}
     openai:
-      api-key: ${SILICONFLOW_API_KEY}
-      base-url: https://api.siliconflow.cn
-      chat:
-        options:
-          model: deepseek-ai/DeepSeek-V3
-      embedding:
-        options:
-          model: bce-embedding-base_v1   # 或 Qwen/Qwen3-Embedding-8B
+      api-key: ${SILICONFLOW_API_KEY:placeholder}
     ollama:
       base-url: http://localhost:11434
       chat:
-        enabled: true
         options:
-          model: qwen2.5:0.5b
+          model: qwen2.5:7b
       embedding:
-        enabled: true
         options:
-          model: dengcao/Qwen3-Embedding-8B:F16  # 必须与 ollama list 中的名字完全一致，运行前执行：ollama pull dengcao/Qwen3-Embedding-8B:F16
+          model: bge-m3
   servlet:
     multipart:
       max-file-size: 20MB
@@ -178,25 +176,6 @@ chat:
   selection:
     failure-threshold: 2
     open-duration-ms: 30000
-  candidates:
-    # 本地候选：Ollama qwen2.5:0.5b（离线可用，无需 API Key）
-    - id: ollama-qwen
-      provider: ollama
-      model: qwen2.5:0.5b
-      priority: 1
-      enabled: true
-    # 主候选：DashScope qwen-plus
-    - id: dashscope-qwen
-      provider: dashscope
-      model: qwen-plus
-      priority: 2
-      enabled: false
-    # 备用候选：SiliconFlow DeepSeek-V3（OpenAI 兼容接口）
-    - id: siliconflow-deepseek
-      provider: openai
-      model: deepseek-ai/DeepSeek-V3
-      priority: 3
-      enabled: false
 
 # RabbitMQ 队列声明
 zuo:

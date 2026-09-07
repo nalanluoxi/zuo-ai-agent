@@ -1,7 +1,12 @@
 package com.example.zuoaiagent.raglab.controller;
 
+import com.example.zuoaiagent.common.BaseResponse;
+import com.example.zuoaiagent.common.ResultUtils;
+import com.example.zuoaiagent.config.TenantContextHolder;
 import com.example.zuoaiagent.raglab.entity.LlmModelConfigDO;
+import com.example.zuoaiagent.raglab.service.GrayReleasePlanService;
 import com.example.zuoaiagent.raglab.service.LlmModelConfigService;
+import com.example.zuoaiagent.raglab.service.impl.ModelRouterServiceImpl;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
@@ -17,9 +22,15 @@ import java.util.List;
 public class LlmModelConfigController {
 
     private final LlmModelConfigService configService;
+    private final ModelRouterServiceImpl modelRouterService;
+    private final GrayReleasePlanService grayReleasePlanService;
 
-    public LlmModelConfigController(LlmModelConfigService configService) {
+    public LlmModelConfigController(LlmModelConfigService configService,
+                                    ModelRouterServiceImpl modelRouterService,
+                                    GrayReleasePlanService grayReleasePlanService) {
         this.configService = configService;
+        this.modelRouterService = modelRouterService;
+        this.grayReleasePlanService = grayReleasePlanService;
     }
 
     @PostMapping
@@ -31,7 +42,10 @@ public class LlmModelConfigController {
     @PutMapping
     @Operation(summary = "更新模型配置")
     public LlmModelConfigDO update(@RequestBody LlmModelConfigDO config) {
-        return configService.update(config);
+        LlmModelConfigDO updated = configService.update(config);
+        // 清除缓存，使新配置生效
+        modelRouterService.evictCache(config.getId());
+        return updated;
     }
 
     @GetMapping("/{id}")
@@ -48,8 +62,17 @@ public class LlmModelConfigController {
 
     @GetMapping("/list/active")
     @Operation(summary = "查询对话模块可选模型（is_active=1）")
-    public List<LlmModelConfigDO> listActive() {
-        return configService.listActive();
+    public BaseResponse<List<LlmModelConfigDO>> listActive() {
+        return ResultUtils.success(configService.listActive());
+    }
+
+    @GetMapping("/list/active/gray")
+    @Operation(summary = "查询当前用户可见的模型（根据灰度规则过滤）")
+    public BaseResponse<List<LlmModelConfigDO>> listActiveGray() {
+        Long userId = TenantContextHolder.getUserId();
+        List<LlmModelConfigDO> allActive = configService.listActive();
+        List<LlmModelConfigDO> visible = grayReleasePlanService.resolveVisibleModels(userId, allActive);
+        return ResultUtils.success(visible);
     }
 
     @PostMapping("/{id}/toggle-active")

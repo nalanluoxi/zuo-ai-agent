@@ -71,13 +71,17 @@
             </el-option>
           </el-option-group>
           <el-option-group label="Premium - 远程模型">
-            <el-option label="GPT-4o (OpenAI)" value="gpt-4o">
-              <span style="float: left">GPT-4o</span>
-              <span style="float: right; color: #8492a6; font-size: 13px">OpenAI</span>
-            </el-option>
-            <el-option label="Claude-3.5-Sonnet" value="claude-3-5-sonnet-20241022">
-              <span style="float: left">Claude 3.5 Sonnet</span>
-              <span style="float: right; color: #8492a6; font-size: 13px">Anthropic</span>
+            <template v-if="activeModels.length === 0">
+              <el-option label="暂无已上线的远程模型" value="" disabled />
+            </template>
+            <el-option
+              v-for="m in activeModels"
+              :key="m.id"
+              :label="`${m.modelName} (${m.modelId})`"
+              :value="m.modelId"
+            >
+              <span style="float: left">{{ m.modelName }}</span>
+              <span style="float: right; color: #8492a6; font-size: 13px">{{ m.provider }}</span>
             </el-option>
           </el-option-group>
         </el-select>
@@ -136,10 +140,21 @@ let messageSeq = 0
 const conversationId = ref('')
 const ragEnabled = ref<boolean>(localStorage.getItem('ragEnabled') !== 'false')
 const selectedModel = ref<string>('Auto Route')
+const activeModels = ref<any[]>([])
 
 watch(ragEnabled, (val) => {
   localStorage.setItem('ragEnabled', String(val))
 })
+
+// 加载已激活的远程模型（根据灰度规则过滤）
+async function loadActiveModels() {
+  try {
+    const res = await request.get('/rag-lab/model-config/list/active/gray') as any
+    activeModels.value = res.data || []
+  } catch (e) {
+    console.error('加载远程模型列表失败:', e)
+  }
+}
 
 // 模型选择变化时的处理
 function handleModelChange() {
@@ -152,6 +167,8 @@ onMounted(async () => {
   if (conversationId.value) {
     await loadMessages()
   }
+  // 加载已激活的远程模型列表
+  await loadActiveModels()
 })
 
 watch(

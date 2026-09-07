@@ -38,7 +38,7 @@ spring:
         - id: rag-service
           uri: http://localhost:8123
           predicates:
-            - Path=/api/knowledge-base/**,/api/chat/**,/api/dashboard/**,/api/admin/**,/api/conversations/**,/api/health/**,/api/monitor/**,/api/feedback/**,/api/intent/**,/api/approvals/**,/api/rag-lab/**
+            - Path=/api/knowledge-base/**,/api/chat/**,/api/dashboard/**,/api/admin/**,/api/conversations/**,/api/health/**,/api/monitor/**,/api/feedback/**,/api/intent/**,/api/approvals/**,/api/rag-lab/**,/api/stream/**
           order: 2
         
         # 日志监控服务（Log Monitor Service - 端口 8200）

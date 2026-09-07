@@ -95,11 +95,16 @@ public class DocumentReranker {
         if (scored.isEmpty()) return List.of();
 
         int finalTopK = Math.min(topK, scored.size());
-        return scored.stream()
+        List<Document> result = scored.stream()
                 .sorted(Comparator.comparingDouble(ScoredDocument::score).reversed())
                 .limit(finalTopK)
-                .map(ScoredDocument::document)
+                .map(sd -> {
+                    // 将重排序分数写入 Document metadata，供 trace 展示使用
+                    sd.document().getMetadata().put("rerank_score", sd.score());
+                    return sd.document();
+                })
                 .toList();
+        return result;
     }
 
     private double scoreDocument(String query, Document doc) {
