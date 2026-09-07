@@ -15,12 +15,12 @@ spring:
       max-lifetime: 1800000
   ai:
     dashscope:
-      api-key: ${DASHSCOPE_API_KEY}
+      api-key: ${DASHSCOPE_API_KEY:placeholder}
       chat:
         options:
           model: qwen-plus
     openai:
-      api-key: ${SILICONFLOW_API_KEY}
+      api-key: ${SILICONFLOW_API_KEY:placeholder}
       base-url: https://api.siliconflow.cn
       chat:
         options:
