@@ -16,8 +16,12 @@ spring:
       - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeAudioTranscriptionAutoConfiguration
       - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeAudioSpeechAutoConfiguration
       - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeRerankAutoConfiguration
-      - org.springframework.ai.model.openai.autoconfigure.OpenAiAutoConfiguration
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiChatAutoConfiguration
       - org.springframework.ai.model.openai.autoconfigure.OpenAiEmbeddingAutoConfiguration
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiImageAutoConfiguration
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechAutoConfiguration
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiAudioTranscriptionAutoConfiguration
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiModerationAutoConfiguration
       - org.springframework.ai.model.ollama.autoconfigure.OllamaAutoConfiguration
   ai:
     # Chat 模型：本地 Ollama 模型写死（始终可用），远程模型从数据库 t_llm_model_config 动态加载
