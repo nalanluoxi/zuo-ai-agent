@@ -11,7 +11,7 @@
     <!-- 日志监控 Appender（异步批量发送到 log-monitor-service） -->
     <appender name="LOG_MONITOR" class="com.example.zuoaiagent.log.LogMonitorAppender">
         <serviceName>zuo-ai-agent</serviceName>
-        <logMonitorUrl>http://localhost:8200/api/log/collect</logMonitorUrl>
+        <logMonitorUrl>${log.monitor.url:-http://localhost:8200/api/log/collect}</logMonitorUrl>
         <batchSize>100</batchSize>
         <flushIntervalSeconds>3</flushIntervalSeconds>
         <queueSize>10000</queueSize>

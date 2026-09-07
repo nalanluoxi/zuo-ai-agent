@@ -33,3 +33,8 @@ logging:
   level:
     root: WARN
     com.example.authservice: INFO
+
+# 日志监控服务地址（Docker 容器内使用服务名）
+log:
+  monitor:
+    url: http://log-monitor-service:8200/api/log/collect
