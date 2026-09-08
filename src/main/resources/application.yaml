@@ -31,10 +31,10 @@ spring:
     openai:
       api-key: ${SILICONFLOW_API_KEY:placeholder}
     ollama:
-      base-url: http://localhost:11434
+      base-url: ${OLLAMA_HOST:http://localhost:11434}
       chat:
         options:
-          model: qwen2.5:3b
+          model: qwen2.5:7b
       embedding:
         options:
           model: bge-m3

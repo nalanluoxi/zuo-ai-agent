@@ -22,7 +22,7 @@ import java.util.List;
  *
  * <p>负责初始化 {@link VectorStore} Bean。向量化层使用
  * {@link CircuitBreakerEmbeddingModel} 包装 {@link EmbeddingModelFactory} 中注册的
- * 多厂商候选模型，实现跨厂商熔断与故障切换。向量维度为 4096（Qwen3-Embedding-8B）。
+ * 多厂商候选模型，实现跨厂商熔断与故障切换。向量维度为 1024（bge-m3）。
  *
  * <p>文档入库已改为动态方式，由上传接口触发
  * {@link com.example.zuoaiagent.knowledge.ingestion.DocumentIngestionService} 异步处理，
@@ -56,30 +56,28 @@ public class VectorStoreConfig {
     /**
      * 构建 PgVector 向量存储 Bean。
      *
-     * <p>参数说明：
-     * <ul>
-     *   <li>dimensions=4096：与 Qwen3-Embedding-8B 输出维度一致</li>
-     *   <li>distanceType=COSINE_DISTANCE：余弦相似度，适合文本语义检索</li>
-     *   <li>indexType=NONE：pgvector 的 HNSW/IVFFLAT 索引硬性限制最多 2000 维，
-     *       4096 维无法建索引（建索引会报 "column cannot have more than 2000 dimensions
-     *       for hnsw index"），因此改为精确扫描（无索引），数据量较小时性能可接受</li>
-     *   <li>initializeSchema=true：首次启动自动建表，无需手动 DDL</li>
-     * </ul>
-     *
-     * @param jdbcTemplate                Spring 管理的 JDBC 操作模板
-     * @param circuitBreakerEmbeddingModel 带熔断的 Embedding 模型
-     * @return 配置好的 PgVectorStore 实例
-     */
-    @Bean
-    public VectorStore vectorStore(JdbcTemplate jdbcTemplate,
-                                   CircuitBreakerEmbeddingModel circuitBreakerEmbeddingModel) {
-        return PgVectorStore.builder(jdbcTemplate, circuitBreakerEmbeddingModel)
-                .dimensions(4096)                              // Qwen3-Embedding-8B 维度为 4096
-                .distanceType(PgVectorStore.PgDistanceType.COSINE_DISTANCE)
-                .indexType(PgVectorStore.PgIndexType.NONE)
-                .initializeSchema(true)
-                .build();
-    }
+ * <p>参数说明：
+ * <ul>
+ *   <li>dimensions=1024：与 bge-m3 输出维度一致</li>
+ *   <li>distanceType=COSINE_DISTANCE：余弦相似度，适合文本语义检索</li>
+ *   <li>indexType=HNSW：1024 维在 pgvector HNSW 索引限制（2000 维）内，启用 HNSW 索引加速检索</li>
+ *   <li>initializeSchema=true：首次启动自动建表，无需手动 DDL</li>
+ * </ul>
+ *
+ * @param jdbcTemplate                Spring 管理的 JDBC 操作模板
+ * @param circuitBreakerEmbeddingModel 带熔断的 Embedding 模型
+ * @return 配置好的 PgVectorStore 实例
+ */
+@Bean
+public VectorStore vectorStore(JdbcTemplate jdbcTemplate,
+                               CircuitBreakerEmbeddingModel circuitBreakerEmbeddingModel) {
+    return PgVectorStore.builder(jdbcTemplate, circuitBreakerEmbeddingModel)
+            .dimensions(1024)                              // bge-m3 维度为 1024
+            .distanceType(PgVectorStore.PgDistanceType.COSINE_DISTANCE)
+            .indexType(PgVectorStore.PgIndexType.HNSW)
+            .initializeSchema(true)
+            .build();
+}
 
     /**
      * 启动时预加载 Markdown 文档到向量库（可选钩子）。

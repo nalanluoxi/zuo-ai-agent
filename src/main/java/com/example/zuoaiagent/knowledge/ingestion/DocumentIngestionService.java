@@ -26,7 +26,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.awt.image.BufferedImage;
@@ -123,14 +122,13 @@ public class DocumentIngestionService {
     private String tessDataPath;
 
     /**
-     * 异步触发文档入库流水线。
+     * 同步执行文档入库流水线。
      *
-     * <p>整个方法在 {@code ingestionExecutor} 线程池中执行（{@link Async} 注解），
-     * 上传接口无需等待即可返回响应。
+     * <p>整个方法在 RabbitMQ 消费线程中同步执行，
+     * 失败时由消费者 nack 让 MQ 重新投递，最终失败可在前端点"重新入库"。
      *
      * @param docId 已插入 t_knowledge_document 表的文档 ID
      */
-    @Async("ingestionExecutor")
     public void ingest(Long docId) {
         log.info("[入库] 开始处理文档 docId={}", docId);
 

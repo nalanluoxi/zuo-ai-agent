@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.ollama.OllamaChatModel;
+import org.springframework.ai.ollama.api.OllamaOptions;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
@@ -33,6 +34,9 @@ public class ChatModelFactory {
     public record ChatModelEntry(String id, String modelName, String provider, ChatModel delegate) {
 
         public ChatOptions buildOptions() {
+            if ("ollama".equals(provider)) {
+                return OllamaOptions.builder().model(modelName).build();
+            }
             return OpenAiChatOptions.builder().model(modelName).build();
         }
     }
@@ -55,11 +59,11 @@ public class ChatModelFactory {
         // 1. 本地 Ollama 模型（写死，始终排在第一位，优先级最高）
         list.add(new ChatModelEntry(
                 "local-ollama",
-                "qwen2.5:3b",
+                "qwen2.5:7b",
                 "ollama",
                 ollamaChatModel
         ));
-        log.info("[ChatModelFactory] 注册本地模型: qwen2.5:3b (ollama) — 优先级最高");
+        log.info("[ChatModelFactory] 注册本地模型: qwen2.5:7b (ollama) — 优先级最高");
 
         // 2. 从数据库加载激活的远程模型配置
         try {
@@ -114,7 +118,7 @@ public class ChatModelFactory {
         // 1. 本地 Ollama 模型（写死，始终排在第一位）
         newList.add(new ChatModelEntry(
                 "local-ollama",
-                "qwen2.5:3b",
+                "qwen2.5:7b",
                 "ollama",
                 ollamaChatModel
         ));

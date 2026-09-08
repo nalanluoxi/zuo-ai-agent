@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
 
+    <!-- 从 Spring 环境读取 log monitor URL（支持 Docker 环境变量 LOG_MONITOR_URL 的 relaxed binding） -->
+    <springProperty scope="context" name="logMonitorUrl" source="log.monitor.url" defaultValue="http://localhost:8200/api/log/collect"/>
+
     <!-- 控制台输出 -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
@@ -11,7 +14,7 @@
     <!-- 日志监控 Appender（异步批量发送到 log-monitor-service） -->
     <appender name="LOG_MONITOR" class="com.example.zuoaiagent.log.LogMonitorAppender">
         <serviceName>zuo-ai-agent</serviceName>
-        <logMonitorUrl>${log.monitor.url:-http://localhost:8200/api/log/collect}</logMonitorUrl>
+        <logMonitorUrl>${logMonitorUrl}</logMonitorUrl>
         <batchSize>100</batchSize>
         <flushIntervalSeconds>3</flushIntervalSeconds>
         <queueSize>10000</queueSize>
