@@ -294,11 +294,16 @@ public class DocumentIngestionService {
      * @return 文件字节数组，若不存在返回 null
      */
     private byte[] fetchFileBytes(String storageKey) {
-        return jdbcTemplate.queryForObject(
-                "SELECT content FROM t_knowledge_document_file WHERE storage_key = ?",
-                byte[].class,
-                storageKey
-        );
+        try {
+            return jdbcTemplate.queryForObject(
+                    "SELECT content FROM t_knowledge_document_file WHERE storage_key = ?",
+                    byte[].class,
+                    storageKey
+            );
+        } catch (org.springframework.dao.EmptyResultDataAccessException e) {
+            log.warn("文件不存在: storageKey={}", storageKey);
+            return null;
+        }
     }
 
     /**
