@@ -51,7 +51,9 @@ public class ExperimentPlanController {
 
         @SuppressWarnings("unchecked")
         List<Long> questionIds = body.get("questionIds") != null
-                ? ((List<Number>) body.get("questionIds")).stream().map(Number::longValue).toList()
+                ? ((List<Object>) body.get("questionIds")).stream()
+                        .map(obj -> Long.valueOf(obj.toString()))
+                        .toList()
                 : List.of();
 
         @SuppressWarnings("unchecked")
