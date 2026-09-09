@@ -10,8 +10,10 @@ import com.example.zuoaiagent.rag.MultiChannelRetriever;
 import com.example.zuoaiagent.rag.QueryRewriter;
 import com.example.zuoaiagent.raglab.entity.RagConfigDO;
 import com.example.zuoaiagent.raglab.entity.RagExperimentDO;
+import com.example.zuoaiagent.raglab.entity.RagExperimentPlanDO;
 import com.example.zuoaiagent.raglab.entity.RagTestQuestionDO;
 import com.example.zuoaiagent.raglab.mapper.RagExperimentMapper;
+import com.example.zuoaiagent.raglab.mapper.RagExperimentPlanMapper;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -34,6 +36,7 @@ public class RagEvaluationService {
     private static final Logger log = LoggerFactory.getLogger(RagEvaluationService.class);
 
     private final RagExperimentMapper experimentMapper;
+    private final RagExperimentPlanMapper planMapper;
     private final RagTestQuestionService testQuestionService;
     private final RagConfigLoader configLoader;
     private final QueryRewriter queryRewriter;
@@ -44,6 +47,7 @@ public class RagEvaluationService {
     private final ObjectMapper objectMapper;
 
     public RagEvaluationService(RagExperimentMapper experimentMapper,
+                                 RagExperimentPlanMapper planMapper,
                                  RagTestQuestionService testQuestionService,
                                  RagConfigLoader configLoader,
                                  QueryRewriter queryRewriter,
@@ -53,6 +57,7 @@ public class RagEvaluationService {
                                  HyDEQueryRewriter hydeQueryRewriter,
                                  ObjectMapper objectMapper) {
         this.experimentMapper = experimentMapper;
+        this.planMapper = planMapper;
         this.testQuestionService = testQuestionService;
         this.configLoader = configLoader;
         this.queryRewriter = queryRewriter;
@@ -78,15 +83,21 @@ public class RagEvaluationService {
      * 启动评估实验（异步执行）。
      */
     public RagExperimentDO startExperiment(String name, List<Long> questionIds) {
+        RagExperimentDO exp = createExperimentRecord(name, questionIds);
+        runExperimentAsync(exp.getId(), questionIds);
+        return exp;
+    }
+
+    /**
+     * 仅创建实验记录（不启动执行）。
+     */
+    public RagExperimentDO createExperimentRecord(String name, List<Long> questionIds) {
         RagExperimentDO exp = new RagExperimentDO();
         exp.setExperimentName(name);
         exp.setTestQuestionIds(toJson(questionIds));
         exp.setStatus("RUNNING");
         exp.setCreateTime(new Date());
         experimentMapper.insert(exp);
-
-        // 异步执行
-        runExperimentAsync(exp.getId(), questionIds);
         return exp;
     }
 
@@ -208,6 +219,9 @@ public class RagEvaluationService {
             update.setDetailData(toJson(details));
             experimentMapper.updateById(update);
 
+            // 回写实验计划状态
+            updatePlanStatus(experimentId, "COMPLETED");
+
             log.info("[RagEvaluation] 实验 #{} 完成, 耗时 {}ms, 意图准确率={}", experimentId, durationMs, update.getIntentAccuracy());
         } catch (Exception e) {
             log.error("[RagEvaluation] 实验 #{} 执行失败", experimentId, e);
@@ -217,6 +231,9 @@ public class RagEvaluationService {
             update.setFinishTime(new Date());
             update.setRunDurationMs(System.currentTimeMillis() - startMs);
             experimentMapper.updateById(update);
+
+            // 回写实验计划状态
+            updatePlanStatus(experimentId, "FAILED");
         }
     }
 
@@ -300,6 +317,27 @@ public class RagEvaluationService {
             return objectMapper.writeValueAsString(obj);
         } catch (JsonProcessingException e) {
             return "[]";
+        }
+    }
+
+    /**
+     * 根据实验 ID 查找关联的实验计划并更新状态
+     */
+    private void updatePlanStatus(Long experimentId, String status) {
+        try {
+            List<RagExperimentPlanDO> plans = planMapper.selectList(
+                    new LambdaQueryWrapper<RagExperimentPlanDO>()
+                            .eq(RagExperimentPlanDO::getExperimentId, experimentId)
+            );
+            for (RagExperimentPlanDO plan : plans) {
+                plan.setStatus(status);
+                plan.setFinishTime(new Date());
+                plan.setUpdateTime(new Date());
+                planMapper.updateById(plan);
+                log.info("[RagEvaluation] 已更新实验计划状态: planId={}, status={}", plan.getId(), status);
+            }
+        } catch (Exception e) {
+            log.warn("[RagEvaluation] 更新实验计划状态失败: experimentId={}, status={}, error={}", experimentId, status, e.getMessage());
         }
     }
 }

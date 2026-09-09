@@ -1,6 +1,7 @@
 package com.example.zuoaiagent.raglab.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 
@@ -34,30 +35,38 @@ public class RagExperimentDO {
     private Double hydeRelevance;
 
     /** Recall@3 */
+    @TableField("recall_at_3")
     private Double recallAt3;
 
     /** Recall@5 */
+    @TableField("recall_at_5")
     private Double recallAt5;
 
     /** Recall@10 */
+    @TableField("recall_at_10")
     private Double recallAt10;
 
     /** MRR（Mean Reciprocal Rank） */
     private Double mrr;
 
     /** Rerank NDCG@3 */
+    @TableField("rerank_ndcg_at_3")
     private Double rerankNdcgAt3;
 
     /** Rerank NDCG@5 */
+    @TableField("rerank_ndcg_at_5")
     private Double rerankNdcgAt5;
 
     /** 答案忠实度 */
+    @TableField("answer_faithfulness")
     private Double answerFaithfulness;
 
     /** 答案完整性 */
+    @TableField("answer_completeness")
     private Double answerCompleteness;
 
     /** 幻觉率 */
+    @TableField("hallucination_rate")
     private Double hallucinationRate;
 
     /** 详细数据（JSON） */
@@ -76,6 +85,7 @@ public class RagExperimentDO {
     private Long createUserId;
 
     /** 运行时长（毫秒） */
+    @TableField("run_duration_ms")
     private Long runDurationMs;
 
     /** 租户 ID */

@@ -26,6 +26,12 @@ public interface ExperimentPlanService {
     /** 执行实验计划 */
     RagExperimentPlanDO executePlan(Long planId);
 
+    /** 取消执行中的实验计划（RUNNING → PENDING） */
+    RagExperimentPlanDO cancelPlan(Long planId);
+
+    /** 获取计划关联的实验记录 ID */
+    Long getPlanExperimentId(Long planId);
+
     /** 获取计划关联的全局题库 ID 列表 */
     List<Long> getPlanQuestionIds(Long planId);
 

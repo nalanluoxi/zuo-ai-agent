@@ -212,11 +212,12 @@
             <el-table-column label="创建时间" width="180">
               <template #default="{ row }">{{ formatTime(row.createTime || row.create_time) }}</template>
             </el-table-column>
-            <el-table-column label="操作" width="220" fixed="right">
+            <el-table-column label="操作" width="260" fixed="right">
               <template #default="{ row }">
                 <el-button v-if="row.status === 'PENDING'" type="primary" link size="small" @click="executePlan(row.id)">执行</el-button>
-                <el-button v-if="row.status === 'COMPLETED'" type="success" link size="small" @click="viewPlanResult(row)">查看结果</el-button>
-                <el-button v-if="row.status === 'COMPLETED'" type="info" link size="small" @click="viewExperimentReport({id: row.id, experimentName: row.planName, ...parseResultSummary(row.resultSummary)})">详细报告</el-button>
+                <el-button v-if="row.status === 'RUNNING'" type="warning" link size="small" @click="cancelPlan(row.id)">取消</el-button>
+                <el-button v-if="row.status === 'COMPLETED' && row.experimentId" type="success" link size="small" @click="viewPlanResult(row)">查看结果</el-button>
+                <el-button v-if="row.status === 'COMPLETED' && row.experimentId" type="info" link size="small" @click="viewExperimentReport(row)">详细报告</el-button>
                 <el-button type="danger" link size="small" @click="deletePlan(row.id)">删除</el-button>
               </template>
             </el-table-column>
@@ -1130,6 +1131,8 @@ async function loadExperimentPlans() {
       useGlobalQuestions: p.use_global_questions ?? p.useGlobalQuestions,
       useCustomQuestions: p.use_custom_questions ?? p.useCustomQuestions,
       knowledgeBaseIds: p.knowledge_base_ids ?? p.knowledgeBaseIds,
+      experimentId: p.experiment_id ?? p.experimentId,
+      resultSummary: p.result_summary ?? p.resultSummary,
       createTime: p.create_time ?? p.createTime
     }))
   } catch (e) {
@@ -1191,6 +1194,17 @@ async function executePlan(id: number) {
     await loadExperimentPlans()
   } catch (e: any) {
     if (e !== 'cancel') ElMessage.error(e.response?.data?.message || '执行失败')
+  }
+}
+
+async function cancelPlan(id: number) {
+  try {
+    await ElMessageBox.confirm('确认取消此实验计划？取消后状态将恢复为 PENDING。', '取消确认')
+    await request.post(`/rag-lab/experiment-plan/${id}/cancel`)
+    ElMessage.success('已取消')
+    await loadExperimentPlans()
+  } catch (e: any) {
+    if (e !== 'cancel') ElMessage.error(e.response?.data?.message || '取消失败')
   }
 }
 
@@ -1320,8 +1334,12 @@ async function loadTestQuestions() {
 }
 
 async function viewExperimentReport(row: any) {
+  if (!row.experimentId) {
+    ElMessage.error('该计划尚未关联实验记录')
+    return
+  }
   try {
-    const res = await request.get(`/rag-lab/experiments/${row.id}/report`) as any
+    const res = await request.get(`/rag-lab/experiments/${row.experimentId}/report`) as any
     const data = res.data || res || {}
     experimentReport.value = {
       ...data,

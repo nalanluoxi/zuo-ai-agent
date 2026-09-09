@@ -1,5 +1,7 @@
 package com.example.zuoaiagent.raglab.controller;
 
+import com.example.zuoaiagent.common.BaseResponse;
+import com.example.zuoaiagent.common.ResultUtils;
 import com.example.zuoaiagent.raglab.entity.RagExperimentPlanDO;
 import com.example.zuoaiagent.raglab.entity.RagPlanCustomQuestionDO;
 import com.example.zuoaiagent.raglab.service.ExperimentPlanService;
@@ -26,7 +28,7 @@ public class ExperimentPlanController {
 
     @PostMapping
     @Operation(summary = "创建实验计划")
-    public RagExperimentPlanDO createPlan(@RequestBody Map<String, Object> body) {
+    public BaseResponse<RagExperimentPlanDO> createPlan(@RequestBody Map<String, Object> body) {
         RagExperimentPlanDO plan = new RagExperimentPlanDO();
         plan.setPlanName((String) body.get("planName"));
         plan.setModelConfigId(body.get("modelConfigId") != null ? Long.valueOf(body.get("modelConfigId").toString()) : null);
@@ -39,9 +41,9 @@ public class ExperimentPlanController {
         Object knowledgeBaseIdsObj = body.get("knowledgeBaseIds");
         if (knowledgeBaseIdsObj instanceof List) {
             @SuppressWarnings("unchecked")
-            List<Number> kbIds = (List<Number>) knowledgeBaseIdsObj;
+            List<Object> kbIds = (List<Object>) knowledgeBaseIdsObj;
             String kbIdsStr = kbIds.stream()
-                    .map(Number::toString)
+                    .map(obj -> obj.toString())
                     .reduce((a, b) -> a + "," + b)
                     .orElse(null);
             plan.setKnowledgeBaseIds(kbIdsStr);
@@ -67,42 +69,49 @@ public class ExperimentPlanController {
                 }).toList()
                 : List.of();
 
-        return planService.createPlan(plan, questionIds, customQuestions);
+        return ResultUtils.success(planService.createPlan(plan, questionIds, customQuestions));
     }
 
     @GetMapping("/{id}")
     @Operation(summary = "查询实验计划")
-    public RagExperimentPlanDO getById(@PathVariable Long id) {
-        return planService.getById(id);
+    public BaseResponse<RagExperimentPlanDO> getById(@PathVariable Long id) {
+        return ResultUtils.success(planService.getById(id));
     }
 
     @GetMapping("/list")
     @Operation(summary = "查询所有实验计划")
-    public List<RagExperimentPlanDO> listAll() {
-        return planService.listAll();
+    public BaseResponse<List<RagExperimentPlanDO>> listAll() {
+        return ResultUtils.success(planService.listAll());
     }
 
     @PostMapping("/{id}/execute")
     @Operation(summary = "执行实验计划")
-    public RagExperimentPlanDO executePlan(@PathVariable Long id) {
-        return planService.executePlan(id);
+    public BaseResponse<RagExperimentPlanDO> executePlan(@PathVariable Long id) {
+        return ResultUtils.success(planService.executePlan(id));
+    }
+
+    @PostMapping("/{id}/cancel")
+    @Operation(summary = "取消执行中的实验计划")
+    public BaseResponse<RagExperimentPlanDO> cancelPlan(@PathVariable Long id) {
+        return ResultUtils.success(planService.cancelPlan(id));
     }
 
     @GetMapping("/{id}/questions")
     @Operation(summary = "获取计划关联的全局题库 ID")
-    public List<Long> getPlanQuestionIds(@PathVariable Long id) {
-        return planService.getPlanQuestionIds(id);
+    public BaseResponse<List<Long>> getPlanQuestionIds(@PathVariable Long id) {
+        return ResultUtils.success(planService.getPlanQuestionIds(id));
     }
 
     @GetMapping("/{id}/custom-questions")
     @Operation(summary = "获取计划关联的自定义提问")
-    public List<RagPlanCustomQuestionDO> getPlanCustomQuestions(@PathVariable Long id) {
-        return planService.getPlanCustomQuestions(id);
+    public BaseResponse<List<RagPlanCustomQuestionDO>> getPlanCustomQuestions(@PathVariable Long id) {
+        return ResultUtils.success(planService.getPlanCustomQuestions(id));
     }
 
     @DeleteMapping("/{id}")
     @Operation(summary = "删除实验计划")
-    public void deletePlan(@PathVariable Long id) {
+    public BaseResponse<String> deletePlan(@PathVariable Long id) {
         planService.deletePlan(id);
+        return ResultUtils.success("已删除");
     }
 }
