@@ -30,6 +30,12 @@ public class RagTestQuestionDO {
     /** 期望文档 ID 列表 */
     private String expectedDocIds;
 
+    /** 期望意图节点 ID（结构化） */
+    private Long expectedIntentNodeId;
+
+    /** 期望知识库 ID */
+    private Long expectedKbId;
+
     /** 标准答案 */
     private String standardAnswer;
 
@@ -67,6 +73,12 @@ public class RagTestQuestionDO {
 
     public String getExpectedDocIds() { return expectedDocIds; }
     public void setExpectedDocIds(String expectedDocIds) { this.expectedDocIds = expectedDocIds; }
+
+    public Long getExpectedIntentNodeId() { return expectedIntentNodeId; }
+    public void setExpectedIntentNodeId(Long expectedIntentNodeId) { this.expectedIntentNodeId = expectedIntentNodeId; }
+
+    public Long getExpectedKbId() { return expectedKbId; }
+    public void setExpectedKbId(Long expectedKbId) { this.expectedKbId = expectedKbId; }
 
     public String getStandardAnswer() { return standardAnswer; }
     public void setStandardAnswer(String standardAnswer) { this.standardAnswer = standardAnswer; }

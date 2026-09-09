@@ -17,9 +17,14 @@
         <template #header>
           <div style="display:flex;justify-content:space-between;align-items:center">
             <span style="font-weight:bold">调用概览</span>
-            <el-tag :type="trace?.status === 'SUCCESS' ? 'success' : trace?.status === 'ERROR' ? 'danger' : 'warning'">
-              {{ trace?.status || '-' }}
-            </el-tag>
+            <div style="display:flex;gap:8px;align-items:center">
+              <el-tag :type="trace?.status === 'SUCCESS' ? 'success' : trace?.status === 'ERROR' ? 'danger' : 'warning'">
+                {{ trace?.status || '-' }}
+              </el-tag>
+              <el-button size="small" type="primary" @click="submitReplayRequest" :loading="replaySubmitting" :disabled="!trace">
+                提交回放申请
+              </el-button>
+            </div>
           </div>
         </template>
         <el-descriptions :column="3" border>
@@ -143,14 +148,14 @@
                   <div v-if="parseInput(node.inputData)?.docs?.length" class="doc-list-scroll">
                     <div style="font-size:11px;color:#909399;margin-bottom:4px">点击文档展开/收起完整内容</div>
                     <template v-for="(doc, idx) in parseInput(node.inputData).docs" :key="idx">
-                      <div class="doc-card-llm" @click="toggleDoc(idx)">
+                      <div class="doc-card-llm" @click="toggleDoc(Number(idx))">
                         <div class="doc-header">
-                          <span class="doc-index">文档 #{{ idx + 1 }}</span>
+                          <span class="doc-index">文档 #{{ Number(idx) + 1 }}</span>
                         </div>
                         <pre class="doc-content-llm">{{ doc.content }}</pre>
                       </div>
-                      <div v-show="expandedDocs[idx]" class="doc-expanded">
-                        <span class="doc-expanded-label">文档 #{{ idx + 1 }} 完整内容</span>
+                      <div v-show="expandedDocs[Number(idx)]" class="doc-expanded">
+                        <span class="doc-expanded-label">文档 #{{ Number(idx) + 1 }} 完整内容</span>
                         <pre class="doc-expanded-content">{{ doc.content }}</pre>
                       </div>
                     </template>
@@ -172,7 +177,7 @@
                     <div style="font-size:11px;color:#909399;margin-bottom:4px">参考文档：</div>
                     <div v-for="(doc, idx) in parseInput(node.inputData).docs" :key="idx" class="doc-card-llm">
                       <div class="doc-header">
-                        <span class="doc-index">#{{ idx + 1 }}</span>
+                        <span class="doc-index">#{{ Number(idx) + 1 }}</span>
                         <span v-if="doc.score" class="doc-score">{{ typeof doc.score === 'number' ? doc.score.toFixed(2) : doc.score }}</span>
                       </div>
                       <pre class="doc-content-llm">{{ doc.content }}</pre>
@@ -215,7 +220,7 @@
                   <div v-if="parseOutput(node.outputData)?.equivQueries?.length" class="field-row">
                     <span class="field-label">等价查询</span>
                     <div class="field-value">
-                      <div v-for="(q, idx) in parseOutput(node.outputData).equivQueries" :key="idx" class="equiv-query">{{ idx + 1 }}. {{ q }}</div>
+                      <div v-for="(q, idx) in parseOutput(node.outputData).equivQueries" :key="idx" class="equiv-query">{{ Number(idx) + 1 }}. {{ q }}</div>
                     </div>
                   </div>
                 </div>
@@ -232,7 +237,7 @@
                   <div v-if="parseOutput(node.outputData)?.docs?.length" class="doc-list-scroll">
                     <div v-for="(doc, idx) in parseOutput(node.outputData).docs" :key="idx" class="doc-card-llm">
                       <div class="doc-header">
-                        <span class="doc-index">文档 {{ idx + 1 }}</span>
+                        <span class="doc-index">文档 {{ Number(idx) + 1 }}</span>
                         <span v-if="doc.score" class="doc-score">分数: {{ typeof doc.score === 'number' ? doc.score.toFixed(3) : doc.score }}</span>
                       </div>
                       <pre class="doc-content-llm">{{ doc.content }}</pre>
@@ -246,15 +251,15 @@
                   <div v-if="parseOutput(node.outputData)?.docs?.length" class="doc-list-scroll">
                     <div style="font-size:11px;color:#909399;margin-bottom:4px">点击文档展开/收起完整内容</div>
                     <template v-for="(doc, idx) in parseOutput(node.outputData).docs" :key="idx">
-                      <div class="doc-card-llm ranked" @click="toggleRankedDoc(idx)">
+                      <div class="doc-card-llm ranked" @click="toggleRankedDoc(Number(idx))">
                         <div class="doc-header">
-                          <span class="doc-index">第 {{ idx + 1 }} 名</span>
+                          <span class="doc-index">第 {{ Number(idx) + 1 }} 名</span>
                           <span v-if="doc.score" class="doc-score">Rerank 分数: {{ typeof doc.score === 'number' ? doc.score.toFixed(1) : doc.score }}</span>
                         </div>
                         <pre class="doc-content-llm">{{ doc.content }}</pre>
                       </div>
-                      <div v-show="expandedRankedDocs[idx]" class="doc-expanded">
-                        <span class="doc-expanded-label">第 {{ idx + 1 }} 名 完整内容</span>
+                      <div v-show="expandedRankedDocs[Number(idx)]" class="doc-expanded">
+                        <span class="doc-expanded-label">第 {{ Number(idx) + 1 }} 名 完整内容</span>
                         <pre class="doc-expanded-content">{{ doc.content }}</pre>
                       </div>
                     </template>
@@ -307,14 +312,18 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '../../api/request'
+import { useAuthStore } from '../../stores/auth'
 
 const route = useRoute()
 const router = useRouter()
+const auth = useAuthStore()
 
 const loading = ref(false)
 const trace = ref<any>(null)
 const nodes = ref<any[]>([])
+const replaySubmitting = ref(false)
 
 // 文档展开状态管理
 const expandedDocs = ref<Record<number, boolean>>({})
@@ -334,6 +343,31 @@ onMounted(() => {
 
 function goBack() {
   router.push('/manage/dashboard')
+}
+
+async function submitReplayRequest() {
+  if (!trace.value) return
+  try {
+    await ElMessageBox.confirm(
+      `确认将以下提问提交为回放申请？\n\n"${trace.value.originalPrompt}"`,
+      '提交回放申请',
+      { confirmButtonText: '确认提交', cancelButtonText: '取消' }
+    )
+    replaySubmitting.value = true
+    await request.post('/rag-lab/data-replay', {
+      traceId: trace.value.traceId,
+      questionText: trace.value.originalPrompt,
+      sourceConversationId: trace.value.conversationId,
+      createUserId: auth.userInfo?.id
+    })
+    ElMessage.success('回放申请已提交')
+  } catch (e: any) {
+    if (e !== 'cancel') {
+      ElMessage.error(e.response?.data?.message || '提交失败')
+    }
+  } finally {
+    replaySubmitting.value = false
+  }
 }
 
 async function loadTraceDetail() {

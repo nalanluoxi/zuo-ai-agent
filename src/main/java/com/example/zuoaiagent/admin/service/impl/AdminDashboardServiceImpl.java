@@ -34,7 +34,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
             // 活跃用户数（最近 7 天有过操作）
             String activeUserSql = "SELECT COUNT(DISTINCT user_id) as active FROM t_conversation WHERE created_at >= NOW() - INTERVAL '7 days'";
             Integer activeUsers = jdbcTemplate.queryForObject(activeUserSql, Integer.class);
-            stats.put("activeUsers", activeUsers != null ? activeUsers : 0);
+            stats.put("activeUsers7Days", activeUsers != null ? activeUsers : 0);
             
             // 租户总数
             String tenantCountSql = "SELECT COUNT(*) as total FROM t_tenant WHERE deleted = 0";

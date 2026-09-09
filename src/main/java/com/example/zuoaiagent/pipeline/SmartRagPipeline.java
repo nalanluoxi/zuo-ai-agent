@@ -1,5 +1,6 @@
 package com.example.zuoaiagent.pipeline;
 
+import com.example.zuoaiagent.chat.ChatModelFactory;
 import com.example.zuoaiagent.chat.RoutingChatService;
 import com.example.zuoaiagent.dashboard.service.RetrievalLogService;
 import com.example.zuoaiagent.intent.model.IntentResult;
@@ -39,6 +40,7 @@ public class SmartRagPipeline {
     private final RAGPromptService ragPromptService;
     private final PromptTemplateLoader templateLoader;
     private final RoutingChatService routingChatService;
+    private final ChatModelFactory chatModelFactory;
     private final RagTraceRecordService traceService;
     private final UserMemoryExtractionService memoryExtractionService;
     private final RagConfigLoader configLoader;
@@ -55,6 +57,7 @@ public class SmartRagPipeline {
                             RAGPromptService ragPromptService,
                             PromptTemplateLoader templateLoader,
                             RoutingChatService routingChatService,
+                            ChatModelFactory chatModelFactory,
                             RagTraceRecordService traceService,
                             UserMemoryExtractionService memoryExtractionService,
                             RagConfigLoader configLoader,
@@ -70,6 +73,7 @@ public class SmartRagPipeline {
         this.ragPromptService = ragPromptService;
         this.templateLoader = templateLoader;
         this.routingChatService = routingChatService;
+        this.chatModelFactory = chatModelFactory;
         this.traceService = traceService;
         this.memoryExtractionService = memoryExtractionService;
         this.configLoader = configLoader;
@@ -79,6 +83,22 @@ public class SmartRagPipeline {
     }
 
     public void execute(RagPipelineContext ctx, SseEmitter emitter) {
+        executeInternal(ctx, emitter, null);
+    }
+
+    /**
+     * 同步执行 Pipeline，返回完整的上下文（不依赖 SseEmitter）。
+     *
+     * @param ctx          流水线上下文
+     * @param experimentId 关联的实验 ID（可为 null）
+     * @return 执行后的上下文（包含所有阶段的输出）
+     */
+    public RagPipelineContext executeSync(RagPipelineContext ctx, Long experimentId) {
+        executeInternal(ctx, null, experimentId);
+        return ctx;
+    }
+
+    private void executeInternal(RagPipelineContext ctx, SseEmitter emitter, Long experimentId) {
         RagConfigDO config = configLoader.getActiveConfig();
         double intentThreshold = getConfigValue(config, RagConfigDO::getIntentConfidenceThreshold, 0.5);
         double highConfidence = getConfigValue(config, RagConfigDO::getIntentConfidenceThreshold, 0.85);
@@ -98,7 +118,7 @@ public class SmartRagPipeline {
         String conId = ctx.getConversationId();
         long pipelineStart = System.currentTimeMillis();
 
-        traceService.startRun(traceId, conId, ctx.getOriginalPrompt());
+        traceService.startRun(traceId, conId, ctx.getOriginalPrompt(), experimentId);
         ctx.setTraceId(traceId);
         // 写入灰度标签到 trace
         try {
@@ -125,7 +145,12 @@ public class SmartRagPipeline {
                 if (memory != null) sysPrompt = memory + "\n" + sysPrompt;
                 ctx.setFinalSystemPrompt(sysPrompt);
                 traceService.finishRun(traceId, "SUCCESS", null, System.currentTimeMillis() - pipelineStart);
-                routingChatService.streamChat(ctx.getOriginalPrompt(), conId, sysPrompt, null, emitter, false, ctx.getUserId(), traceId);
+                if (emitter != null) {
+                    routingChatService.streamChat(ctx.getOriginalPrompt(), conId, sysPrompt, null, emitter, false, ctx.getUserId(), traceId);
+                } else {
+                    String answer = executeLlmWithTrace(traceId, ctx.getOriginalPrompt(), conId, sysPrompt, null);
+                    ctx.setGeneratedAnswer(answer);
+                }
                 return;
             }
 
@@ -146,7 +171,12 @@ public class SmartRagPipeline {
             ctx.setFinalSystemPrompt(finalSystemPrompt);
 
             traceService.finishRun(traceId, "SUCCESS", null, System.currentTimeMillis() - pipelineStart);
-            routingChatService.streamChat(ctx.getOriginalPrompt(), conId, finalSystemPrompt, null, emitter, false, ctx.getUserId(), traceId);
+            if (emitter != null) {
+                routingChatService.streamChat(ctx.getOriginalPrompt(), conId, finalSystemPrompt, null, emitter, false, ctx.getUserId(), traceId);
+            } else {
+                String answer = executeLlmWithTrace(traceId, ctx.getOriginalPrompt(), conId, finalSystemPrompt, null);
+                ctx.setGeneratedAnswer(answer);
+            }
 
         } catch (Exception e) {
             log.error("[SmartRagPipeline] traceId={} 流水线异常: {}", traceId, e.getMessage(), e);
@@ -381,6 +411,52 @@ public class SmartRagPipeline {
         return prompt;
     }
 
+    /**
+     * 执行 LLM 调用并记录 Trace 节点。
+     * 数据结构与 RoutingChatService.tryStreamWithEntry 保持一致，
+     * 前端 TraceDetailPage 按 modelId/systemPrompt/userPrompt（输入）和
+     * modelId/response/inputTokens/outputTokens（输出）解析。
+     */
+    private String executeLlmWithTrace(String traceId, String originalPrompt, String conversationId,
+                                        String systemPrompt, Long userId) {
+        long start = System.currentTimeMillis();
+        String modelId = chatModelFactory.getCandidates().isEmpty()
+                ? "unknown" : chatModelFactory.getCandidates().get(0).id();
+
+        // 输入数据：与 RoutingChatService.buildLlmInputData 一致
+        Map<String, Object> inputData = new LinkedHashMap<>();
+        inputData.put("modelId", modelId);
+        inputData.put("systemPrompt", truncate(systemPrompt, 2000));
+        inputData.put("userPrompt", truncate(originalPrompt, 500));
+        traceService.startNode(traceId, "llm", "增强生成", "LLM", toJson(inputData));
+
+        try {
+            String answer = routingChatService.chat(originalPrompt, conversationId, systemPrompt, null);
+
+            int inputTokens = estimateTokens(systemPrompt, 0.4);
+            int outputTokens = estimateTokens(answer, 0.4);
+
+            // 输出数据：与 RoutingChatService.buildLlmOutputData 一致
+            Map<String, Object> outputData = new LinkedHashMap<>();
+            outputData.put("modelId", modelId);
+            outputData.put("response", truncate(answer, 3000));
+            outputData.put("inputTokens", inputTokens);
+            outputData.put("outputTokens", outputTokens);
+            traceService.finishNode(traceId, "llm", "SUCCESS", null,
+                    System.currentTimeMillis() - start, toJson(outputData),
+                    inputTokens, outputTokens);
+            logEventCollector.logEvent("LLM_COMPLETED", Map.of(
+                    "answerLength", answer != null ? answer.length() : 0,
+                    "durationMs", System.currentTimeMillis() - start));
+            return answer;
+        } catch (Exception e) {
+            log.error("[SmartRagPipeline] LLM 调用失败: {}", e.getMessage());
+            traceService.finishNode(traceId, "llm", "ERROR", e.getMessage(),
+                    System.currentTimeMillis() - start, null);
+            return null;
+        }
+    }
+
     private String resolveDomain(IntentResult intentResult) {
         if (intentResult == null) return "各领域";
         if (intentResult.isSystem() || intentResult.getConfidence() == 0.0) return "各领域";
@@ -397,6 +473,9 @@ public class SmartRagPipeline {
                 .limit(10)
                 .map(doc -> {
                     Map<String, Object> docInfo = new HashMap<>();
+                    docInfo.put("docId", doc.getId());
+                    Object knowledgeDocId = doc.getMetadata().get("doc_id");
+                    docInfo.put("knowledgeDocId", knowledgeDocId != null ? String.valueOf(knowledgeDocId) : null);
                     docInfo.put("content", truncate(doc.getFormattedContent(), 500));
                     Object score = doc.getMetadata().get("score");
                     docInfo.put("score", score != null ? score : null);
@@ -443,6 +522,9 @@ public class SmartRagPipeline {
                 .limit(10)
                 .map(doc -> {
                     Map<String, Object> docInfo = new HashMap<>();
+                    docInfo.put("docId", doc.getId());
+                    Object knowledgeDocId = doc.getMetadata().get("doc_id");
+                    docInfo.put("knowledgeDocId", knowledgeDocId != null ? String.valueOf(knowledgeDocId) : null);
                     docInfo.put("content", truncate(doc.getFormattedContent(), 300));
                     Object rerankScore = doc.getMetadata().get("rerank_score");
                     docInfo.put("score", rerankScore != null ? rerankScore : null);

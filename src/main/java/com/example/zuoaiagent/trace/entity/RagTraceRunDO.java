@@ -48,6 +48,9 @@ public class RagTraceRunDO {
     /** 灰度标签：BASELINE / TAG_A / TAG_B */
     private String grayTag;
 
+    /** 关联的实验记录 ID */
+    private Long experimentId;
+
     @TableField(fill = FieldFill.INSERT)
     private Date createTime;
 
@@ -88,6 +91,9 @@ public class RagTraceRunDO {
 
     public String getGrayTag() { return grayTag; }
     public void setGrayTag(String grayTag) { this.grayTag = grayTag; }
+
+    public Long getExperimentId() { return experimentId; }
+    public void setExperimentId(Long experimentId) { this.experimentId = experimentId; }
 
     public Date getCreateTime() { return createTime; }
     public void setCreateTime(Date createTime) { this.createTime = createTime; }

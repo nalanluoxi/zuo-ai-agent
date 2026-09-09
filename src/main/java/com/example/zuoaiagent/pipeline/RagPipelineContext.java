@@ -54,6 +54,9 @@ public class RagPipelineContext {
     /** 灰度标签：BASELINE / TAG_A / TAG_B */
     private String grayTag = "BASELINE";
 
+    /** LLM 生成的答案（executeSync 时填充） */
+    private String generatedAnswer;
+
 public RagPipelineContext(String originalPrompt, String conversationId,
                                String name,
                                boolean enableRewrite, boolean enableRerank,
@@ -95,6 +98,9 @@ public RagPipelineContext(String originalPrompt, String conversationId,
 
     public String getGrayTag() { return grayTag; }
     public void setGrayTag(String grayTag) { this.grayTag = grayTag; }
+
+    public String getGeneratedAnswer() { return generatedAnswer; }
+    public void setGeneratedAnswer(String generatedAnswer) { this.generatedAnswer = generatedAnswer; }
 
     /** 获取实际用于检索的查询（改写后或原始） */
     public String getEffectiveQuery() {

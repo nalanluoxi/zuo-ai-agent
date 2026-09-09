@@ -38,6 +38,9 @@ public class RagExperimentPlanDO {
     /** 状态: PENDING / RUNNING / COMPLETED / FAILED */
     private String status;
 
+    /** 关联的实验记录 ID */
+    private Long experimentId;
+
     /** 执行结果摘要（JSON） */
     private String resultSummary;
 
@@ -74,6 +77,9 @@ public class RagExperimentPlanDO {
 
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
+
+    public Long getExperimentId() { return experimentId; }
+    public void setExperimentId(Long experimentId) { this.experimentId = experimentId; }
 
     public String getResultSummary() { return resultSummary; }
     public void setResultSummary(String resultSummary) { this.resultSummary = resultSummary; }

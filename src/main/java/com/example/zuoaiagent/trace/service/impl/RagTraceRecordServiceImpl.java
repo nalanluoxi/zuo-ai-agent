@@ -33,12 +33,18 @@ public class RagTraceRecordServiceImpl implements RagTraceRecordService {
 
     @Override
     public void startRun(String traceId, String conversationId, String originalPrompt) {
+        startRun(traceId, conversationId, originalPrompt, null);
+    }
+
+    @Override
+    public void startRun(String traceId, String conversationId, String originalPrompt, Long experimentId) {
         try {
             RagTraceRunDO run = new RagTraceRunDO();
             run.setTraceId(traceId);
             run.setConversationId(conversationId);
             run.setOriginalPrompt(originalPrompt);
             run.setStatus("RUNNING");
+            run.setExperimentId(experimentId);
             run.setStartTime(new Date());
             runMapper.insert(run);
         } catch (Exception e) {

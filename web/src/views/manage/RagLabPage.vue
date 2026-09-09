@@ -212,11 +212,12 @@
             <el-table-column label="创建时间" width="180">
               <template #default="{ row }">{{ formatTime(row.createTime || row.create_time) }}</template>
             </el-table-column>
-            <el-table-column label="操作" width="220" fixed="right">
+            <el-table-column label="操作" width="260" fixed="right">
               <template #default="{ row }">
                 <el-button v-if="row.status === 'PENDING'" type="primary" link size="small" @click="executePlan(row.id)">执行</el-button>
-                <el-button v-if="row.status === 'COMPLETED'" type="success" link size="small" @click="viewPlanResult(row)">查看结果</el-button>
-                <el-button v-if="row.status === 'COMPLETED'" type="info" link size="small" @click="viewExperimentReport({id: row.id, experimentName: row.planName, ...parseResultSummary(row.resultSummary)})">详细报告</el-button>
+                <el-button v-if="row.status === 'RUNNING'" type="warning" link size="small" @click="cancelPlan(row.id)">取消</el-button>
+                <el-button v-if="row.status === 'COMPLETED' && row.experimentId" type="success" link size="small" @click="viewPlanResult(row)">查看结果</el-button>
+                <el-button v-if="row.status === 'COMPLETED' && row.experimentId" type="info" link size="small" @click="viewExperimentReport(row)">详细报告</el-button>
                 <el-button type="danger" link size="small" @click="deletePlan(row.id)">删除</el-button>
               </template>
             </el-table-column>
@@ -237,8 +238,21 @@
           <el-table :data="testQuestions" border size="small" style="width:100%">
             <el-table-column prop="id" label="ID" width="60" />
             <el-table-column prop="questionText" label="问题" min-width="250" show-overflow-tooltip />
-            <el-table-column prop="expectedIntent" label="期望意图" width="120" show-overflow-tooltip />
-            <el-table-column prop="expectedDocIds" label="期望文档ID" width="120" show-overflow-tooltip />
+            <el-table-column label="期望意图" width="140" show-overflow-tooltip>
+              <template #default="{ row }">
+                {{ getIntentLabel(row.expectedIntentNodeId) || row.expectedIntent || '-' }}
+              </template>
+            </el-table-column>
+            <el-table-column label="期望知识库" width="120" show-overflow-tooltip>
+              <template #default="{ row }">
+                {{ getKbName(row.expectedKbId) || '-' }}
+              </template>
+            </el-table-column>
+            <el-table-column label="期望文档" width="150" show-overflow-tooltip>
+              <template #default="{ row }">
+                {{ getDocNames(row.expectedDocIds) || '-' }}
+              </template>
+            </el-table-column>
             <el-table-column label="操作" width="150">
               <template #default="{ row }">
                 <el-button type="primary" link size="small" @click="openEditQuestionDialog(row)">编辑</el-button>
@@ -295,16 +309,28 @@
         </el-dialog>
 
         <!-- 新增/编辑测试题目对话框 -->
-        <el-dialog v-model="questionDialogVisible" :title="questionForm.id ? '编辑题目' : '新增题目'" width="500px">
+        <el-dialog v-model="questionDialogVisible" :title="questionForm.id ? '编辑题目' : '新增题目'" width="600px">
           <el-form :model="questionForm" label-width="100px">
             <el-form-item label="问题内容" required>
               <el-input v-model="questionForm.questionText" type="textarea" :rows="3" placeholder="输入测试问题" />
             </el-form-item>
             <el-form-item label="期望意图">
-              <el-input v-model="questionForm.expectedIntent" placeholder="如：RAG_CHAT / CHITCHAT" />
+              <el-select v-model="questionForm.expectedIntentNodeId" placeholder="选择意图节点（选填）" clearable filterable style="width:100%">
+                <el-option v-for="node in intentNodes" :key="node.id" :label="node.pathLabel" :value="node.id" />
+              </el-select>
             </el-form-item>
-            <el-form-item label="期望文档ID">
-              <el-input v-model="questionForm.expectedDocIds" placeholder="逗号分隔的文档ID" />
+            <el-form-item label="期望知识库">
+              <el-select v-model="questionForm.expectedKbId" placeholder="选择知识库（选填）" clearable filterable style="width:100%" @change="onQuestionKbChange">
+                <el-option v-for="kb in knowledgeBases" :key="kb.id" :label="kb.name" :value="kb.id" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="期望文档" v-if="kbDocuments.length > 0">
+              <el-select v-model="questionDocIdsArray" placeholder="选择文档（选填，可多选）" clearable filterable multiple style="width:100%">
+                <el-option v-for="doc in kbDocuments" :key="doc.id" :label="doc.docName" :value="String(doc.id)" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="期望答案">
+              <el-input v-model="questionForm.standardAnswer" type="textarea" :rows="3" placeholder="标准答案（选填）" />
             </el-form-item>
           </el-form>
           <template #footer>
@@ -338,7 +364,7 @@
             <el-divider content-position="left">逐题明细</el-divider>
             <el-table :data="experimentReport.details || []" border size="small" style="width:100%" max-height="300">
               <el-table-column prop="questionId" label="题号" width="60" />
-              <el-table-column prop="question" label="问题" width="200" show-overflow-tooltip />
+              <el-table-column prop="question" label="问题" min-width="200" show-overflow-tooltip />
               <el-table-column prop="intentCorrect" label="意图正确" width="80">
                 <template #default="{ row }">
                   <el-tag :type="row.intentCorrect ? 'success' : 'danger'" size="small">{{ row.intentCorrect ? 'Y' : 'N' }}</el-tag>
@@ -349,6 +375,11 @@
               </el-table-column>
               <el-table-column prop="mrr" label="MRR" width="70">
                 <template #default="{ row }">{{ row.mrr != null ? row.mrr.toFixed(2) : '-' }}</template>
+              </el-table-column>
+              <el-table-column label="操作" width="100" fixed="right">
+                <template #default="{ row }">
+                  <el-button v-if="row.traceId" type="primary" link size="small" @click="goTraceDetail(row.traceId)">全链路详情</el-button>
+                </template>
               </el-table-column>
             </el-table>
           </div>
@@ -648,7 +679,10 @@
           <template #header>
             <div style="display:flex;justify-content:space-between;align-items:center">
               <span style="font-weight:bold">生产数据回放审批</span>
-              <el-button size="small" @click="loadReplayRequests">刷新</el-button>
+              <div style="display:flex;gap:8px">
+                <el-button size="small" @click="loadReplayRequests">刷新</el-button>
+                <el-button size="small" type="primary" @click="openManualReplayDialog">手动提交</el-button>
+              </div>
             </div>
           </template>
           <el-table :data="replayRequests" stripe v-loading="replayLoading">
@@ -674,6 +708,22 @@
         </el-card>
       </el-tab-pane>
 
+      <!-- 手动提交回放申请对话框 -->
+      <el-dialog v-model="manualReplayDialogVisible" title="手动提交回放申请" width="500px">
+        <el-form :model="manualReplayForm" label-width="100px">
+          <el-form-item label="traceId" required>
+            <el-input v-model="manualReplayForm.traceId" placeholder="粘贴链路 traceId" />
+          </el-form-item>
+          <el-form-item label="提问内容" required>
+            <el-input v-model="manualReplayForm.questionText" type="textarea" :rows="3" placeholder="输入用户提问" />
+          </el-form-item>
+        </el-form>
+        <template #footer>
+          <el-button @click="manualReplayDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="submitManualReplay" :loading="manualReplaySubmitting">提交</el-button>
+        </template>
+      </el-dialog>
+
     </el-tabs>
   </div>
 </template>
@@ -682,9 +732,11 @@
 import { ref, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '../../api/request'
+import { useAuthStore } from '../../stores/auth'
 
 // ==================== 通用 ====================
 const activeTab = ref('pipeline')
+const auth = useAuthStore()
 
 function formatTime(val: any): string {
   if (!val) return '-'
@@ -922,20 +974,72 @@ const planResultContent = ref('')
 // 知识库列表
 const knowledgeBases = ref<any[]>([])
 
+// 意图节点列表
+const intentNodes = ref<any[]>([])
+
+// 当前选中知识库的文档列表
+const kbDocuments = ref<any[]>([])
+
 // 测试题目管理
 const questionDialogVisible = ref(false)
 const questionSaving = ref(false)
 const questionForm = ref<any>({
   id: null,
   questionText: '',
+  expectedIntentNodeId: null,
   expectedIntent: '',
-  expectedDocIds: ''
+  expectedKbId: null,
+  expectedDocIds: '',
+  standardAnswer: ''
+})
+
+// 计算属性：文档 ID 多选数组（用于 el-select multiple）
+const questionDocIdsArray = computed({
+  get: () => {
+    if (!questionForm.value.expectedDocIds) return []
+    try {
+      const parsed = JSON.parse(questionForm.value.expectedDocIds)
+      return Array.isArray(parsed) ? parsed.map(String) : []
+    } catch {
+      return questionForm.value.expectedDocIds.split(',').filter(Boolean).map(String)
+    }
+  },
+  set: (val: string[]) => {
+    questionForm.value.expectedDocIds = val.length > 0 ? JSON.stringify(val) : ''
+  }
 })
 
 // 实验报告相关
 const experimentReportVisible = ref(false)
 const experimentReport = ref<any>(null)
 const testQuestions = ref<any[]>([])
+
+function getIntentLabel(nodeId: number): string {
+  if (!nodeId) return ''
+  const node = intentNodes.value.find((n: any) => n.id === nodeId)
+  return node ? node.pathLabel : String(nodeId)
+}
+
+function getKbName(kbId: number): string {
+  if (!kbId) return ''
+  const kb = knowledgeBases.value.find((k: any) => k.id === kbId)
+  return kb ? kb.name : String(kbId)
+}
+
+function getDocNames(docIdsStr: string): string {
+  if (!docIdsStr) return ''
+  let ids: string[] = []
+  try {
+    const parsed = JSON.parse(docIdsStr)
+    ids = Array.isArray(parsed) ? parsed.map(String) : []
+  } catch {
+    ids = docIdsStr.split(',').filter(Boolean)
+  }
+  return ids.map(id => {
+    const doc = kbDocuments.value.find((d: any) => String(d.id) === id)
+    return doc ? doc.docName : id
+  }).join(', ')
+}
 
 function planStatusType(status: string): '' | 'success' | 'warning' | 'danger' | 'info' {
   if (status === 'COMPLETED') return 'success'
@@ -974,6 +1078,45 @@ async function loadKnowledgeBases() {
   }
 }
 
+// 加载意图节点（复用已有的 GET /intent/nodes API）
+async function loadIntentNodes() {
+  try {
+    const res = await request.get('/intent/nodes') as any
+    const nodes = res.data || res || []
+    // 构建树形路径标签，如 "金融 > 金融工程"
+    intentNodes.value = nodes.map((n: any) => {
+      let pathLabel = n.label || ''
+      if (n.parentId) {
+        const parent = nodes.find((p: any) => p.id === n.parentId)
+        if (parent) {
+          const grandparent = nodes.find((g: any) => g.id === parent.parentId)
+          pathLabel = (grandparent ? grandparent.label + ' > ' : '') + parent.label + ' > ' + n.label
+        }
+      }
+      return { ...n, pathLabel }
+    })
+  } catch (e) {
+    console.error('加载意图节点失败', e)
+  }
+}
+
+// 知识库切换时加载文档列表
+async function onQuestionKbChange(kbId: number) {
+  kbDocuments.value = []
+  questionForm.value.expectedDocIds = ''  // 重置文档选择
+  if (!kbId) return
+  try {
+    const res = await request.get(`/knowledge-base/${kbId}/docs`, { params: { current: 1, pageSize: 100 } }) as any
+    const data = res.data || res || {}
+    kbDocuments.value = (data.records || data.list || []).map((d: any) => ({
+      id: d.id,
+      docName: d.doc_name ?? d.docName
+    }))
+  } catch (e) {
+    console.error('加载文档列表失败', e)
+  }
+}
+
 function parseResultSummary(summary: string): any {
   if (!summary) return {}
   try {
@@ -993,6 +1136,8 @@ async function loadExperimentPlans() {
       useGlobalQuestions: p.use_global_questions ?? p.useGlobalQuestions,
       useCustomQuestions: p.use_custom_questions ?? p.useCustomQuestions,
       knowledgeBaseIds: p.knowledge_base_ids ?? p.knowledgeBaseIds,
+      experimentId: p.experiment_id ?? p.experimentId,
+      resultSummary: p.result_summary ?? p.resultSummary,
       createTime: p.create_time ?? p.createTime
     }))
   } catch (e) {
@@ -1057,6 +1202,17 @@ async function executePlan(id: number) {
   }
 }
 
+async function cancelPlan(id: number) {
+  try {
+    await ElMessageBox.confirm('确认取消此实验计划？取消后状态将恢复为 PENDING。', '取消确认')
+    await request.post(`/rag-lab/experiment-plan/${id}/cancel`)
+    ElMessage.success('已取消')
+    await loadExperimentPlans()
+  } catch (e: any) {
+    if (e !== 'cancel') ElMessage.error(e.response?.data?.message || '取消失败')
+  }
+}
+
 async function deletePlan(id: number) {
   try {
     await ElMessageBox.confirm('确认删除此实验计划？', '删除确认')
@@ -1075,7 +1231,11 @@ function viewPlanResult(row: any) {
 
 // 测试题目管理方法
 function openCreateQuestionDialog() {
-  questionForm.value = { id: null, questionText: '', expectedIntent: '', expectedDocIds: '' }
+  questionForm.value = {
+    id: null, questionText: '', expectedIntentNodeId: null,
+    expectedIntent: '', expectedKbId: null, expectedDocIds: '', standardAnswer: ''
+  }
+  kbDocuments.value = []
   questionDialogVisible.value = true
 }
 
@@ -1083,8 +1243,16 @@ function openEditQuestionDialog(row: any) {
   questionForm.value = {
     id: row.id,
     questionText: row.questionText,
+    expectedIntentNodeId: row.expectedIntentNodeId || null,
     expectedIntent: row.expectedIntent || '',
-    expectedDocIds: row.expectedDocIds || ''
+    expectedKbId: row.expectedKbId || null,
+    expectedDocIds: row.expectedDocIds || '',
+    standardAnswer: row.standardAnswer || ''
+  }
+  kbDocuments.value = []
+  // 如果有知识库，加载对应的文档
+  if (row.expectedKbId) {
+    onQuestionKbChange(row.expectedKbId)
   }
   questionDialogVisible.value = true
 }
@@ -1096,18 +1264,18 @@ async function submitQuestion() {
   }
   questionSaving.value = true
   try {
+    const payload = {
+      questionText: questionForm.value.questionText,
+      expectedIntentNodeId: questionForm.value.expectedIntentNodeId,
+      expectedIntent: questionForm.value.expectedIntent,
+      expectedKbId: questionForm.value.expectedKbId,
+      expectedDocIds: questionForm.value.expectedDocIds,
+      standardAnswer: questionForm.value.standardAnswer
+    }
     if (questionForm.value.id) {
-      await request.put(`/rag-lab/test-questions/${questionForm.value.id}`, {
-        questionText: questionForm.value.questionText,
-        expectedIntent: questionForm.value.expectedIntent,
-        expectedDocIds: questionForm.value.expectedDocIds
-      })
+      await request.put(`/rag-lab/test-questions/${questionForm.value.id}`, payload)
     } else {
-      await request.post('/rag-lab/test-questions', {
-        questionText: questionForm.value.questionText,
-        expectedIntent: questionForm.value.expectedIntent,
-        expectedDocIds: questionForm.value.expectedDocIds
-      })
+      await request.post('/rag-lab/test-questions', payload)
     }
     ElMessage.success(questionForm.value.id ? '已更新' : '已创建')
     questionDialogVisible.value = false
@@ -1171,8 +1339,12 @@ async function loadTestQuestions() {
 }
 
 async function viewExperimentReport(row: any) {
+  if (!row.experimentId) {
+    ElMessage.error('该计划尚未关联实验记录')
+    return
+  }
   try {
-    const res = await request.get(`/rag-lab/experiments/${row.id}/report`) as any
+    const res = await request.get(`/rag-lab/experiments/${row.experimentId}/report`) as any
     const data = res.data || res || {}
     experimentReport.value = {
       ...data,
@@ -1196,6 +1368,11 @@ async function viewExperimentReport(row: any) {
     console.error(e)
     ElMessage.error('获取报告失败')
   }
+}
+
+function goTraceDetail(traceId: string) {
+  if (!traceId) return
+  window.open(`/manage/trace/${traceId}`, '_blank')
 }
 
 // ==================== Tab 4: 发布管理 ====================
@@ -1713,6 +1890,11 @@ async function submitEditModel() {
 const replayRequests = ref<any[]>([])
 const replayLoading = ref(false)
 
+// 手动提交回放
+const manualReplayDialogVisible = ref(false)
+const manualReplaySubmitting = ref(false)
+const manualReplayForm = ref({ traceId: '', questionText: '' })
+
 async function loadReplayRequests() {
   replayLoading.value = true
   try {
@@ -1737,11 +1919,38 @@ async function approveReplay(id: number) {
 
 async function rejectReplay(id: number) {
   try {
-    await request.post(`/rag-lab/data-replay/${id}/reject`, null, { params: { approvedBy: 1 } })
+    await request.post(`/rag-lab/data-replay/${id}/reject`, null, { params: { approvedBy: auth.userInfo?.id || 1 } })
     ElMessage.success('已拒绝')
     await loadReplayRequests()
   } catch (e: any) {
     ElMessage.error(e.response?.data?.message || '操作失败')
+  }
+}
+
+function openManualReplayDialog() {
+  manualReplayForm.value = { traceId: '', questionText: '' }
+  manualReplayDialogVisible.value = true
+}
+
+async function submitManualReplay() {
+  if (!manualReplayForm.value.traceId.trim() || !manualReplayForm.value.questionText.trim()) {
+    ElMessage.warning('请填写 traceId 和提问内容')
+    return
+  }
+  manualReplaySubmitting.value = true
+  try {
+    await request.post('/rag-lab/data-replay', {
+      traceId: manualReplayForm.value.traceId,
+      questionText: manualReplayForm.value.questionText,
+      createUserId: auth.userInfo?.id
+    })
+    ElMessage.success('回放申请已提交')
+    manualReplayDialogVisible.value = false
+    await loadReplayRequests()
+  } catch (e: any) {
+    ElMessage.error(e.response?.data?.message || '提交失败')
+  } finally {
+    manualReplaySubmitting.value = false
   }
 }
 
@@ -1754,6 +1963,8 @@ onMounted(async () => {
   await loadReleasePlans()
   await loadModelConfigs()
   await loadReplayRequests()
+  await loadIntentNodes()
+  await loadKnowledgeBases()
 })
 </script>
 

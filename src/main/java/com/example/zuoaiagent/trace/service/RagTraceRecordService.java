@@ -28,6 +28,16 @@ public interface RagTraceRecordService {
     void startRun(String traceId, String conversationId, String originalPrompt);
 
     /**
+     * 流水线开始，插入 run 记录（status=RUNNING），并关联实验 ID。
+     *
+     * @param traceId        全局链路 ID
+     * @param conversationId 会话 ID
+     * @param originalPrompt 用户原始问题
+     * @param experimentId   关联的实验记录 ID（可为 null）
+     */
+    void startRun(String traceId, String conversationId, String originalPrompt, Long experimentId);
+
+    /**
      * 设置灰度标签（异步更新已插入的 run 记录）。
      *
      * @param traceId 链路 ID
