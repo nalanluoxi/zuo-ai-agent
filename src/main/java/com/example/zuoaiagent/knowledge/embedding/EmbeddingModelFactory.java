@@ -9,11 +9,13 @@ import org.springframework.ai.ollama.OllamaEmbeddingModel;
 import org.springframework.ai.ollama.api.OllamaOptions;
 import org.springframework.ai.openai.OpenAiEmbeddingModel;
 import org.springframework.ai.openai.OpenAiEmbeddingOptions;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayDeque;
 import java.util.Comparator;
 import java.util.Deque;
+import java.util.Optional;
 
 /**
  * Embedding 模型工厂
@@ -75,10 +77,10 @@ public class EmbeddingModelFactory {
         this.queue = new ArrayDeque<>(entries);
     }
 
-    @org.springframework.beans.factory.annotation.Autowired
+    @Autowired
     public EmbeddingModelFactory(EmbeddingProperties properties,
-                                 OllamaEmbeddingModel ollamaEmbeddingModel,
-                                 OpenAiEmbeddingModel openAiEmbeddingModel) {
+                                 @org.springframework.beans.factory.annotation.Qualifier("ollamaEmbeddingModel") OllamaEmbeddingModel ollamaEmbeddingModel,
+                                 @Autowired(required = false) OpenAiEmbeddingModel openAiEmbeddingModel) {
         this.queue = new ArrayDeque<>();
 
         if (properties.getCandidates() == null || properties.getCandidates().isEmpty()) {
@@ -91,15 +93,19 @@ public class EmbeddingModelFactory {
                 .sorted(Comparator.comparingInt(c -> c.getPriority() == null ? Integer.MAX_VALUE : c.getPriority()))
                 .forEach(candidate -> {
                     String provider = candidate.getProvider();
-                    EmbeddingModel delegate = resolveDelegate(provider, ollamaEmbeddingModel, openAiEmbeddingModel);
-                    queue.addLast(new EmbeddingModelEntry(
-                            candidate.getId(),
-                            candidate.getModel(),
-                            provider,
-                            delegate
-                    ));
-                    log.info("[EmbeddingModelFactory] 注册候选: id={}, model={}, provider={}",
-                            candidate.getId(), candidate.getModel(), provider);
+                    try {
+                        EmbeddingModel delegate = resolveDelegate(provider, ollamaEmbeddingModel, openAiEmbeddingModel);
+                        queue.addLast(new EmbeddingModelEntry(
+                                candidate.getId(),
+                                candidate.getModel(),
+                                provider,
+                                delegate
+                        ));
+                        log.info("[EmbeddingModelFactory] 注册候选: id={}, model={}, provider={}",
+                                candidate.getId(), candidate.getModel(), provider);
+                    } catch (IllegalStateException e) {
+                        log.warn("[EmbeddingModelFactory] 跳过候选 {}: {}", candidate.getId(), e.getMessage());
+                    }
                 });
     }
 
@@ -139,7 +145,12 @@ public class EmbeddingModelFactory {
         }
         return switch (provider) {
             case "ollama" -> ollama;
-            case "openai" -> openai;
+            case "openai" -> {
+                if (openai == null) {
+                    throw new IllegalStateException("OpenAI Embedding 未启用，无法注册 openai 候选");
+                }
+                yield openai;
+            }
             default -> throw new IllegalArgumentException("不支持的 provider: " + provider);
         };
     }

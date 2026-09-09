@@ -198,12 +198,13 @@
         :file-list="uploadFileList"
         :limit="1"
         :on-exceed="handleFileExceed"
-        accept=".pdf,.doc,.docx,.txt,.md,.xlsx,.xls,.csv"
+        :before-upload="beforeUpload"
+        accept=".pdf,.txt,.md"
       >
         <el-icon class="el-icon--upload"><upload-filled /></el-icon>
         <div class="el-upload__text">拖拽文件到此或 <em>点击上传</em></div>
         <template #tip>
-          <div class="el-upload__tip">支持 PDF、Word、Excel、TXT、Markdown 等格式，单个文件不超过 100MB</div>
+          <div class="el-upload__tip">支持 PDF、TXT、Markdown 格式，单个文件不超过 100MB</div>
         </template>
       </el-upload>
 
@@ -522,6 +523,13 @@ const deleteKB = async () => {
 
 const handleFileSelect = async (file: any) => {
   const rawFile = file.raw || file
+  // 校验文件格式
+  const name = (rawFile.name || '').toLowerCase()
+  const ext = name.substring(name.lastIndexOf('.'))
+  if (!ALLOWED_EXTENSIONS.includes(ext)) {
+    ElMessage.error('不支持的文件格式，仅支持 PDF、TXT、Markdown')
+    return
+  }
   uploadFileRaw.value = rawFile
   uploadFileSize.value = rawFile.size || 0
 
@@ -546,6 +554,18 @@ const handleFileRemove = () => {
 
 const handleFileExceed = () => {
   ElMessage.warning('一次只能上传一个文件，请先移除已选文件')
+}
+
+const ALLOWED_EXTENSIONS = ['.pdf', '.txt', '.md', '.markdown']
+const beforeUpload = (file: any) => {
+  const rawFile = file.raw || file
+  const name = (rawFile.name || '').toLowerCase()
+  const ext = name.substring(name.lastIndexOf('.'))
+  if (!ALLOWED_EXTENSIONS.includes(ext)) {
+    ElMessage.error('不支持的文件格式，仅支持 PDF、TXT、Markdown')
+    return false
+  }
+  return true
 }
 
 const checkDocNameConflict = async () => {

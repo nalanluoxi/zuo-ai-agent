@@ -1,0 +1,50 @@
+# 生产环境配置
+# 所有敏感信息通过环境变量注入
+
+spring:
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: 0
+  cloud:
+    gateway:
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials
+      
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOriginPatterns: "*"
+            allowedMethods: "*"
+            allowedHeaders: "*"
+            allowCredentials: true
+      
+      routes:
+        # 认证服务（容器服务名）
+        - id: auth-service
+          uri: http://auth-service:8100
+          predicates:
+            - Path=/api/auth/**
+          order: 1
+        
+        # RAG 服务（容器服务名）
+        - id: rag-service
+          uri: http://zuo-ai-agent:8123
+          predicates:
+            - Path=/api/knowledge-base/**,/api/chat/**,/api/dashboard/**,/api/admin/**,/api/conversations/**,/api/health/**,/api/monitor/**,/api/feedback/**,/api/intent/**,/api/approvals/**,/api/rag-lab/**,/api/stream/**
+          order: 2
+        
+        # 日志监控服务（容器服务名）
+        - id: log-monitor-service
+          uri: http://log-monitor-service:8200
+          predicates:
+            - Path=/api/log/**
+          order: 3
+
+logging:
+  level:
+    root: WARN
+    com.example.zuai.gateway: INFO
+    org.springframework.cloud.gateway: INFO

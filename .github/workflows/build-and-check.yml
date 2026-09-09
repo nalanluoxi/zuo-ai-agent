@@ -12,10 +12,10 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v5
     
-    - name: Set up JDK 17
+    - name: Set up JDK 21
       uses: actions/setup-java@v5
       with:
-        java-version: '17'
+        java-version: '21'
         distribution: 'temurin'
         cache: maven
     
@@ -78,13 +78,13 @@ jobs:
       run: |
         echo "检查并拉取 Ollama 模型..."
         
-        # 从配置文件提取模型名称
-        CHAT_MODEL=$(grep -A 5 "ollama:" src/main/resources/application.yaml | grep "model:" | head -1 | awk '{print $2}')
-        EMBEDDING_MODEL=$(grep -A 10 "ollama:" src/main/resources/application.yaml | grep "model:" | tail -1 | awk '{print $2}')
+        # 写死的模型名称（与 application.yaml 配置一致）
+        CHAT_MODEL="qwen2.5:7b"
+        EMBEDDING_MODEL="bge-m3"
         
         echo "需要检查的模型:"
-        echo "  - $CHAT_MODEL"
-        echo "  - $EMBEDDING_MODEL"
+        echo "  - Chat 模型: $CHAT_MODEL"
+        echo "  - Embedding 模型: $EMBEDDING_MODEL"
         
         # 检查模型是否已存在
         MODELS_TO_PULL=()
@@ -236,12 +236,13 @@ jobs:
     - name: Deploy to server
       uses: appleboy/ssh-action@v1.0.3
       with:
-        host: ${{ secrets.SSH_HOST }}
-        username: ${{ secrets.SSH_USER }}
-        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        host: ${{ secrets.SERVER_HOST }}
+        username: ${{ secrets.SERVER_USER }}
+        password: ${{ secrets.SERVER_PASSWORD }}
         port: 22
         command_timeout: 20m
         script: |
           cd /opt/zuo-ai-agent
-          git pull || true
+          git fetch origin master
+          git reset --hard origin/master
           bash scripts/deploy.sh update

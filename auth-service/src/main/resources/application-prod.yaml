@@ -1,0 +1,40 @@
+# 生产环境配置
+# 所有敏感信息通过环境变量注入
+
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/zuo_ai_agent}
+    username: ${DB_USERNAME:zuo_ai}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 3
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 4
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+
+logging:
+  level:
+    root: WARN
+    com.example.authservice: INFO
+
+# 日志监控服务地址（Docker 容器内使用服务名）
+log:
+  monitor:
+    url: http://log-monitor-service:8200/api/log/collect

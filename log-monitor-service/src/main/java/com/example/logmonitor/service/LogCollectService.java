@@ -9,7 +9,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 
@@ -36,7 +38,15 @@ public class LogCollectService {
                 appLog.setThreadName((String) entry.getOrDefault("threadName", ""));
                 appLog.setMessage((String) entry.getOrDefault("message", ""));
                 appLog.setStackTrace((String) entry.getOrDefault("stackTrace", null));
-                appLog.setLogTs(LocalDateTime.now());
+                // 使用 Appender 发送的原始时间戳，而非服务器当前时间
+                Object logTsObj = entry.get("logTs");
+                if (logTsObj instanceof Number) {
+                    appLog.setLogTs(LocalDateTime.ofInstant(
+                            Instant.ofEpochMilli(((Number) logTsObj).longValue()),
+                            ZoneId.systemDefault()));
+                } else {
+                    appLog.setLogTs(LocalDateTime.now());
+                }
                 appLog.setCreateTime(LocalDateTime.now());
 
                 // Phase 4: CAT 风格扩展字段

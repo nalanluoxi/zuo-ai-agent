@@ -6,23 +6,38 @@ spring:
   autoconfigure:
     # 纯 Java 项目，排除 springdoc Kotlin 自动配置，避免 ClassNotFoundException: kotlin.reflect.full.KClasses
     # 排除 DashScope/OpenAI/Ollama 自动配置，模型配置从数据库动态加载
+    # 排除 OpenAiEmbeddingAutoConfiguration，避免无 API key 时 bean 创建失败
     exclude:
       - org.springdoc.core.configuration.SpringDocKotlinConfiguration
       - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeChatAutoConfiguration
       - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeEmbeddingAutoConfiguration
       - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeAgentAutoConfiguration
-      - org.springframework.ai.autoconfigure.openai.OpenAiAutoConfiguration
-      - org.springframework.ai.autoconfigure.openai.OpenAiEmbeddingAutoConfiguration
-      - org.springframework.ai.autoconfigure.ollama.OllamaAutoConfiguration
+      - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeImageAutoConfiguration
+      - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeAudioTranscriptionAutoConfiguration
+      - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeAudioSpeechAutoConfiguration
+      - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeRerankAutoConfiguration
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiChatAutoConfiguration
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiEmbeddingAutoConfiguration
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiImageAutoConfiguration
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechAutoConfiguration
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiAudioTranscriptionAutoConfiguration
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiModerationAutoConfiguration
+      - org.springframework.ai.model.ollama.autoconfigure.OllamaAutoConfiguration
   ai:
-    # 模型配置已从数据库 t_llm_model_config 表动态加载，不再使用 YAML 配置
-    # 以下配置仅保留用于兼容性，实际不使用
+    # Chat 模型：本地 Ollama 模型写死（始终可用），远程模型从数据库 t_llm_model_config 动态加载
+    # Embedding 模型：本地 Ollama bge-m3 写死
     dashscope:
       api-key: ${DASHSCOPE_API_KEY:placeholder}
     openai:
       api-key: ${SILICONFLOW_API_KEY:placeholder}
     ollama:
-      base-url: http://localhost:11434
+      base-url: ${OLLAMA_HOST:http://localhost:11434}
+      chat:
+        options:
+          model: qwen2.5:7b
+      embedding:
+        options:
+          model: bge-m3
   servlet:
     multipart:
       max-file-size: 20MB

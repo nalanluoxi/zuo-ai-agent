@@ -2,8 +2,6 @@
 # 所有敏感信息通过环境变量注入，禁止硬编码
 
 spring:
-  profiles:
-    active: prod
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/zuo_ai_agent}
     username: ${DB_USERNAME:zuo_ai}
@@ -17,12 +15,12 @@ spring:
       max-lifetime: 1800000
   ai:
     dashscope:
-      api-key: ${DASHSCOPE_API_KEY}
+      api-key: ${DASHSCOPE_API_KEY:placeholder}
       chat:
         options:
           model: qwen-plus
     openai:
-      api-key: ${SILICONFLOW_API_KEY}
+      api-key: ${SILICONFLOW_API_KEY:placeholder}
       base-url: https://api.siliconflow.cn
       chat:
         options:
@@ -35,7 +33,7 @@ spring:
       chat:
         enabled: true
         options:
-          model: qwen2.5:7b
+          model: qwen2.5:3b
       embedding:
         enabled: true
         options:
@@ -72,6 +70,16 @@ logging:
     root: WARN
     com.example.zuoaiagent: INFO
     org.springframework.web: WARN
+
+# 认证服务地址（Docker 容器内使用服务名，本地开发覆盖为 localhost）
+auth:
+  service:
+    url: http://auth-service:8100/api/auth
+
+# 日志监控服务地址（Docker 容器内使用服务名）
+log:
+  monitor:
+    url: http://log-monitor-service:8200/api/log/collect
 
 # Tesseract OCR（生产环境路径）
 ocr:

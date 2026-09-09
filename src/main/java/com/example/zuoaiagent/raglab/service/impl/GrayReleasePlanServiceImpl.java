@@ -1,6 +1,7 @@
 package com.example.zuoaiagent.raglab.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.example.zuoaiagent.chat.ChatModelFactory;
 import com.example.zuoaiagent.raglab.entity.GrayReleasePlanDO;
 import com.example.zuoaiagent.raglab.entity.GrayReleasePlanModelDO;
 import com.example.zuoaiagent.raglab.entity.LlmModelConfigDO;
@@ -32,17 +33,23 @@ public class GrayReleasePlanServiceImpl implements GrayReleasePlanService {
     private final RagConfigService ragConfigService;
     private final RagPromptService ragPromptService;
     private final LlmModelConfigMapper llmModelConfigMapper;
+    private final ChatModelFactory chatModelFactory;
+    private final ModelRouterServiceImpl modelRouterService;
 
     public GrayReleasePlanServiceImpl(GrayReleasePlanMapper planMapper,
                                         GrayReleasePlanModelMapper planModelMapper,
                                         RagConfigService ragConfigService,
                                         RagPromptService ragPromptService,
-                                        LlmModelConfigMapper llmModelConfigMapper) {
+                                        LlmModelConfigMapper llmModelConfigMapper,
+                                        ChatModelFactory chatModelFactory,
+                                        ModelRouterServiceImpl modelRouterService) {
         this.planMapper = planMapper;
         this.planModelMapper = planModelMapper;
         this.ragConfigService = ragConfigService;
         this.ragPromptService = ragPromptService;
         this.llmModelConfigMapper = llmModelConfigMapper;
+        this.chatModelFactory = chatModelFactory;
+        this.modelRouterService = modelRouterService;
     }
 
     @Override
@@ -199,6 +206,9 @@ public class GrayReleasePlanServiceImpl implements GrayReleasePlanService {
         plan.setFinishTime(new Date());
         plan.setUpdateTime(new Date());
         planMapper.updateById(plan);
+        // 重新加载模型列表（全量发布后立即生效）
+        modelRouterService.evictAllCache();
+        chatModelFactory.reload();
         log.info("[灰度发布] 计划 {} 全量发布完成", planId);
         return plan;
     }
@@ -341,6 +351,27 @@ public class GrayReleasePlanServiceImpl implements GrayReleasePlanService {
     }
 
     /**
+     * MODEL 类型灰度计划的用户检查
+     * <p>MODEL 类型的 componentId 为 null，不能复用 isUserInGray 方法，
+     * 需要直接用计划的 grayRatio 和 grayMode 判断
+     */
+    private boolean checkModelPlanUserInGray(Long userId, GrayReleasePlanDO plan) {
+        String mode = plan.getGrayMode();
+        if (mode == null) mode = "PERCENT";
+
+        switch (mode) {
+            case "PERCENT":
+                return checkPercent(userId, plan.getGrayRatio());
+            case "LIST":
+                return checkList(userId, plan.getGrayUserIds());
+            case "BOTH":
+                return checkPercent(userId, plan.getGrayRatio()) || checkList(userId, plan.getGrayUserIds());
+            default:
+                return false;
+        }
+    }
+
+    /**
      * 获取用户可见的模型配置列表（根据灰度规则过滤）
      * @param userId 用户 ID
      * @param allActiveModels 所有 is_active=1 的模型列表
@@ -356,8 +387,18 @@ public class GrayReleasePlanServiceImpl implements GrayReleasePlanService {
         );
 
         if (modelPlans.isEmpty()) {
-            // 没有灰度计划，返回所有激活的模型
-            return allActiveModels;
+            // 没有灰度计划，返回所有激活的模型 + 本地模型
+            List<LlmModelConfigDO> result = new java.util.ArrayList<>(allActiveModels);
+            // 本地 Ollama 模型（qwen2.5:3b）写死，始终显示在第一位
+            LlmModelConfigDO localModel = new LlmModelConfigDO();
+            localModel.setProvider("ollama");
+            localModel.setModelName("本地 Qwen2.5-7B");
+            localModel.setModelId("qwen2.5:3b");
+            localModel.setBaseUrl("http://localhost:11434");
+            localModel.setIsActive(1);
+            localModel.setStatus("ACTIVE");
+            result.add(0, localModel);
+            return result;
         }
 
         // 收集用户可见的新模型 ID
@@ -372,7 +413,12 @@ public class GrayReleasePlanServiceImpl implements GrayReleasePlanService {
                 inGray = true;
             } else if ("GRAYING".equals(plan.getStatus())) {
                 // 灰度中，根据规则判断
-                inGray = isUserInGray(userId, plan.getComponentType(), plan.getComponentId());
+                // MODEL 类型特殊处理：直接用计划的 grayRatio 和 grayMode 判断
+                if ("MODEL".equals(plan.getComponentType())) {
+                    inGray = checkModelPlanUserInGray(userId, plan);
+                } else {
+                    inGray = isUserInGray(userId, plan.getComponentType(), plan.getComponentId());
+                }
             }
 
             if (inGray) {
@@ -417,6 +463,16 @@ public class GrayReleasePlanServiceImpl implements GrayReleasePlanService {
                 }
             }
         }
+
+        // 本地 Ollama 模型（qwen2.5:3b）写死，始终显示在第一位，不参与灰度发布
+        LlmModelConfigDO localModel = new LlmModelConfigDO();
+        localModel.setProvider("ollama");
+        localModel.setModelName("本地 Qwen2.5-7B");
+        localModel.setModelId("qwen2.5:3b");
+        localModel.setBaseUrl("http://localhost:11434");
+        localModel.setIsActive(1);
+        localModel.setStatus("ACTIVE");
+        visibleModels.add(0, localModel);
 
         return visibleModels;
     }
