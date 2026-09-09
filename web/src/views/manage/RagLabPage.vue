@@ -1117,15 +1117,6 @@ async function onQuestionKbChange(kbId: number) {
   }
 }
 
-function parseResultSummary(summary: string): any {
-  if (!summary) return {}
-  try {
-    return JSON.parse(summary)
-  } catch {
-    return {}
-  }
-}
-
 async function loadExperimentPlans() {
   experimentPlansLoading.value = true
   try {
