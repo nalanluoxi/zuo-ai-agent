@@ -144,7 +144,7 @@ public class SmartRagPipeline {
                 if (emitter != null) {
                     routingChatService.streamChat(ctx.getOriginalPrompt(), conId, sysPrompt, null, emitter, false, ctx.getUserId(), traceId);
                 } else {
-                    String answer = routingChatService.chat(ctx.getOriginalPrompt(), conId, sysPrompt, null);
+                    String answer = executeLlmWithTrace(traceId, ctx.getOriginalPrompt(), conId, sysPrompt, null);
                     ctx.setGeneratedAnswer(answer);
                 }
                 return;
@@ -170,7 +170,7 @@ public class SmartRagPipeline {
             if (emitter != null) {
                 routingChatService.streamChat(ctx.getOriginalPrompt(), conId, finalSystemPrompt, null, emitter, false, ctx.getUserId(), traceId);
             } else {
-                String answer = routingChatService.chat(ctx.getOriginalPrompt(), conId, finalSystemPrompt, null);
+                String answer = executeLlmWithTrace(traceId, ctx.getOriginalPrompt(), conId, finalSystemPrompt, null);
                 ctx.setGeneratedAnswer(answer);
             }
 
@@ -407,6 +407,37 @@ public class SmartRagPipeline {
         return prompt;
     }
 
+    /**
+     * 执行 LLM 调用并记录 Trace 节点。
+     * 将 LLM 调用包装为 Trace 节点，记录输入 prompt 和输出 answer。
+     */
+    private String executeLlmWithTrace(String traceId, String originalPrompt, String conversationId,
+                                        String systemPrompt, Long userId) {
+        long start = System.currentTimeMillis();
+        traceService.startNode(traceId, "llm", "LLM生成", "LLM",
+                toJson(Map.of("promptLength", systemPrompt != null ? systemPrompt.length() : 0,
+                              "conversationId", conversationId)));
+
+        try {
+            String answer = routingChatService.chat(originalPrompt, conversationId, systemPrompt, null);
+
+            traceService.finishNode(traceId, "llm", "SUCCESS", null,
+                    System.currentTimeMillis() - start,
+                    toJson(Map.of("answerLength", answer != null ? answer.length() : 0,
+                                  "answerPreview", answer != null ? truncate(answer, 500) : null)),
+                    estimateTokens(systemPrompt, 0.4), estimateTokens(answer, 0.4));
+            logEventCollector.logEvent("LLM_COMPLETED", Map.of(
+                    "answerLength", answer != null ? answer.length() : 0,
+                    "durationMs", System.currentTimeMillis() - start));
+            return answer;
+        } catch (Exception e) {
+            log.error("[SmartRagPipeline] LLM 调用失败: {}", e.getMessage());
+            traceService.finishNode(traceId, "llm", "ERROR", e.getMessage(),
+                    System.currentTimeMillis() - start, null);
+            return null;
+        }
+    }
+
     private String resolveDomain(IntentResult intentResult) {
         if (intentResult == null) return "各领域";
         if (intentResult.isSystem() || intentResult.getConfidence() == 0.0) return "各领域";
@@ -424,6 +455,8 @@ public class SmartRagPipeline {
                 .map(doc -> {
                     Map<String, Object> docInfo = new HashMap<>();
                     docInfo.put("docId", doc.getId());
+                    Object knowledgeDocId = doc.getMetadata().get("doc_id");
+                    docInfo.put("knowledgeDocId", knowledgeDocId != null ? String.valueOf(knowledgeDocId) : null);
                     docInfo.put("content", truncate(doc.getFormattedContent(), 500));
                     Object score = doc.getMetadata().get("score");
                     docInfo.put("score", score != null ? score : null);
@@ -471,6 +504,8 @@ public class SmartRagPipeline {
                 .map(doc -> {
                     Map<String, Object> docInfo = new HashMap<>();
                     docInfo.put("docId", doc.getId());
+                    Object knowledgeDocId = doc.getMetadata().get("doc_id");
+                    docInfo.put("knowledgeDocId", knowledgeDocId != null ? String.valueOf(knowledgeDocId) : null);
                     docInfo.put("content", truncate(doc.getFormattedContent(), 300));
                     Object rerankScore = doc.getMetadata().get("rerank_score");
                     docInfo.put("score", rerankScore != null ? rerankScore : null);

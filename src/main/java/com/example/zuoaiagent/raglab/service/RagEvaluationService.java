@@ -166,7 +166,7 @@ public class RagEvaluationService {
                         List<Map<String, Object>> docs = (List<Map<String, Object>>) retrieveOutput.get("docs");
                         if (docs != null) {
                             retrievedIds = docs.stream()
-                                    .map(doc -> String.valueOf(doc.get("docId")))
+                                    .map(doc -> String.valueOf(doc.get("knowledgeDocId")))
                                     .collect(Collectors.toList());
                         }
                     }
@@ -198,7 +198,7 @@ public class RagEvaluationService {
                         List<Map<String, Object>> docs = (List<Map<String, Object>>) rerankOutput.get("docs");
                         if (docs != null) {
                             rerankedIds = docs.stream()
-                                    .map(doc -> String.valueOf(doc.get("docId")))
+                                    .map(doc -> String.valueOf(doc.get("knowledgeDocId")))
                                     .collect(Collectors.toList());
                         }
                     }
