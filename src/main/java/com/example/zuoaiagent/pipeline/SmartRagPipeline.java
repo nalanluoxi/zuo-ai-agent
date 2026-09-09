@@ -1,5 +1,6 @@
 package com.example.zuoaiagent.pipeline;
 
+import com.example.zuoaiagent.chat.ChatModelFactory;
 import com.example.zuoaiagent.chat.RoutingChatService;
 import com.example.zuoaiagent.dashboard.service.RetrievalLogService;
 import com.example.zuoaiagent.intent.model.IntentResult;
@@ -39,6 +40,7 @@ public class SmartRagPipeline {
     private final RAGPromptService ragPromptService;
     private final PromptTemplateLoader templateLoader;
     private final RoutingChatService routingChatService;
+    private final ChatModelFactory chatModelFactory;
     private final RagTraceRecordService traceService;
     private final UserMemoryExtractionService memoryExtractionService;
     private final RagConfigLoader configLoader;
@@ -55,6 +57,7 @@ public class SmartRagPipeline {
                             RAGPromptService ragPromptService,
                             PromptTemplateLoader templateLoader,
                             RoutingChatService routingChatService,
+                            ChatModelFactory chatModelFactory,
                             RagTraceRecordService traceService,
                             UserMemoryExtractionService memoryExtractionService,
                             RagConfigLoader configLoader,
@@ -70,6 +73,7 @@ public class SmartRagPipeline {
         this.ragPromptService = ragPromptService;
         this.templateLoader = templateLoader;
         this.routingChatService = routingChatService;
+        this.chatModelFactory = chatModelFactory;
         this.traceService = traceService;
         this.memoryExtractionService = memoryExtractionService;
         this.configLoader = configLoader;
@@ -409,23 +413,38 @@ public class SmartRagPipeline {
 
     /**
      * 执行 LLM 调用并记录 Trace 节点。
-     * 将 LLM 调用包装为 Trace 节点，记录输入 prompt 和输出 answer。
+     * 数据结构与 RoutingChatService.tryStreamWithEntry 保持一致，
+     * 前端 TraceDetailPage 按 modelId/systemPrompt/userPrompt（输入）和
+     * modelId/response/inputTokens/outputTokens（输出）解析。
      */
     private String executeLlmWithTrace(String traceId, String originalPrompt, String conversationId,
                                         String systemPrompt, Long userId) {
         long start = System.currentTimeMillis();
-        traceService.startNode(traceId, "llm", "LLM生成", "LLM",
-                toJson(Map.of("promptLength", systemPrompt != null ? systemPrompt.length() : 0,
-                              "conversationId", conversationId)));
+        String modelId = chatModelFactory.getCandidates().isEmpty()
+                ? "unknown" : chatModelFactory.getCandidates().get(0).id();
+
+        // 输入数据：与 RoutingChatService.buildLlmInputData 一致
+        Map<String, Object> inputData = new LinkedHashMap<>();
+        inputData.put("modelId", modelId);
+        inputData.put("systemPrompt", truncate(systemPrompt, 2000));
+        inputData.put("userPrompt", truncate(originalPrompt, 500));
+        traceService.startNode(traceId, "llm", "增强生成", "LLM", toJson(inputData));
 
         try {
             String answer = routingChatService.chat(originalPrompt, conversationId, systemPrompt, null);
 
+            int inputTokens = estimateTokens(systemPrompt, 0.4);
+            int outputTokens = estimateTokens(answer, 0.4);
+
+            // 输出数据：与 RoutingChatService.buildLlmOutputData 一致
+            Map<String, Object> outputData = new LinkedHashMap<>();
+            outputData.put("modelId", modelId);
+            outputData.put("response", truncate(answer, 3000));
+            outputData.put("inputTokens", inputTokens);
+            outputData.put("outputTokens", outputTokens);
             traceService.finishNode(traceId, "llm", "SUCCESS", null,
-                    System.currentTimeMillis() - start,
-                    toJson(Map.of("answerLength", answer != null ? answer.length() : 0,
-                                  "answerPreview", answer != null ? truncate(answer, 500) : null)),
-                    estimateTokens(systemPrompt, 0.4), estimateTokens(answer, 0.4));
+                    System.currentTimeMillis() - start, toJson(outputData),
+                    inputTokens, outputTokens);
             logEventCollector.logEvent("LLM_COMPLETED", Map.of(
                     "answerLength", answer != null ? answer.length() : 0,
                     "durationMs", System.currentTimeMillis() - start));
