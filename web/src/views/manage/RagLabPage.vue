@@ -364,7 +364,7 @@
             <el-divider content-position="left">逐题明细</el-divider>
             <el-table :data="experimentReport.details || []" border size="small" style="width:100%" max-height="300">
               <el-table-column prop="questionId" label="题号" width="60" />
-              <el-table-column prop="question" label="问题" width="200" show-overflow-tooltip />
+              <el-table-column prop="question" label="问题" min-width="200" show-overflow-tooltip />
               <el-table-column prop="intentCorrect" label="意图正确" width="80">
                 <template #default="{ row }">
                   <el-tag :type="row.intentCorrect ? 'success' : 'danger'" size="small">{{ row.intentCorrect ? 'Y' : 'N' }}</el-tag>
@@ -375,6 +375,11 @@
               </el-table-column>
               <el-table-column prop="mrr" label="MRR" width="70">
                 <template #default="{ row }">{{ row.mrr != null ? row.mrr.toFixed(2) : '-' }}</template>
+              </el-table-column>
+              <el-table-column label="操作" width="100" fixed="right">
+                <template #default="{ row }">
+                  <el-button v-if="row.traceId" type="primary" link size="small" @click="goTraceDetail(row.traceId)">全链路详情</el-button>
+                </template>
               </el-table-column>
             </el-table>
           </div>
@@ -1363,6 +1368,11 @@ async function viewExperimentReport(row: any) {
     console.error(e)
     ElMessage.error('获取报告失败')
   }
+}
+
+function goTraceDetail(traceId: string) {
+  if (!traceId) return
+  window.open(`/manage/trace/${traceId}`, '_blank')
 }
 
 // ==================== Tab 4: 发布管理 ====================

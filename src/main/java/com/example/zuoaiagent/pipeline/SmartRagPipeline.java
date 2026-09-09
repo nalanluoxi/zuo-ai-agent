@@ -79,6 +79,22 @@ public class SmartRagPipeline {
     }
 
     public void execute(RagPipelineContext ctx, SseEmitter emitter) {
+        executeInternal(ctx, emitter, null);
+    }
+
+    /**
+     * 同步执行 Pipeline，返回完整的上下文（不依赖 SseEmitter）。
+     *
+     * @param ctx          流水线上下文
+     * @param experimentId 关联的实验 ID（可为 null）
+     * @return 执行后的上下文（包含所有阶段的输出）
+     */
+    public RagPipelineContext executeSync(RagPipelineContext ctx, Long experimentId) {
+        executeInternal(ctx, null, experimentId);
+        return ctx;
+    }
+
+    private void executeInternal(RagPipelineContext ctx, SseEmitter emitter, Long experimentId) {
         RagConfigDO config = configLoader.getActiveConfig();
         double intentThreshold = getConfigValue(config, RagConfigDO::getIntentConfidenceThreshold, 0.5);
         double highConfidence = getConfigValue(config, RagConfigDO::getIntentConfidenceThreshold, 0.85);
@@ -98,7 +114,7 @@ public class SmartRagPipeline {
         String conId = ctx.getConversationId();
         long pipelineStart = System.currentTimeMillis();
 
-        traceService.startRun(traceId, conId, ctx.getOriginalPrompt());
+        traceService.startRun(traceId, conId, ctx.getOriginalPrompt(), experimentId);
         ctx.setTraceId(traceId);
         // 写入灰度标签到 trace
         try {
@@ -125,7 +141,12 @@ public class SmartRagPipeline {
                 if (memory != null) sysPrompt = memory + "\n" + sysPrompt;
                 ctx.setFinalSystemPrompt(sysPrompt);
                 traceService.finishRun(traceId, "SUCCESS", null, System.currentTimeMillis() - pipelineStart);
-                routingChatService.streamChat(ctx.getOriginalPrompt(), conId, sysPrompt, null, emitter, false, ctx.getUserId(), traceId);
+                if (emitter != null) {
+                    routingChatService.streamChat(ctx.getOriginalPrompt(), conId, sysPrompt, null, emitter, false, ctx.getUserId(), traceId);
+                } else {
+                    String answer = routingChatService.chat(ctx.getOriginalPrompt(), conId, sysPrompt, null);
+                    ctx.setGeneratedAnswer(answer);
+                }
                 return;
             }
 
@@ -146,7 +167,12 @@ public class SmartRagPipeline {
             ctx.setFinalSystemPrompt(finalSystemPrompt);
 
             traceService.finishRun(traceId, "SUCCESS", null, System.currentTimeMillis() - pipelineStart);
-            routingChatService.streamChat(ctx.getOriginalPrompt(), conId, finalSystemPrompt, null, emitter, false, ctx.getUserId(), traceId);
+            if (emitter != null) {
+                routingChatService.streamChat(ctx.getOriginalPrompt(), conId, finalSystemPrompt, null, emitter, false, ctx.getUserId(), traceId);
+            } else {
+                String answer = routingChatService.chat(ctx.getOriginalPrompt(), conId, finalSystemPrompt, null);
+                ctx.setGeneratedAnswer(answer);
+            }
 
         } catch (Exception e) {
             log.error("[SmartRagPipeline] traceId={} 流水线异常: {}", traceId, e.getMessage(), e);
@@ -397,6 +423,7 @@ public class SmartRagPipeline {
                 .limit(10)
                 .map(doc -> {
                     Map<String, Object> docInfo = new HashMap<>();
+                    docInfo.put("docId", doc.getId());
                     docInfo.put("content", truncate(doc.getFormattedContent(), 500));
                     Object score = doc.getMetadata().get("score");
                     docInfo.put("score", score != null ? score : null);
@@ -443,6 +470,7 @@ public class SmartRagPipeline {
                 .limit(10)
                 .map(doc -> {
                     Map<String, Object> docInfo = new HashMap<>();
+                    docInfo.put("docId", doc.getId());
                     docInfo.put("content", truncate(doc.getFormattedContent(), 300));
                     Object rerankScore = doc.getMetadata().get("rerank_score");
                     docInfo.put("score", rerankScore != null ? rerankScore : null);

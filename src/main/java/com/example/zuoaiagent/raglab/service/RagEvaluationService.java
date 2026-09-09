@@ -1,19 +1,17 @@
 package com.example.zuoaiagent.raglab.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.example.zuoaiagent.intent.model.IntentResult;
-import com.example.zuoaiagent.intent.service.IntentClassifier;
-import com.example.zuoaiagent.rag.DocumentReranker;
-import com.example.zuoaiagent.rag.HyDEQueryRewriter;
-import com.example.zuoaiagent.rag.MultiChannelRetriever;
-import com.example.zuoaiagent.rag.QueryRewriter;
-import com.example.zuoaiagent.raglab.entity.RagConfigDO;
+import com.example.zuoaiagent.pipeline.RagPipelineContext;
+import com.example.zuoaiagent.pipeline.SmartRagPipeline;
 import com.example.zuoaiagent.raglab.entity.RagExperimentDO;
 import com.example.zuoaiagent.raglab.entity.RagExperimentPlanDO;
 import com.example.zuoaiagent.raglab.entity.RagTestQuestionDO;
 import com.example.zuoaiagent.raglab.mapper.RagExperimentMapper;
 import com.example.zuoaiagent.raglab.mapper.RagExperimentPlanMapper;
+import com.example.zuoaiagent.trace.entity.RagTraceNodeDO;
+import com.example.zuoaiagent.trace.mapper.RagTraceNodeMapper;
+import com.example.zuoaiagent.trace.service.RagTraceRecordService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -26,9 +24,18 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * RAG 评估引擎服务
+ * RAG 评估引擎服务（重写版：走 SmartRagPipeline 全链路）
  *
- * <p>对指定测试题库执行 RAG 流水线各阶段，计算多维度指标。
+ * <p>实验评估现在完全走用户使用的 SmartRagPipeline，包括：
+ * - 查询改写（REWRITE）
+ * - HyDE 假设生成（HYDE）
+ * - 意图识别（CLASSIFY）
+ * - 多通道检索（RETRIEVE）
+ * - 重排序（RERANK）
+ * - Prompt 组装（PROMPT）
+ * - LLM 生成（LLM）
+ *
+ * <p>每道题的执行都会产生完整的 Trace 记录，可跳转到 TraceDetailPage 查看详情。
  */
 @Service
 public class RagEvaluationService {
@@ -38,33 +45,21 @@ public class RagEvaluationService {
     private final RagExperimentMapper experimentMapper;
     private final RagExperimentPlanMapper planMapper;
     private final RagTestQuestionService testQuestionService;
-    private final RagConfigLoader configLoader;
-    private final QueryRewriter queryRewriter;
-    private final IntentClassifier intentClassifier;
-    private final MultiChannelRetriever multiChannelRetriever;
-    private final DocumentReranker documentReranker;
-    private final HyDEQueryRewriter hydeQueryRewriter;
+    private final SmartRagPipeline smartRagPipeline;
+    private final RagTraceNodeMapper traceNodeMapper;
     private final ObjectMapper objectMapper;
 
     public RagEvaluationService(RagExperimentMapper experimentMapper,
                                  RagExperimentPlanMapper planMapper,
                                  RagTestQuestionService testQuestionService,
-                                 RagConfigLoader configLoader,
-                                 QueryRewriter queryRewriter,
-                                 IntentClassifier intentClassifier,
-                                 MultiChannelRetriever multiChannelRetriever,
-                                 DocumentReranker documentReranker,
-                                 HyDEQueryRewriter hydeQueryRewriter,
+                                 SmartRagPipeline smartRagPipeline,
+                                 RagTraceNodeMapper traceNodeMapper,
                                  ObjectMapper objectMapper) {
         this.experimentMapper = experimentMapper;
         this.planMapper = planMapper;
         this.testQuestionService = testQuestionService;
-        this.configLoader = configLoader;
-        this.queryRewriter = queryRewriter;
-        this.intentClassifier = intentClassifier;
-        this.multiChannelRetriever = multiChannelRetriever;
-        this.documentReranker = documentReranker;
-        this.hydeQueryRewriter = hydeQueryRewriter;
+        this.smartRagPipeline = smartRagPipeline;
+        this.traceNodeMapper = traceNodeMapper;
         this.objectMapper = objectMapper;
     }
 
@@ -105,13 +100,11 @@ public class RagEvaluationService {
     public void runExperimentAsync(Long experimentId, List<Long> questionIds) {
         long startMs = System.currentTimeMillis();
         try {
-            RagConfigDO config = configLoader.getActiveConfig();
             List<RagTestQuestionDO> questions = testQuestionService.getQuestionsByIds(questionIds);
 
             int intentCorrect = 0;
             int totalQuestions = questions.size();
 
-            // 收集检索指标
             List<Double> recallAt3List = new ArrayList<>();
             List<Double> recallAt5List = new ArrayList<>();
             List<Double> recallAt10List = new ArrayList<>();
@@ -128,34 +121,61 @@ public class RagEvaluationService {
                 detail.put("question", q.getQuestionText());
 
                 try {
-                    // 1. 查询改写
-                    String rewritten = queryRewriter.rewrite(q.getQuestionText());
-                    detail.put("rewritten", rewritten);
+                    // 使用 SmartRagPipeline 执行全链路
+                    String conversationId = "exp-" + experimentId + "-q" + (i + 1);
+                    RagPipelineContext ctx = new RagPipelineContext(
+                            q.getQuestionText(),
+                            conversationId,
+                            "实验助手",
+                            true,  // enableRewrite
+                            true,  // enableRerank
+                            false, // enableMemory
+                            null   // userId
+                    );
 
-                    // 2. 意图分类
-                    double highConf = config != null && config.getIntentConfidenceThreshold() != null
-                            ? config.getIntentConfidenceThreshold() : 0.85;
-                    IntentResult intent = intentClassifier.classify(rewritten, highConf);
-                    detail.put("intentLabel", intent.getLabel());
-                    detail.put("intentConfidence", intent.getConfidence());
+                    // 同步执行 Pipeline，传入 experimentId
+                    ctx = smartRagPipeline.executeSync(ctx, experimentId);
 
-                    // 意图正确性
-                    boolean intentOk = checkIntentCorrect(q.getExpectedIntent(), intent);
-                    detail.put("intentCorrect", intentOk);
-                    if (intentOk) intentCorrect++;
+                    // 记录 traceId 以便前端跳转
+                    detail.put("traceId", ctx.getTraceId());
+                    detail.put("rewritten", ctx.getRewrittenQuery());
 
-                    // 3. 检索
-                    Long kbId = intent.getKbId();
-                    List<Document> retrieved = multiChannelRetriever.retrieve(rewritten, kbId, config, null, null);
-                    List<String> retrievedIds = retrieved.stream()
-                            .map(Document::getId)
-                            .collect(Collectors.toList());
+                    // 从 Trace 记录收集各阶段数据
+                    Map<String, RagTraceNodeDO> nodes = loadTraceNodes(ctx.getTraceId());
+
+                    // 意图分类结果
+                    RagTraceNodeDO classifyNode = nodes.get("classify");
+                    if (classifyNode != null) {
+                        Map<String, Object> classifyOutput = parseJsonMap(classifyNode.getOutputData());
+                        String intentLabel = (String) classifyOutput.get("label");
+                        Double confidence = (Double) classifyOutput.get("confidence");
+                        detail.put("intentLabel", intentLabel);
+                        detail.put("intentConfidence", confidence);
+
+                        // 意图正确性
+                        boolean intentOk = checkIntentCorrect(q.getExpectedIntent(), intentLabel);
+                        detail.put("intentCorrect", intentOk);
+                        if (intentOk) intentCorrect++;
+                    }
+
+                    // 检索结果
+                    RagTraceNodeDO retrieveNode = nodes.get("retrieve");
+                    List<String> retrievedIds = new ArrayList<>();
+                    if (retrieveNode != null) {
+                        Map<String, Object> retrieveOutput = parseJsonMap(retrieveNode.getOutputData());
+                        List<Map<String, Object>> docs = (List<Map<String, Object>>) retrieveOutput.get("docs");
+                        if (docs != null) {
+                            retrievedIds = docs.stream()
+                                    .map(doc -> String.valueOf(doc.get("docId")))
+                                    .collect(Collectors.toList());
+                        }
+                    }
                     detail.put("retrievedDocIds", retrievedIds);
 
                     // 解析期望文档 ID
                     List<String> expectedDocIds = parseExpectedDocIds(q.getExpectedDocIds());
 
-                    // Recall@K
+                    // 计算检索指标
                     double r3 = recallAt(retrievedIds, expectedDocIds, 3);
                     double r5 = recallAt(retrievedIds, expectedDocIds, 5);
                     double r10 = recallAt(retrievedIds, expectedDocIds, 10);
@@ -166,30 +186,33 @@ public class RagEvaluationService {
                     detail.put("recallAt5", r5);
                     detail.put("recallAt10", r10);
 
-                    // MRR
                     double mrr = computeMrr(retrievedIds, expectedDocIds);
                     mrrList.add(mrr);
                     detail.put("mrr", mrr);
 
-                    // 4. Rerank
-                    int rerankTopK = config != null && config.getRerankTopK() != null ? config.getRerankTopK() : 3;
-                    double rerankThreshold = config != null && config.getRerankConfidenceThreshold() != null
-                            ? config.getRerankConfidenceThreshold() : 0.5;
-                    int docTruncate = config != null && config.getRerankDocTruncate() != null
-                            ? config.getRerankDocTruncate() : 800;
-                    List<Document> reranked = documentReranker.rerank(rewritten, retrieved, rerankTopK, rerankThreshold, docTruncate);
-                    List<String> rerankedIds = reranked.stream()
-                            .map(Document::getId)
-                            .collect(Collectors.toList());
+                    // Rerank 结果
+                    RagTraceNodeDO rerankNode = nodes.get("rerank");
+                    List<String> rerankedIds = new ArrayList<>();
+                    if (rerankNode != null) {
+                        Map<String, Object> rerankOutput = parseJsonMap(rerankNode.getOutputData());
+                        List<Map<String, Object>> docs = (List<Map<String, Object>>) rerankOutput.get("docs");
+                        if (docs != null) {
+                            rerankedIds = docs.stream()
+                                    .map(doc -> String.valueOf(doc.get("docId")))
+                                    .collect(Collectors.toList());
+                        }
+                    }
                     detail.put("rerankedDocIds", rerankedIds);
 
-                    // NDCG@K
                     double n3 = ndcgAt(rerankedIds, expectedDocIds, 3);
                     double n5 = ndcgAt(rerankedIds, expectedDocIds, 5);
                     ndcgAt3List.add(n3);
                     ndcgAt5List.add(n5);
                     detail.put("ndcgAt3", n3);
                     detail.put("ndcgAt5", n5);
+
+                    // LLM 生成结果
+                    detail.put("generatedAnswer", ctx.getGeneratedAnswer());
 
                     detail.put("status", "SUCCESS");
                 } catch (Exception e) {
@@ -237,15 +260,42 @@ public class RagEvaluationService {
         }
     }
 
-    // ==================== 指标计算 ====================
+    // ==================== 辅助方法 ====================
 
-    private boolean checkIntentCorrect(String expectedIntent, IntentResult actual) {
+    /**
+     * 从数据库加载指定 traceId 的所有节点
+     */
+    private Map<String, RagTraceNodeDO> loadTraceNodes(String traceId) {
+        Map<String, RagTraceNodeDO> result = new HashMap<>();
+        try {
+            List<RagTraceNodeDO> nodes = traceNodeMapper.selectList(
+                    new LambdaQueryWrapper<RagTraceNodeDO>()
+                            .eq(RagTraceNodeDO::getTraceId, traceId)
+            );
+            for (RagTraceNodeDO node : nodes) {
+                result.put(node.getNodeId(), node);
+            }
+        } catch (Exception e) {
+            log.warn("[RagEvaluation] 加载 Trace 节点失败: traceId={}", traceId);
+        }
+        return result;
+    }
+
+    private Map<String, Object> parseJsonMap(String json) {
+        if (json == null || json.isEmpty()) return Map.of();
+        try {
+            return objectMapper.readValue(json, Map.class);
+        } catch (Exception e) {
+            return Map.of();
+        }
+    }
+
+    private boolean checkIntentCorrect(String expectedIntent, String actualLabel) {
         if (expectedIntent == null || expectedIntent.isEmpty()) return true;
-        if (actual == null) return false;
-        // 支持精确匹配或包含匹配
-        return expectedIntent.equalsIgnoreCase(actual.getLabel())
-                || expectedIntent.contains(actual.getLabel())
-                || actual.getLabel().contains(expectedIntent);
+        if (actualLabel == null) return false;
+        return expectedIntent.equalsIgnoreCase(actualLabel)
+                || expectedIntent.contains(actualLabel)
+                || actualLabel.contains(expectedIntent);
     }
 
     private List<String> parseExpectedDocIds(String json) {
@@ -253,14 +303,10 @@ public class RagEvaluationService {
         try {
             return objectMapper.readValue(json, objectMapper.getTypeFactory().constructCollectionType(List.class, String.class));
         } catch (Exception e) {
-            // 尝试按逗号分隔解析
             return Arrays.asList(json.split("[,;]"));
         }
     }
 
-    /**
-     * Recall@K: 期望文档中在前K个被召回的比例
-     */
     private double recallAt(List<String> retrievedIds, List<String> expectedIds, int k) {
         if (expectedIds.isEmpty()) return 1.0;
         Set<String> topK = new HashSet<>(retrievedIds.subList(0, Math.min(k, retrievedIds.size())));
@@ -268,9 +314,6 @@ public class RagEvaluationService {
         return (double) hit / expectedIds.size();
     }
 
-    /**
-     * MRR: 1 / 第一个命中位置的排名
-     */
     private double computeMrr(List<String> retrievedIds, List<String> expectedIds) {
         if (expectedIds.isEmpty()) return 1.0;
         Set<String> expected = new HashSet<>(expectedIds);
@@ -282,22 +325,17 @@ public class RagEvaluationService {
         return 0.0;
     }
 
-    /**
-     * NDCG@K: 归一化折损累计增益
-     */
     private double ndcgAt(List<String> rankedIds, List<String> expectedIds, int k) {
         if (expectedIds.isEmpty()) return 1.0;
         Set<String> expected = new HashSet<>(expectedIds);
         int limit = Math.min(k, rankedIds.size());
 
-        // DCG
         double dcg = 0;
         for (int i = 0; i < limit; i++) {
             double rel = expected.contains(rankedIds.get(i)) ? 1.0 : 0.0;
-            dcg += rel / (Math.log(i + 2) / Math.log(2)); // log2(i+2)
+            dcg += rel / (Math.log(i + 2) / Math.log(2));
         }
 
-        // IDCG (理想排序：所有命中在前)
         long totalHits = Math.min(expected.size(), limit);
         double idcg = 0;
         for (int i = 0; i < totalHits; i++) {
@@ -320,9 +358,6 @@ public class RagEvaluationService {
         }
     }
 
-    /**
-     * 根据实验 ID 查找关联的实验计划并更新状态
-     */
     private void updatePlanStatus(Long experimentId, String status) {
         try {
             List<RagExperimentPlanDO> plans = planMapper.selectList(
